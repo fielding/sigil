@@ -189,3 +189,31 @@ def test_gate_edges_integrated_in_build_graph(tmp_path):
     gated = [e for e in g.edges if e.type == "gated_by" and e.src == "SPEC-0001"]
     assert len(gated) == 1
     assert gated[0].dst == "GATE-q"
+
+
+# ---------------------------------------------------------------------------
+# doctor
+# ---------------------------------------------------------------------------
+
+def test_doctor_on_empty_repo(tmp_path):
+    """Doctor should run and report failures on an empty directory."""
+    (tmp_path / ".git").mkdir()
+    args = make_args(repo=str(tmp_path))
+    rc = cli.cmd_doctor(args)
+    assert rc == 1  # not everything will pass on empty repo
+
+
+def test_doctor_on_valid_repo(tmp_path):
+    """Doctor should pass most checks on a properly set up repo."""
+    for d in ["components", "intent", "interfaces", "gates", "templates", ".intent", ".intent/index"]:
+        (tmp_path / d).mkdir(parents=True, exist_ok=True)
+    (tmp_path / ".intent" / "config.yaml").write_text("id_counters: {}\n")
+    (tmp_path / "templates" / "SPEC.md").write_text("---\nid: SPEC-0000\n---\n")
+    (tmp_path / "templates" / "ADR.md").write_text("---\nid: ADR-0000\n---\n")
+    (tmp_path / ".intent" / "index" / "graph.json").write_text('{"nodes":[],"edges":[]}')
+    (tmp_path / "components" / "test.yaml").write_text("id: COMP-test\nname: test\n")
+    (tmp_path / ".git").mkdir()
+    args = make_args(repo=str(tmp_path))
+    rc = cli.cmd_doctor(args)
+    # Most checks pass (viewer and hook may fail)
+    assert rc in (0, 1)

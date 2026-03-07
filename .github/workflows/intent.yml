@@ -17,40 +17,40 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install dependencies
-        run: pip install -r tools/intent/requirements.txt
+      - name: Install sigil
+        run: pip install .
 
       - name: Build intent index
-        run: python tools/intent/sigil.py index
+        run: sigil index
 
       - name: Lint intent docs
-        run: python tools/intent/sigil.py lint
+        run: sigil lint
 
       - name: Run gate checks
-        run: python tools/intent/sigil.py check
+        run: sigil check
 
       - name: Drift detection
-        run: python tools/intent/sigil.py drift || true
+        run: sigil drift || true
 
       - name: Build timeline
-        run: python tools/intent/sigil.py timeline || true
+        run: sigil timeline || true
 
       - name: Generate coverage badge
-        run: python tools/intent/sigil.py badge
+        run: sigil badge
 
       - name: Generate export snapshot
-        run: python tools/intent/sigil.py export
+        run: sigil export
 
       - name: Compute graph diff
         run: |
           BASE="${{ github.event.pull_request.base.sha }}"
           HEAD="${{ github.event.pull_request.head.sha }}"
-          python tools/intent/sigil.py diff "$BASE" "$HEAD" --out .intent/index/diff.json --md .intent/index/diff.md
+          sigil diff "$BASE" "$HEAD" --out .intent/index/diff.json --md .intent/index/diff.md
 
       - name: Sigil PR Analysis
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python tools/intent/sigil.py pr ${{ github.event.pull_request.number }}
+        run: sigil pr ${{ github.event.pull_request.number }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

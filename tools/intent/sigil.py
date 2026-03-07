@@ -478,6 +478,42 @@ def _write_review_json(repo_root: Path, g: Graph, out_path: Path) -> None:
 
 
 # -----------------------------
+# Viewer resolution
+# -----------------------------
+
+def _find_viewer(repo: Path) -> Optional[Path]:
+    """Find the viewer HTML — in-repo first, then bundled with pip package."""
+    in_repo = repo / "tools" / "intent_viewer" / "index.html"
+    if in_repo.exists():
+        return in_repo
+    # Check next to this script (pip force-include puts it as sibling)
+    bundled = Path(__file__).with_name("sigil_viewer.html")
+    if bundled.exists():
+        return bundled
+    # Check via importlib
+    import importlib.util
+    spec = importlib.util.find_spec("sigil_cli")
+    if spec and spec.origin:
+        candidate = Path(spec.origin).with_name("sigil_viewer.html")
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def _ensure_viewer(repo: Path) -> Optional[Path]:
+    """Ensure viewer exists in repo. Copy from package if needed. Return path."""
+    in_repo = repo / "tools" / "intent_viewer" / "index.html"
+    if in_repo.exists():
+        return in_repo
+    src = _find_viewer(repo)
+    if src and src != in_repo:
+        in_repo.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, in_repo)
+        return in_repo
+    return None
+
+
+# -----------------------------
 # Git helpers for diff
 # -----------------------------
 
@@ -1123,8 +1159,9 @@ def cmd_init(args) -> int:
     print(f"  [2/5] Templates ready")
 
     # Bootstrap components from manifest files
+    _repo_str = str(repo)
     class BootArgs:
-        repo = str(repo)
+        repo = _repo_str
         dry_run = False
     # Capture bootstrap output
     comp_dir = repo / "components"
@@ -1141,9 +1178,11 @@ def cmd_init(args) -> int:
     write_graph_artifacts(repo, g)
     print(f"  [4/5] Graph indexed: {len(g.nodes)} nodes, {len(g.edges)} edges")
 
+    # Ensure viewer exists — copy from package if needed
+    viewer = _ensure_viewer(repo)
+
     # Open viewer
-    viewer = repo / "tools" / "intent_viewer" / "index.html"
-    if viewer.exists():
+    if viewer:
         import webbrowser
         import threading
         from http.server import HTTPServer, SimpleHTTPRequestHandler
@@ -1445,9 +1484,9 @@ def cmd_export(args) -> int:
     g = build_graph(repo)
     write_graph_artifacts(repo, g)
 
-    viewer_path = repo / "tools" / "intent_viewer" / "index.html"
-    if not viewer_path.exists():
-        print("Viewer not found at tools/intent_viewer/index.html")
+    viewer_path = _find_viewer(repo)
+    if not viewer_path:
+        print("Viewer not found. Run 'sigil init' first or install sigil-cli via pip.")
         return 1
 
     graph_path = repo / ".intent" / "index" / "graph.json"
@@ -2644,6 +2683,108 @@ def cmd_pr(args) -> int:
     return 0
 
 
+def cmd_doctor(args) -> int:
+    """Diagnose sigil installation and repo health."""
+    repo = Path(args.repo).resolve()
+    checks: List[Tuple[str, bool, str]] = []
+
+    # 1. Python version
+    v = sys.version_info
+    ok = v >= (3, 11)
+    checks.append(("Python >= 3.11", ok, f"{v.major}.{v.minor}.{v.micro}"))
+
+    # 2. PyYAML
+    checks.append(("PyYAML installed", yaml is not None, "import yaml" if yaml else "missing — pip install pyyaml"))
+
+    # 3. Git
+    try:
+        git_v = subprocess.run(["git", "--version"], capture_output=True, text=True)
+        checks.append(("Git available", git_v.returncode == 0, git_v.stdout.strip()))
+    except FileNotFoundError:
+        checks.append(("Git available", False, "not found"))
+
+    # 4. gh CLI
+    try:
+        gh_v = subprocess.run(["gh", "--version"], capture_output=True, text=True)
+        first_line = gh_v.stdout.strip().split("\n")[0] if gh_v.stdout else ""
+        checks.append(("GitHub CLI (gh)", gh_v.returncode == 0, first_line))
+    except FileNotFoundError:
+        checks.append(("GitHub CLI (gh)", False, "not found (optional — needed for sigil pr)"))
+
+    # 5. Directory structure
+    expected_dirs = ["components", "intent", "interfaces", "gates", "templates", ".intent"]
+    missing = [d for d in expected_dirs if not (repo / d).is_dir()]
+    if missing:
+        checks.append(("Directory structure", False, f"missing: {', '.join(missing)} — run sigil init"))
+    else:
+        checks.append(("Directory structure", True, f"{len(expected_dirs)} dirs present"))
+
+    # 6. Config file
+    config = repo / ".intent" / "config.yaml"
+    checks.append(("Config file", config.exists(), str(config.relative_to(repo)) if config.exists() else "missing — run sigil init"))
+
+    # 7. Templates
+    spec_tmpl = repo / "templates" / "SPEC.md"
+    adr_tmpl = repo / "templates" / "ADR.md"
+    both = spec_tmpl.exists() and adr_tmpl.exists()
+    checks.append(("Templates", both, "SPEC.md + ADR.md" if both else "missing — run sigil init"))
+
+    # 8. Graph index
+    graph_json = repo / ".intent" / "index" / "graph.json"
+    if graph_json.exists():
+        try:
+            data = json.loads(graph_json.read_text(encoding="utf-8"))
+            n = len(data.get("nodes", []))
+            e = len(data.get("edges", []))
+            checks.append(("Graph index", True, f"{n} nodes, {e} edges"))
+        except Exception:
+            checks.append(("Graph index", False, "corrupt — run sigil index"))
+    else:
+        checks.append(("Graph index", False, "not built — run sigil index"))
+
+    # 9. Viewer
+    viewer = _find_viewer(repo)
+    checks.append(("Viewer", viewer is not None, str(viewer) if viewer else "not found — run sigil init"))
+
+    # 10. Components
+    comp_dir = repo / "components"
+    comps = list(comp_dir.glob("*.yaml")) if comp_dir.is_dir() else []
+    checks.append(("Components", len(comps) > 0, f"{len(comps)} component(s)" if comps else "none — run sigil bootstrap"))
+
+    # 11. Git repo
+    git_dir = repo / ".git"
+    checks.append(("Git repository", git_dir.is_dir(), "initialized" if git_dir.is_dir() else "not a git repo"))
+
+    # 12. Pre-commit hook
+    hook = repo / ".git" / "hooks" / "pre-commit"
+    has_hook = hook.exists() and "sigil" in hook.read_text(encoding="utf-8", errors="ignore") if hook.exists() else False
+    checks.append(("Pre-commit hook", has_hook, "sigil review --staged" if has_hook else "not installed — run sigil hook install"))
+
+    # Print results
+    print()
+    print("  Sigil Doctor")
+    print("  " + "=" * 50)
+    print()
+    passed = 0
+    failed = 0
+    for label, ok, detail in checks:
+        icon = "\u2713" if ok else "\u2717"
+        status = "ok" if ok else "FAIL"
+        print(f"  {icon} {label:.<30s} {status:>4s}  {detail}")
+        if ok:
+            passed += 1
+        else:
+            failed += 1
+    print()
+    print(f"  {passed} passed, {failed} failed")
+    if failed == 0:
+        print("  Everything looks good.")
+    else:
+        print("  Run 'sigil init' to fix most issues.")
+    print()
+    return 0 if failed == 0 else 1
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(prog="sigil", description="Sigil — intent-first engineering CLI")
     ap.add_argument("--repo", default=".", help="Repo root (default: cwd)")
@@ -2731,6 +2872,9 @@ def main() -> int:
     sp.add_argument("number", nargs="?", type=int, default=None, help="PR number (default: current branch PR)")
     sp.add_argument("--dry-run", action="store_true", help="Print comment without posting")
     sp.set_defaults(fn=cmd_pr)
+
+    sp = sub.add_parser("doctor", help="Diagnose sigil installation and repo health")
+    sp.set_defaults(fn=cmd_doctor)
 
     args = ap.parse_args()
     return args.fn(args)

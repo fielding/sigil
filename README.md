@@ -20,15 +20,16 @@ Sigil gives intent a home:
 
 ```bash
 # Install
-pip install pyyaml
+pip install sigil-cli
 
-# Initialize in your repo
-python3 tools/intent/sigil.py init
+# Initialize in any repo
+cd your-project
+sigil init
 
 # That's it. Browser opens with your intent graph.
 ```
 
-`sigil init` scans your repo, creates the directory structure, builds the knowledge graph, and opens the interactive viewer.
+`sigil init` scans your repo, creates the directory structure, bootstraps components from package manifests, builds the knowledge graph, and opens the interactive viewer. The viewer is bundled — no extra downloads needed.
 
 ## The Viewer
 
@@ -74,6 +75,7 @@ sigil fmt        Normalize intent doc formatting
 sigil bootstrap  Scan repo for missing component stubs
 sigil hook       Install/uninstall pre-commit hook
 sigil pr         Analyze GitHub PR and post intent coverage comment
+sigil doctor     Diagnose installation and repo health
 ```
 
 ## Repo Structure
@@ -95,11 +97,11 @@ templates/           Scaffolding for new docs
 Add to your GitHub Actions workflow:
 
 ```yaml
-- run: python tools/intent/sigil.py index
-- run: python tools/intent/sigil.py lint
-- run: python tools/intent/sigil.py check
-- run: python tools/intent/sigil.py drift || true
-- run: python tools/intent/sigil.py pr ${{ github.event.pull_request.number }}
+- run: sigil index
+- run: sigil lint
+- run: sigil check
+- run: sigil drift || true
+- run: sigil pr ${{ github.event.pull_request.number }}
 ```
 
 PRs get an automatic intent analysis comment with coverage percentage, governed/ungoverned changes, gate results, and links back to the intent graph.
