@@ -3,6 +3,14 @@
 <head>
   <meta charset="utf-8" />
   <title>Sigil Export (18 nodes) — — Intent Graph Viewer</title>
+  <link rel="icon" type="image/x-icon" href="../../branding/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="32x32" href="../../branding/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="../../branding/favicon-16x16.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="../../branding/apple-touch-icon.png" />
+  <meta property="og:image" content="../../branding/social-card.png" />
+  <meta property="og:title" content="Sigil — Intent-first engineering" />
+  <meta property="og:description" content="Version control for architectural decisions. Specs, ADRs, gates, and components as a connected graph." />
+  <meta name="twitter:card" content="summary_large_image" />
   <style>
     :root {
       --base00: #1a1c22; --base01: #282b31; --base02: #3a3d42; --base03: #5a5d62;
@@ -501,7 +509,7 @@
     // Injected by sigil export — no server needed
     window.__SIGIL_GRAPH__ = {
   "version": "1.0",
-  "generated_at": "2026-03-07T00:07:18Z",
+  "generated_at": "2026-03-07T10:08:50Z",
   "nodes": [
     {
       "id": "COMP-sigil-ci",
@@ -1012,6 +1020,26 @@
         "gate applies_to"
       ]
     }
+  ],
+  "gates": [
+    {
+      "id": "GATE-0001",
+      "summary": "Ensures all specs under intent-system have acceptance criteria, status, and valid references",
+      "kind": "lint-rule",
+      "policy": "block",
+      "passed": true,
+      "scope": 11,
+      "findings": []
+    },
+    {
+      "id": "GATE-0002",
+      "summary": "Ensures ADRs progress beyond draft status in a timely manner",
+      "kind": "lint-rule",
+      "policy": "warn",
+      "passed": true,
+      "scope": 11,
+      "findings": []
+    }
   ]
 };
     window.__SIGIL_FILES__ = {"components/sigil-ci.yaml": "id: COMP-sigil-ci\nname: Sigil CI Pipeline\ndescription: GitHub Actions workflow that runs intent linting, gate checks, drift detection, and posts PR comments.\n\nowners:\n  - core-team\n\npaths:\n  - .github/workflows/intent.yml\n\ninterfaces:\n  provides: []\n  consumes:\n    - API-INTENT-CLI-V1\n\nattributes:\n  tier: 1\n  runtime: [ci]\n", "components/sigil-viewer.yaml": "id: COMP-sigil-viewer\nname: Sigil Viewer\ndescription: Interactive web-based intent graph explorer with 7 view modes, command palette, and human++ theming.\n\nowners:\n  - core-team\n\npaths:\n  - tools/intent_viewer/**\n\ninterfaces:\n  provides: []\n  consumes:\n    - API-INTENT-CLI-V1\n\nattributes:\n  tier: 1\n  runtime: [browser]\n", "components/intent-system.yaml": "id: COMP-intent-system\nname: Intent System\n\nowners:\n  - core-team\n\npaths:\n  - tools/intent/**\n  - tools/intent_viewer/**\n  - .intent/**\n\ninterfaces:\n  provides:\n    - API-INTENT-CLI-V1\n  consumes: []\n\nattributes:\n  tier: 0\n  runtime: [cli, ci]\n", "interfaces/API-INTENT-CLI-V1/README.md": "---\nid: API-INTENT-CLI-V1\nstatus: active\n---\n\n# Intent CLI Interface v1\n\nThe Sigil CLI exposes 15 commands that operate on the intent graph. This interface is consumed by the viewer (via `sigil serve` HTTP API) and CI (via direct CLI invocation).\n\n## Commands\n\n| Command | Input | Output | Used by |\n|---------|-------|--------|---------|\n| `index` | repo root | graph.json, search.json | viewer, CI |\n| `status` | repo root | terminal health report | developer |\n| `diff` | base SHA, head SHA | diff.json, diff.md | CI |\n| `new` | type, component, title | new intent doc | viewer (via API), developer |\n| `lint` | repo root | lint results | CI |\n| `check` | repo root | gate results | CI |\n| `drift` | repo root | drift.json | viewer, CI |\n| `timeline` | repo root | timeline.json | viewer, CI |\n| `export` | repo root | self-contained HTML | CI, developer |\n| `badge` | repo root | badge.svg | CI |\n| `serve` | port | HTTP server + file watcher | viewer |\n| `ask` | query | search results | developer |\n| `init` | repo root | scaffolded repo + running server | developer |\n| `fmt` | repo root | normalized docs | developer |\n| `bootstrap` | repo root | component stubs | developer |\n\n## HTTP API (via `sigil serve`)\n\n| Endpoint | Method | Description |\n|----------|--------|-------------|\n| `/api/new` | POST | Create a new intent document |\n| `/**` | GET | Static file serving for viewer |\n\n## Links\n\n- Provided by: [[COMP-intent-system]]\n- Consumed by: [[COMP-sigil-viewer]], [[COMP-sigil-ci]]\n", "intent/sigil-ci/specs/SPEC-0006-ci-pipeline.md": "---\nid: SPEC-0006\nstatus: accepted\n---\n\n# CI Pipeline Spec\n\nThe Sigil CI workflow runs on every pull request and produces a comprehensive intent report.\n\n## Intent\n\nIntent drift happens silently. Without enforcement, teams write intent docs once and never update them. CI integration makes intent a living part of the development workflow.\n\n## Pipeline Steps\n\n1. `sigil index` -- build the knowledge graph\n2. `sigil lint` -- check docs for structural issues\n3. `sigil check` -- enforce gates\n4. `sigil drift` -- compare intent vs code\n5. `sigil timeline` -- build evolution history\n6. `sigil badge` -- generate coverage badge\n7. `sigil export` -- create self-contained HTML snapshot\n8. `sigil diff` -- compute graph changes between PR base and head\n\n## PR Comment\n\nThe workflow posts a comment with:\n- Stats table (nodes, edges, specs, ADRs, gates)\n- Graph diff showing what changed\n\n## Acceptance Criteria\n\n- [ ] Workflow runs on PR open, sync, and reopen\n- [ ] All artifacts uploaded (graph.json, diff.json, badge.svg, export.html, drift.json, timeline.json)\n- [ ] PR comment includes stats table and diff\n- [ ] Gate failures block merge (when configured)\n\n## Links\n\n- Belongs to: [[COMP-sigil-ci]]\n- Depends on: [[API-INTENT-CLI-V1]]\n", "intent/intent-system/specs/SPEC-0001-intent-first-review-system.md": "---\nid: SPEC-0001\nstatus: accepted\n---\n\n# Intent-First Review System\n\n## Intent\n\nReplace diff-centric code review with intent-centric review. Humans review what and why; machines verify that code conforms to stated intent.\n\n## Context\n\nCode review today is broken at scale. Reviewers scroll through thousands of lines of diffs without understanding the purpose, constraints, or risks of a change. This leads to rubber-stamping, slow cycles, and missed architectural issues.\n\n## Goals\n\n- Intent documents (specs, ADRs, interfaces, gates) become the primary review surface\n- A dependency graph connects components, interfaces, specs, and constraints\n- CI enforces conformance via gates tied to intent nodes\n- Adoption is low-friction: CLI-first, editor-integrated, repo-portable\n\n## Non-goals\n\n- Replacing version control (git remains the storage layer)\n- Eliminating all human review (humans still review intent; machines review implementation)\n- Building a full project management tool\n\n## Design\n\nThe system has four layers:\n\n1. **Repo conventions** \u2014 structured directories for components, intent docs, interfaces, and gates\n2. **CLI/indexer** \u2014 parses repo into a graph, produces diffs, runs lints\n3. **Editor plugin** \u2014 autocomplete for `[[ID]]` references, quick-fixes, inline lint\n4. **Platform UI** \u2014 graph explorer, intent review view, impact analysis, drift dashboard\n\n### Core node types\n\n- Component (COMP-*): a service, package, or module\n- Spec (SPEC-*): an intent plan describing what and why\n- Decision (ADR-*): architectural decision records\n- Interface (API-*, EVT-*, SCHEMA-*, PROTO-*): contract definitions\n- Gate (GATE-*): enforceable constraints tied to nodes\n\n### Edge vocabulary\n\n- belongs_to, decided_by, provides, consumes, depends_on, gated_by, supersedes, relates_to\n\n## Links\n\n- Belongs to: [[COMP-intent-system]]\n\n## Acceptance Criteria\n\n- [ ] Repo schema supports all core node types\n- [ ] CLI can index repo into graph.json\n- [ ] CLI can compute graph diff between two commits\n- [ ] Templates exist for all core node types\n- [ ] CI can post intent diff as PR comment\n- [ ] Editor plugin provides autocomplete for [[ID]] references\n", "intent/intent-system/specs/SPEC-0002-bootstrapper-and-demo-strategy.md": "---\nid: SPEC-0002\nstatus: proposed\n---\n\n# Bootstrapper and Demo Strategy\n\n## Intent\n\nProvide a way to adopt intent-first on existing projects by generating an \"as-built\" intent skeleton, and define a demo flow that makes the value proposition immediately visible.\n\n## Context\n\nGreenfield adoption is easy but rare. Most teams have existing codebases. A bootstrapper that generates components, interfaces, and spec skeletons from an existing repo removes the cold-start problem. A compelling demo sells the concept.\n\n## Goals\n\n- `intent bootstrap` scans a repo and generates components, interfaces, and spec skeletons\n- Bootstrap output includes confidence scores on inferred relationships\n- Demo flow: bootstrap -> index -> viewer -> make a change -> see graph diff in PR\n\n## Non-goals\n\n- Recovering true \"why\" from code (bootstrapper generates as-built maps, not real intent)\n- Production-grade inference (heuristics are sufficient for v1)\n\n## Design\n\n### Bootstrap pipeline\n\n1. **Repo scan** \u2014 discover services/packages/modules, interface files, deployment topology\n2. **Dependency extraction** \u2014 regex heuristics for imports, build graph analysis\n3. **Graph assembly** \u2014 create nodes and edges with confidence scores\n4. **Emit skeleton intent** \u2014 spec skeletons, component registry, interface nodes\n5. **Emit diagnostics** \u2014 low-confidence edges, unknown ownership, TODOs\n\n### Demo narrative\n\n1. \"Here's the system map\" (graph viewer after bootstrap)\n2. \"Here's an intent PR\" (SPEC + ADR + interface change)\n3. \"Here's the graph diff review\" (CI comment)\n4. \"Here's an implementation PR \u2014 it merges because gates pass\"\n\n## Links\n\n- Belongs to: [[COMP-intent-system]]\n- Depends on: [[SPEC-0001]]\n\n## Acceptance Criteria\n\n- [ ] `intent bootstrap` produces valid components/*.yaml from repo structure\n- [ ] Bootstrap detects interface artifacts (OpenAPI, protobuf, JSON Schema)\n- [ ] Inferred edges include confidence scores and evidence\n- [ ] DEMO.md walks through the full narrative\n", "intent/intent-system/specs/SPEC-0004-sigil-cli.md": "---\nid: SPEC-0004\nstatus: accepted\n---\n\n# Sigil CLI\n\n## Intent\n\nProvide a single command-line tool that manages the full lifecycle of intent documents: scaffolding, indexing, linting, searching, and diffing. The CLI is the kernel that everything else builds on.\n\n!! If the CLI is slow or unreliable, nothing else works. Keep it fast and dependency-light.\n\n## Context\n\nEngineers already live in their terminal. A CLI that fits into existing workflows (git hooks, CI, editor tasks) has zero adoption friction. We chose Python because it's universal and the YAML/markdown parsing ecosystem is mature.\n\n>> See [[ADR-0002]] for the repo schema that the CLI operates on.\n\n## Goals\n\n- **index** -- build the knowledge graph from repo contents into `.intent/index/graph.json`\n- **lint** -- validate intent documents (front matter, required sections, dangling refs)\n- **new** -- scaffold new specs/ADRs from templates with auto-incrementing IDs\n- **diff** -- compute structural graph changes between two git commits\n- **fmt** -- normalize front matter and ensure Links sections exist\n- **bootstrap** -- scan a repo for manifest files and create component stubs\n- **init** -- zero-to-working setup: scaffold dirs, bootstrap, index, open viewer\n- **ask** -- local keyword search across the intent corpus\n\n## Non-goals\n\n- GUI or TUI interface (use the viewer for that)\n- Package manager distribution yet (run from source for now)\n- LLM-powered features in the core CLI (keep it offline-first)\n\n## Design\n\n### Single-file architecture\n\nEverything lives in `tools/intent/sigil.py`. No package structure, no setup.py. One file, one entry point.\n\n?? Will this scale past 2000 lines? Probably fine for now. Split when it hurts.\n\n### Graph model\n\n- **Node**: id, type, title, path, body_summary\n- **Edge**: type, src, dst, confidence, evidence\n- **Graph**: dict of nodes + list of edges\n\nNodes are discovered from four directory scanners (components, interfaces, intent docs, gates). Edges come from three sources: typed Links blocks, path-inferred belongs_to, and wikilink-derived relates_to.\n\n### Output artifacts\n\n- `graph.json` -- full graph with frontmatter enrichment\n- `search.json` -- lightweight index for autocomplete/search\n\n## Links\n\n- Belongs to: [[COMP-intent-system]]\n- Depends on: [[ADR-0002]]\n- Decided by: [[ADR-0004]]\n\n## Acceptance Criteria\n\n- [x] All 7 commands work: index, lint, new, diff, fmt, bootstrap, init\n- [x] 45+ tests passing\n- [x] graph.json includes body_summary and frontmatter fields\n- [x] Zero external dependencies beyond PyYAML\n- [x] Runs on Python 3.11+\n- [ ] `ask` command with local keyword search\n", "intent/intent-system/specs/SPEC-0003-sigil-viewer.md": "---\nid: SPEC-0003\nstatus: accepted\n---\n\n# Sigil Viewer\n\n## Intent\n\nBuild a browser-based graph explorer that makes the intent graph tangible. Engineers should be able to see their entire decision landscape at a glance, drill into any node to read the full spec/ADR, and understand blast radius before making changes.\n\n!! The viewer is the primary interface for non-CLI users. If it doesn't work well, Sigil doesn't work.\n\n## Context\n\nThe CLI kernel ([[SPEC-0001]]) produces `graph.json` with nodes and edges. Without a visual layer, that JSON is useful only to scripts. Architects need a spatial view; new team members need a reading surface; reviewers need blast radius analysis.\n\n>> See [[ADR-0001]] for why we chose intent-first review over traditional code review.\n\n## Goals\n\n- Render the full intent graph as an interactive force-directed diagram\n- Click any node to read its full markdown content with proper rendering\n- Show blast radius (Impact Radar) for any selected node\n- Compute and display an Intent Coverage health score\n- Support the human++ color scheme and annotation markers (`!!`, `??`, `>>`)\n- Resolve `[[wikilinks]]` as clickable navigation within the viewer\n\n## Non-goals\n\n- Real-time collaboration (this is a local tool)\n- Editing intent docs from the viewer (use your editor)\n- Server-side rendering (static HTML + JS only)\n\n## Design\n\n### Architecture\n\nSingle `index.html` file with inline CSS and JS. Dependencies: D3.js (graph rendering), marked.js (markdown parsing). Loaded via CDN. No build step.\n\n### Views\n\n1. **Graph View** -- D3 force-directed layout. Nodes colored by type. Edge labels on hover. Zoom/pan via scroll/drag.\n2. **Impact Radar** -- Concentric ring visualization. Center = selected node. Rings = direct/secondary/tertiary connections. Click to navigate.\n3. **Coverage Dashboard** -- Health score (0-100%), stat cards, and actionable findings list.\n\n### Content Panel\n\nRight-side panel with tabs:\n- **Content** -- fetches the source file, strips YAML frontmatter, renders markdown with human++ markers\n- **Edges** -- lists all incoming/outgoing edges with type badges\n- **Blast Radius** -- text-based impact analysis\n- **Raw** -- JSON representation of the node\n\n### Human++ Integration\n\n?? Should we bundle the palette or fetch it from the human++ repo?\n\nCurrent approach: CSS variables with hardcoded Base24 hex values from the human++ palette.json. Annotation markers (`!!`, `??`, `>>`) and keyword aliases (FIXME, TODO, NOTE) are post-processed after markdown rendering.\n\n>> See [[ADR-0005]] for why we integrated human++.\n\n## Links\n\n- Belongs to: [[COMP-intent-system]]\n- Depends on: [[SPEC-0001]]\n- Decided by: [[ADR-0005]]\n\n## Acceptance Criteria\n\n- [x] Force-directed graph renders all nodes and edges from graph.json\n- [x] Clicking a node shows rendered markdown content\n- [x] Human++ annotation markers render as colored badges\n- [x] Wikilinks navigate to the referenced node in the graph\n- [x] Impact Radar shows blast radius in concentric rings\n- [x] Coverage Dashboard shows health score and findings\n- [x] Edge labels visible on hover\n- [x] Search matches node IDs, titles, and body content\n- [x] Breadcrumb navigation shows Component > Node chain\n", "intent/intent-system/adrs/ADR-0003-gate-model.md": "---\nid: ADR-0003\nstatus: accepted\n---\n\n# Gate Model\n\n## Context\n\nIf intent documents are the \"what and why,\" gates are the \"enforcement.\" We need a way to define constraints that are tied to intent nodes and can be run in CI.\n\n## Decision\n\nGates are YAML files in `/gates/` with:\n\n- An ID (`GATE-*`)\n- An `applies_to` list referencing intent nodes\n- An `enforced_by` block specifying how to check (command, builtin rule, or AI prompt)\n- A `policy` block specifying warn vs. block behavior\n\nGate types include: command (run a script), builtin (framework-provided rules like spec-quality checks), and AI (LLM conformance check against a spec).\n\n## Alternatives\n\n1. **Hardcoded CI checks** \u2014 inflexible, not tied to intent graph\n2. **Policy-as-code tools (OPA, Kyverno)** \u2014 powerful but separate from intent model\n3. **No enforcement** \u2014 intent becomes aspirational documentation\n\n## Consequences\n\n- Gates make intent actionable, not just documentary\n- CI becomes the enforcement layer, not human reviewers\n- Gate YAML is simple enough for non-infra engineers to author\n- Must be careful about gate proliferation; start with high-value checks\n\n## Links\n\n- For: [[SPEC-0001]]\n", "intent/intent-system/adrs/ADR-0002-repo-schema-for-intent.md": "---\nid: ADR-0002\nstatus: accepted\n---\n\n# Repo Schema for Intent\n\n## Context\n\nIntent artifacts need a home. They could live in a database, a wiki, or the repo itself. We need a convention that is portable, versionable, and doesn't require a running service.\n\n## Decision\n\nStore all intent artifacts in the git repo using a structured directory layout:\n\n- `/components/` \u2014 component registry (YAML)\n- `/intent/<component>/specs/` \u2014 spec documents (Markdown + front matter)\n- `/intent/<component>/adrs/` \u2014 decision records\n- `/interfaces/` \u2014 contract definitions (OpenAPI, protobuf, JSON Schema)\n- `/gates/` \u2014 constraint definitions (YAML)\n- `/.intent/` \u2014 tooling config and generated index\n\nFront matter provides machine-readable metadata (id, status). Markdown body provides human-readable content. `[[ID]]` wikilinks create typed relationships.\n\n## Alternatives\n\n1. **External database** \u2014 queryable but not versionable, not portable\n2. **Wiki (Notion, Confluence)** \u2014 easy to write but disconnected from code, no enforcement\n3. **Inline code annotations** \u2014 close to code but hard to get a system view\n\n## Consequences\n\n- Repo is the source of truth; no external dependency\n- Git history tracks intent evolution\n- Tooling (CLI, editor, CI) reads directly from the filesystem\n- Requires discipline: teams must follow conventions\n\n## Links\n\n- For: [[SPEC-0001]]\n", "intent/intent-system/adrs/ADR-0001-why-intent-first.md": "---\nid: ADR-0001\nstatus: accepted\n---\n\n# Why Intent-First\n\n## Context\n\nTraditional code review focuses on diffs \u2014 line-by-line implementation details. At scale, this fails: reviewers lack context, rubber-stamp approvals, and miss architectural issues. Meanwhile, AI can generate code faster than humans can review it.\n\n## Decision\n\nAdopt an intent-first model where the primary review surface is structured intent documents (specs, ADRs, interface definitions) rather than code diffs. Implementation review is delegated to automated gates and AI conformance checks.\n\n## Alternatives\n\n1. **Status quo (diff review)** \u2014 doesn't scale with AI-generated code velocity\n2. **PR templates / checklists** \u2014 lightweight but unstructured, no enforcement\n3. **Architecture-as-code tools (Backstage, etc.)** \u2014 catalog-focused, not review-focused\n\n## Consequences\n\n- Higher upfront cost: teams must write specs before (or alongside) implementation\n- Lower review cost: reviewers read intent, not diffs\n- Better traceability: every change links back to a spec and its constraints\n- Requires tooling investment: CLI, editor plugin, CI integration\n\n## Links\n\n- For: [[SPEC-0001]]\n", "intent/intent-system/adrs/ADR-0004-ids-and-wikilinks.md": "---\nid: ADR-0004\nstatus: accepted\n---\n\n# IDs and Wikilinks\n\n## Context\n\nNodes in the intent graph need stable, human-readable identifiers. Relationships between nodes need a lightweight syntax that works in plain Markdown.\n\n## Decision\n\n- Every node gets a prefixed ID: `SPEC-0042`, `ADR-0001`, `COMP-user-service`, `API-USER-V1`, `GATE-0021`\n- IDs are declared in YAML front matter (`id: SPEC-0042`)\n- References use `[[ID]]` wikilink syntax: `[[COMP-user-service]]`, `[[API-USER-V1]]`\n- Typed relationships use a `## Links` section with labeled entries:\n  ```\n  - Belongs to: [[COMP-user-service]]\n  - Provides: [[API-USER-V1]]\n  ```\n- The CLI resolves wikilinks to file paths via the generated index\n\n## Alternatives\n\n1. **UUIDs** \u2014 stable but unreadable\n2. **File paths as IDs** \u2014 fragile across renames\n3. **Custom DSL** \u2014 higher learning curve than Markdown conventions\n\n## Consequences\n\n- IDs are grep-friendly and human-readable\n- Wikilinks are familiar (Obsidian, Notion, wiki conventions)\n- Renaming requires updating references (mitigated by `intent fmt`)\n- Tooling must maintain an ID-to-path mapping\n\n## Links\n\n- For: [[SPEC-0001]]\n", "intent/intent-system/adrs/ADR-0006-graph-storage-format.md": "---\nid: ADR-0006\nstatus: accepted\n---\n\n# Graph Storage Format\n\n## Context\n\nThe intent indexer needs to persist the knowledge graph in a format that the viewer, CI, and search tools can all consume. The graph consists of nodes (components, specs, ADRs, interfaces, gates) and typed edges (belongs_to, decided_by, depends_on, etc.).\n\n?? We considered a database but decided it was overkill for a repo-local tool.\n\n## Decision\n\nUse a single JSON file (`.intent/index/graph.json`) as the canonical graph artifact. Structure:\n\n```json\n{\n  \"version\": \"1.0\",\n  \"generated_at\": \"ISO-8601 timestamp\",\n  \"nodes\": [\n    {\n      \"id\": \"SPEC-0001\",\n      \"type\": \"spec\",\n      \"title\": \"Intent-First Review System\",\n      \"path\": \"intent/intent-system/specs/SPEC-0001-intent-first-review-system.md\",\n      \"body_summary\": \"First 500 chars of markdown body...\",\n      \"frontmatter\": { \"id\": \"SPEC-0001\", \"status\": \"accepted\" }\n    }\n  ],\n  \"edges\": [\n    {\n      \"type\": \"belongs_to\",\n      \"src\": \"SPEC-0001\",\n      \"dst\": \"COMP-intent-system\",\n      \"confidence\": 1.0,\n      \"evidence\": [\"Links block\"]\n    }\n  ]\n}\n```\n\nKey design choices:\n\n1. **body_summary** (max 500 chars) -- enables content search and preview without loading source files\n2. **frontmatter** object -- enables the viewer to show status badges and the coverage engine to score document maturity\n3. **confidence + evidence** on edges -- not all edges are explicit; some are inferred from paths or wikilinks\n4. **Flat arrays** -- no nesting, easy to parse in any language\n\nA secondary `search.json` with lightweight node records is also generated for autocomplete use cases.\n\n## Alternatives\n\n1. **SQLite** -- full query power, but adds a binary dependency and doesn't diff well in git. Rejected.\n2. **Multiple JSON files** (one per node) -- avoids large single files, but complicates viewer loading. Rejected.\n3. **YAML graph** -- more readable, but slower to parse and D3 expects JSON anyway. Rejected.\n\n## Consequences\n\n- Single file load in the viewer (one fetch for the entire graph)\n- Git-friendly: graph.json can be diffed and tracked\n- Regenerated on every `sigil index` -- not a source of truth, just a cache\n- Will need pagination or streaming if graphs exceed ~10,000 nodes\n\n!! If graph.json ever becomes a bottleneck, consider splitting into chunks or adding lazy loading.\n\n>> See [[SPEC-0004]] for the CLI commands that produce this file.\n\n## Links\n\n- For: [[SPEC-0004]]\n- Belongs to: [[COMP-intent-system]]\n", "intent/intent-system/adrs/ADR-0005-human++-integration.md": "---\nid: ADR-0005\nstatus: accepted\n---\n\n# Human++ Integration\n\n## Context\n\nSigil needed a visual identity for its viewer and a convention for annotating intent documents. The founder already maintained human++, a Base24 color scheme built around the thesis that \"code is cheap, intent is scarce.\" The scheme provides 24 colors in three tiers (grayscale, loud accents, quiet accents) plus three annotation markers for human judgment in code.\n\n!! Annotation markers are what make intent docs scannable. Without them, everything looks the same.\n\n## Decision\n\nAdopt human++ as the default color scheme and annotation system for all Sigil surfaces.\n\n**Color palette:** All 24 Base24 colors from `palette.json`, applied via CSS variables (`--base00` through `--base17`). Dark background (base00: `#1a1c22`), muted syntax (base10-17), loud accents for diagnostics and human markers (base08-0F).\n\n**Annotation markers:**\n\n| Marker | Meaning | Color |\n|--------|---------|-------|\n| `!!` | Attention -- critical concern | base0F (lime `#bbff00`) |\n| `??` | Uncertainty -- low confidence | base0E (purple `#9871fe`) |\n| `>>` | Reference -- pointer to related context | base0C (cyan `#1ad0d6`) |\n\nKeyword aliases are also recognized: FIXME/BUG/XXX map to `!!`, TODO/HACK map to `??`, NOTE/NB map to `>>`.\n\n**Rendering:** Markers are post-processed after markdown-to-HTML conversion. Each marker becomes a styled `<span>` with colored background, bold text, and 4px border radius.\n\n## Alternatives\n\n1. **No theme** -- plain markdown rendering. Rejected: too bland, no visual distinction for human judgment markers.\n2. **Custom theme** -- build a Sigil-specific palette. Rejected: unnecessary work when human++ already exists and the founder uses it everywhere.\n3. **Configurable themes** -- let users pick their own Base16/24 scheme. Deferred: good idea for later, but premature for v1.\n\n## Consequences\n\n- Viewer has a strong visual identity out of the box\n- Intent docs can use `!!`, `??`, `>>` markers that render meaningfully in the viewer\n- VS Code users who install the human++ extension get consistent highlighting in both editor and viewer\n- Tight coupling to one color scheme -- will need a theme system if we open-source\n\n>> See [[SPEC-0003]] for how the viewer implements human++ rendering.\n\n## Links\n\n- For: [[SPEC-0003]]\n- Belongs to: [[COMP-intent-system]]\n", "intent/sigil-viewer/specs/SPEC-0005-seven-view-modes.md": "---\nid: SPEC-0005\nstatus: accepted\n---\n\n# Seven View Modes\n\nThe Sigil viewer provides seven distinct visualizations of the intent graph, each optimized for a different analysis task.\n\n## Intent\n\nArchitects and developers need multiple lenses to understand a system's intent structure. A single graph view is not enough -- you need to see topology, hierarchy, coverage, drift, history, and coupling.\n\n## Views\n\n1. **Graph** -- force-directed knowledge graph with drag, zoom, glow effects on high-connectivity nodes, colored edges by type, and curved paths with directional arrows\n2. **Impact Radar** -- concentric ring visualization showing blast radius from any selected node\n3. **Hierarchy** -- layered view with components at top, specs/gates in middle, ADRs at bottom\n4. **Coverage** -- health dashboard with weighted scoring (component coverage, ADR maturity, spec quality, reference integrity)\n5. **Drift** -- comparison of intent graph against actual codebase file structure\n6. **Timeline** -- swim-lane visualization of intent evolution from git history\n7. **Matrix** -- dependency grid showing node-to-node relationships as a heatmap\n\n## Acceptance Criteria\n\n- [ ] All seven views render without errors\n- [ ] Each view has a keyboard shortcut (g/r/h/c/d/t/m)\n- [ ] Views are accessible from command palette (Cmd+K)\n- [ ] View state persists across node selections\n\n## Links\n\n- Belongs to: [[COMP-sigil-viewer]]\n- Depends on: [[API-INTENT-CLI-V1]]\n- Decided by: [[ADR-0005]]\n", "gates/GATE-0002-adr-maturity.yaml": "id: GATE-0002\ntype: spec-quality\nstatus: active\n\napplies_to:\n  - node: COMP-intent-system\n\nenforced_by:\n  kind: lint-rule\n  checks:\n    - all_adrs_have_status\n    - no_draft_adrs_older_than_30_days\n\npolicy:\n  mode: \"warn\"\n  on_fail: \"warn\"\n\ndocs:\n  summary: \"Ensures ADRs progress beyond draft status in a timely manner\"\n  owner: \"sigil-team\"\n", "gates/GATE-0001-spec-quality.yaml": "id: GATE-0001\ntype: spec-quality\nstatus: active\n\napplies_to:\n  - node: COMP-intent-system\n\nenforced_by:\n  kind: lint-rule\n  checks:\n    - all_specs_have_acceptance_criteria\n    - all_specs_have_status\n    - no_dangling_references\n\npolicy:\n  mode: \"warn\"\n  on_fail: \"block\"\n\ndocs:\n  summary: \"Ensures all specs under intent-system have acceptance criteria, status, and valid references\"\n  owner: \"sigil-team\"\n"};
@@ -1223,6 +1251,110 @@
   ],
   "generated_at": "2026-03-06T20:53:43Z"
 };
+    window.__SIGIL_REVIEW__ = {
+  "generated_at": "2026-03-07T10:08:50Z",
+  "summary": {
+    "total_changes": 2,
+    "intent_changes": 0,
+    "code_changes": 2,
+    "covered_files": 0,
+    "uncovered_files": 2,
+    "coverage_pct": 0
+  },
+  "intent_changes": [],
+  "covered": {},
+  "uncovered": [
+    {
+      "status": "M",
+      "path": "branding/BRAND.md"
+    },
+    {
+      "status": "M",
+      "path": "pyproject.toml"
+    }
+  ],
+  "governance": {},
+  "gates": [
+    {
+      "id": "GATE-0001",
+      "summary": "Ensures all specs under intent-system have acceptance criteria, status, and valid references",
+      "kind": "lint-rule",
+      "policy": "block",
+      "passed": true,
+      "scope": 11,
+      "findings": []
+    },
+    {
+      "id": "GATE-0002",
+      "summary": "Ensures ADRs progress beyond draft status in a timely manner",
+      "kind": "lint-rule",
+      "policy": "warn",
+      "passed": true,
+      "scope": 11,
+      "findings": []
+    }
+  ]
+};
+    window.__SIGIL_COVERAGE__ = {
+  "score": 100,
+  "metrics": {
+    "components_with_spec": {
+      "value": 3,
+      "total": 3,
+      "pct": 100
+    },
+    "specs_with_acceptance": {
+      "value": 6,
+      "total": 6,
+      "pct": 100
+    },
+    "adrs_with_status": {
+      "value": 6,
+      "total": 6,
+      "pct": 100
+    },
+    "adrs_accepted": {
+      "value": 6,
+      "total": 6,
+      "pct": 100
+    }
+  },
+  "stats": {
+    "nodes": 18,
+    "edges": 37,
+    "components": 3,
+    "specs": 6,
+    "adrs": 6,
+    "gates": 2
+  },
+  "components": [
+    {
+      "id": "COMP-sigil-ci",
+      "title": "Sigil CI Pipeline",
+      "has_spec": true,
+      "adr_count": 0,
+      "gate_count": 0,
+      "level": "yellow"
+    },
+    {
+      "id": "COMP-sigil-viewer",
+      "title": "Sigil Viewer",
+      "has_spec": true,
+      "adr_count": 1,
+      "gate_count": 0,
+      "level": "green"
+    },
+    {
+      "id": "COMP-intent-system",
+      "title": "Intent System",
+      "has_spec": true,
+      "adr_count": 6,
+      "gate_count": 2,
+      "level": "green"
+    }
+  ],
+  "findings": []
+};
 
     // Override fetch to serve embedded data
     const _origFetch = window.fetch;
@@ -1236,6 +1368,12 @@
       }
       if (urlStr.includes('timeline.json')) {
         return Promise.resolve(new Response(JSON.stringify(window.__SIGIL_TIMELINE__), {status: 200}));
+      }
+      if (urlStr.includes('review.json')) {
+        return Promise.resolve(new Response(JSON.stringify(window.__SIGIL_REVIEW__), {status: 200}));
+      }
+      if (urlStr.includes('coverage.json')) {
+        return Promise.resolve(new Response(JSON.stringify(window.__SIGIL_COVERAGE__), {status: 200}));
       }
       // Check file contents
       for (const [path, content] of Object.entries(window.__SIGIL_FILES__)) {
@@ -1259,6 +1397,7 @@
       <button class="view-btn" data-view="drift" onclick="switchView('drift')">Drift</button>
       <button class="view-btn" data-view="timeline" onclick="switchView('timeline')">Timeline</button>
       <button class="view-btn" data-view="matrix" onclick="switchView('matrix')">Matrix</button>
+      <button class="view-btn" data-view="review" onclick="switchView('review')">Review</button>
       <button id="new-btn" onclick="showNewModal()">+ New</button>
     </div>
     <div id="health-badge"></div>
@@ -1568,6 +1707,44 @@
       `;
     }
 
+    async function renderCoverageDashboardAsync() {
+      const cov = computeCoverage(graphData);
+      renderCoverageDashboard(cov);
+      // Try to load coverage.json for per-component details
+      try {
+        const res = await fetch("../../.intent/index/coverage.json");
+        if (!res.ok) throw new Error();
+        const covData = await res.json();
+        if (covData.components && covData.components.length) {
+          const area = document.getElementById("content-area");
+          const levelColor = { green: "var(--base0B)", yellow: "var(--base0A)", red: "var(--base08)" };
+          const levelIcon = { green: "+", yellow: "~", red: "-" };
+          let compHtml = '<h3 style="color:var(--base06);font-size:14px;margin:16px 0 10px">Component Coverage</h3>';
+          compHtml += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px">';
+          covData.components.forEach(c => {
+            const col = levelColor[c.level] || "var(--base05)";
+            const icon = levelIcon[c.level] || "?";
+            compHtml += `<div class="cov-card" style="cursor:pointer;border-left:3px solid ${col}" onclick="switchView('graph');selectNodeById('${c.id}')">
+              <div class="cov-card-title" style="color:${col}">[${icon}] ${esc(c.id)}</div>
+              <div class="cov-card-sub">${c.has_spec ? 'spec' : 'no spec'} · ${c.adr_count} ADR(s) · ${c.gate_count} gate(s)</div>
+            </div>`;
+          });
+          compHtml += '</div>';
+          // Also show metrics from CLI
+          if (covData.metrics) {
+            const m = covData.metrics;
+            compHtml += '<h3 style="color:var(--base06);font-size:14px;margin:16px 0 10px">Metrics</h3><div class="cov-grid">';
+            compHtml += `<div class="cov-card"><div class="cov-card-title">Components with Spec</div><div class="cov-card-value" style="color:var(--base0B)">${m.components_with_spec.pct}%</div><div class="cov-card-sub">${m.components_with_spec.value}/${m.components_with_spec.total}</div></div>`;
+            compHtml += `<div class="cov-card"><div class="cov-card-title">Specs with Acceptance</div><div class="cov-card-value" style="color:var(--base0D)">${m.specs_with_acceptance.pct}%</div><div class="cov-card-sub">${m.specs_with_acceptance.value}/${m.specs_with_acceptance.total}</div></div>`;
+            compHtml += `<div class="cov-card"><div class="cov-card-title">ADRs Accepted</div><div class="cov-card-value" style="color:var(--base0E)">${m.adrs_accepted.pct}%</div><div class="cov-card-sub">${m.adrs_accepted.value}/${m.adrs_accepted.total}</div></div>`;
+            compHtml += `<div class="cov-card"><div class="cov-card-title">ADRs with Status</div><div class="cov-card-value" style="color:var(--base0C)">${m.adrs_with_status.pct}%</div><div class="cov-card-sub">${m.adrs_with_status.value}/${m.adrs_with_status.total}</div></div>`;
+            compHtml += '</div>';
+          }
+          area.innerHTML += compHtml;
+        }
+      } catch(e) { /* coverage.json not available, client-side view is sufficient */ }
+    }
+
     // ---- Drift Detection View ----
 
     async function renderDriftDashboard() {
@@ -1659,6 +1836,167 @@
           <span class="cov-sev cov-sev-ok">PASS</span>
           <span class="cov-finding-text">All code files are mapped to components with governing specs</span>
         </div>`;
+      }
+
+      area.innerHTML = html;
+    }
+
+    // ---- Review Dashboard ----
+
+    async function renderReviewDashboard() {
+      const area = document.getElementById("content-area");
+      document.getElementById("node-header").innerHTML = '<h2>Intent Review</h2><div><span class="pill pill-type">code review governance</span></div>';
+      document.getElementById("breadcrumb").innerHTML = '';
+      document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+
+      let review;
+      try {
+        const res = await fetch("../../.intent/index/review.json");
+        if (!res.ok) throw new Error();
+        review = await res.json();
+      } catch {
+        area.innerHTML = `<div class="md-body">
+          <p>No review data available. Run <code>sigil index</code> or <code>sigil serve</code> to generate.</p>
+        </div>`;
+        return;
+      }
+
+      const s = review.summary || {};
+      const pct = s.coverage_pct !== undefined ? s.coverage_pct : 100;
+      const covColor = pct >= 80 ? "var(--base0B)" : pct >= 50 ? "var(--base0A)" : "var(--base08)";
+      const covLabel = pct >= 80 ? "GOOD" : pct >= 50 ? "FAIR" : "LOW";
+
+      // Gate summary
+      const gates = review.gates || [];
+      const gatesPassed = gates.filter(g => g.passed).length;
+      const gatesTotal = gates.length;
+      const gatesColor = gatesTotal === 0 ? "var(--base04)" : gatesPassed === gatesTotal ? "var(--base0B)" : "var(--base08)";
+
+      let html = `
+        <div class="cov-grid">
+          <div class="cov-card">
+            <div class="cov-card-title">Intent Coverage</div>
+            <div class="cov-card-value" style="color:${covColor};font-size:36px">${pct}%</div>
+            <div style="font-size:11px;color:var(--base04);margin-top:4px">${covLabel} &mdash; ${s.covered_files || 0}/${s.code_changes || 0} files governed</div>
+          </div>
+          <div class="cov-card">
+            <div class="cov-card-title">Changes</div>
+            <div class="cov-card-value" style="color:var(--base06)">${s.total_changes || 0}</div>
+            <div style="font-size:11px;color:var(--base04);margin-top:4px">${s.intent_changes || 0} intent, ${s.code_changes || 0} code</div>
+          </div>
+          <div class="cov-card">
+            <div class="cov-card-title">Gates</div>
+            <div class="cov-card-value" style="color:${gatesColor}">${gatesPassed}/${gatesTotal}</div>
+            <div style="font-size:11px;color:var(--base04);margin-top:4px">${gatesPassed === gatesTotal ? 'all passing' : (gatesTotal - gatesPassed) + ' failing'}</div>
+          </div>
+          <div class="cov-card">
+            <div class="cov-card-title">Ungoverned</div>
+            <div class="cov-card-value" style="color:${(s.uncovered_files || 0) > 0 ? 'var(--base09)' : 'var(--base0B)'}">${s.uncovered_files || 0}</div>
+            <div style="font-size:11px;color:var(--base04);margin-top:4px">files without component mapping</div>
+          </div>
+        </div>
+      `;
+
+      // Intent document changes
+      const intentChanges = review.intent_changes || [];
+      if (intentChanges.length > 0) {
+        html += '<h3 style="color:var(--base06);font-size:14px;margin:16px 0 10px">Intent Document Changes</h3>';
+        const statusBadge = (s) => {
+          const colors = { A: "var(--base0B)", M: "var(--base0D)", D: "var(--base08)", R: "var(--base0E)" };
+          const labels = { A: "added", M: "modified", D: "deleted", R: "renamed" };
+          return `<span style="display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:600;background:${colors[s] || 'var(--base03)'};color:var(--base00);margin-right:6px">${(labels[s] || s).toUpperCase()}</span>`;
+        };
+        intentChanges.forEach(ic => {
+          const nodeId = ic.path.split("/").pop().replace(/\.md$/, "").replace(/\.yaml$/, "");
+          html += `<div style="margin:4px 0;font-size:12px">
+            ${statusBadge(ic.status)}
+            <code style="background:var(--base02);padding:1px 4px;border-radius:2px;font-size:11px">${esc(ic.path)}</code>
+          </div>`;
+        });
+      }
+
+      // Governed code changes by component
+      const covered = review.covered || {};
+      const governance = review.governance || {};
+      const coveredComps = Object.keys(covered);
+      if (coveredComps.length > 0) {
+        html += '<h3 style="color:var(--base06);font-size:14px;margin:16px 0 10px">Governed Code Changes</h3>';
+        coveredComps.forEach(cid => {
+          const files = covered[cid];
+          const gov = governance[cid] || {};
+          html += `<div style="margin:8px 0;padding:10px;background:var(--base02);border-radius:6px">`;
+          html += `<div style="font-weight:600;font-size:13px;margin-bottom:6px">
+            <span class="cov-link" onclick="switchView('graph');selectNodeById('${cid}')">${esc(cid)}</span>
+            <span style="color:var(--base04);font-weight:400;margin-left:8px">${files.length} file(s)</span>
+          </div>`;
+
+          // Governance badges
+          const govParts = [];
+          if (gov.specs && gov.specs.length) {
+            govParts.push(gov.specs.map(s =>
+              `<span class="cov-link" onclick="switchView('graph');selectNodeById('${s.id}')" style="font-size:11px">${esc(s.id)}</span>`
+            ).join(' '));
+          }
+          if (gov.adrs && gov.adrs.length) {
+            govParts.push(gov.adrs.map(a =>
+              `<span class="cov-link" onclick="switchView('graph');selectNodeById('${a.id}')" style="font-size:11px">${esc(a.id)}</span>`
+            ).join(' '));
+          }
+          if (gov.gates && gov.gates.length) {
+            govParts.push(gov.gates.map(g =>
+              `<span class="cov-link" onclick="switchView('graph');selectNodeById('${g.id}')" style="font-size:11px">${esc(g.id)}</span>`
+            ).join(' '));
+          }
+          if (govParts.length) {
+            html += `<div style="margin-bottom:6px;font-size:11px;color:var(--base04)">Governed by: ${govParts.join(' &middot; ')}</div>`;
+          }
+
+          files.forEach(f => {
+            const st = f.status || "M";
+            const stColors = { A: "var(--base0B)", M: "var(--base0D)", D: "var(--base08)" };
+            html += `<div style="margin:2px 0;font-size:11px;color:var(--base04)">
+              <span style="color:${stColors[st] || 'var(--base04)'};font-weight:600;width:12px;display:inline-block">${st}</span>
+              <code style="background:var(--base01);padding:1px 4px;border-radius:2px">${esc(f.path)}</code>
+            </div>`;
+          });
+          html += `</div>`;
+        });
+      }
+
+      // Ungoverned files
+      const uncovered = review.uncovered || [];
+      if (uncovered.length > 0) {
+        html += `<h3 style="color:var(--base09);font-size:14px;margin:16px 0 10px">Ungoverned Files</h3>`;
+        html += `<div style="padding:10px;background:rgba(242,108,51,0.08);border:1px solid rgba(242,108,51,0.2);border-radius:6px">`;
+        uncovered.forEach(f => {
+          html += `<div style="margin:2px 0;font-size:11px;color:var(--base09)">
+            <code style="background:var(--base02);padding:1px 4px;border-radius:2px">${esc(f.path)}</code>
+          </div>`;
+        });
+        html += `</div>`;
+      }
+
+      // Gate results
+      if (gates.length > 0) {
+        html += '<h3 style="color:var(--base06);font-size:14px;margin:16px 0 10px">Gate Results</h3>';
+        gates.forEach(gr => {
+          const passColor = gr.passed ? "var(--base0B)" : "var(--base08)";
+          const passLabel = gr.passed ? "PASS" : "FAIL";
+          html += `<div class="cov-finding">
+            <span class="cov-sev" style="background:${gr.passed ? 'rgba(4,179,114,0.15)' : 'rgba(231,52,156,0.15)'};color:${passColor}">${passLabel}</span>
+            <span class="cov-finding-text">
+              <span class="cov-link" onclick="switchView('graph');selectNodeById('${gr.id}')">${esc(gr.id)}</span>: ${esc(gr.summary || '')}
+            </span>
+          </div>`;
+          if (gr.findings && gr.findings.length) {
+            html += '<div style="margin:4px 0 8px 40px;font-size:11px;color:var(--base04)">';
+            gr.findings.forEach(f => {
+              const msg = typeof f === "string" ? f : (f.severity + ": " + f.message);
+              html += `<div style="margin:2px 0">${esc(msg)}</div>`;
+            });
+            html += '</div>';
+          }
+        });
       }
 
       area.innerHTML = html;
@@ -2192,7 +2530,7 @@
         document.getElementById("node-header").innerHTML = '<h2>Intent Coverage Dashboard</h2><div><span class="pill pill-type">health report</span></div>';
         document.getElementById("breadcrumb").innerHTML = '';
         document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
-        renderCoverageDashboard(computeCoverage(graphData));
+        renderCoverageDashboardAsync();
       } else if (view === "drift") {
         renderDriftDashboard();
       } else if (view === "timeline") {
@@ -2201,6 +2539,8 @@
       } else if (view === "matrix") {
         mtxEl.style.display = "block";
         renderMatrixView();
+      } else if (view === "review") {
+        renderReviewDashboard();
       }
     }
 
@@ -2485,6 +2825,8 @@
         switchView("timeline");
       } else if (ev.key === "m") {
         switchView("matrix");
+      } else if (ev.key === "w") {
+        switchView("review");
       } else if (ev.key === "Escape") {
         hideTooltip();
       }
@@ -2770,6 +3112,7 @@
         { label: "Drift Detection", action: () => switchView("drift"), type: "view", hint: "d" },
         { label: "Timeline", action: () => switchView("timeline"), type: "view", hint: "t" },
         { label: "Dependency Matrix", action: () => switchView("matrix"), type: "view", hint: "m" },
+        { label: "Review", action: () => switchView("review"), type: "view", hint: "w" },
       ];
 
       // Actions
