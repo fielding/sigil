@@ -973,7 +973,30 @@ def cmd_status(args) -> int:
         max_score += 10
     pct = round((score / max_score) * 100) if max_score > 0 else 0
 
-    # Output
+    # Build issues list
+    issues = []
+    uncomps = [n for n in components if n.id not in comps_with_spec]
+    if uncomps:
+        issues.append(f"{len(uncomps)} component(s) have no governing spec")
+    if draft_adrs:
+        issues.append(f"{draft_adrs} ADR(s) still in draft/proposed")
+    if dangling:
+        issues.append(f"{dangling} dangling reference(s)")
+
+    # JSON output
+    if getattr(args, "json", False):
+        import json as _json
+        print(_json.dumps({
+            "health": pct,
+            "nodes": len(g.nodes),
+            "edges": len(g.edges),
+            "node_types": {t: types.get(t, 0) for t in ["component", "spec", "adr", "gate", "interface"] if types.get(t, 0)},
+            "edge_types": edge_types,
+            "issues": issues,
+        }, indent=2))
+        return 0
+
+    # Terminal output
     bar_len = 20
     filled = round(pct / 100 * bar_len)
     bar = "#" * filled + "-" * (bar_len - filled)
@@ -992,19 +1015,10 @@ def cmd_status(args) -> int:
         print(f"    {et}: {edge_types[et]}")
     print()
 
-    issues = []
-    uncomps = [n for n in components if n.id not in comps_with_spec]
-    if uncomps:
-        issues.append(f"  {len(uncomps)} component(s) have no governing spec")
-    if draft_adrs:
-        issues.append(f"  {draft_adrs} ADR(s) still in draft/proposed")
-    if dangling:
-        issues.append(f"  {dangling} dangling reference(s)")
-
     if issues:
         print("  Issues:")
         for i in issues:
-            print(f"    - {i}")
+            print(f"    -   {i}")
     else:
         print("  No issues found.")
     print()
@@ -4179,6 +4193,7 @@ def main() -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     sp = sub.add_parser("status", help="Show intent graph health status")
+    sp.add_argument("--json", action="store_true", default=False, help="Output results as JSON")
     sp.set_defaults(fn=cmd_status)
 
     sp = sub.add_parser("index", help="Build graph index from repo")
