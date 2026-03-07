@@ -1,120 +1,117 @@
 # Sigil
 
-**Intent-first engineering. Your decisions, structured, connected, and enforced.**
+**Your codebase knows *what*. Sigil knows *why*.**
 
-Sigil makes the *why* behind your code as navigable as the code itself. Specs, ADRs, gates, and component definitions live in your repo, versioned with your code, connected in a knowledge graph, and enforced in CI.
+Sigil is an intent graph framework for software projects. Specs, ADRs, gates, and component definitions live in your repo — versioned with your code, connected in a navigable knowledge graph, and enforced in CI. No SaaS, no sync, no drift between your docs and your code.
 
-**[Live Demo](https://fielding.github.io/sigil/)** — explore the Sigil intent graph in your browser, no install needed.
-
-## Why
-
-Every team has intent scattered across Notion, Confluence, Slack threads, PR descriptions, and people's heads. When you need to know *why* a decision was made, you're left grepping through months of messages.
-
-Sigil gives intent a home:
-- **Structured** -- specs, ADRs, and gates follow templates with frontmatter
-- **Connected** -- wikilinks and typed edges build a navigable knowledge graph
-- **Enforced** -- gates block PRs that violate your own stated intent
-- **Versioned** -- everything is in Git, reviewed like code
+**[Live Demo](https://fielding.github.io/sigil/)** — explore a full intent graph in your browser.
 
 ## Quick Start
 
 ```bash
-# Install
 pip install sigil-cli
 
-# Initialize in any repo
 cd your-project
 sigil init
-
-# That's it. Browser opens with your intent graph.
 ```
 
-`sigil init` scans your repo, creates the directory structure, bootstraps components from package manifests, builds the knowledge graph, and opens the interactive viewer. The viewer is bundled — no extra downloads needed.
+`sigil init` scans your repo, scaffolds the directory structure, detects components from package manifests, builds the knowledge graph, and opens an interactive viewer. One command, zero config.
 
-## The Viewer
+## What You Get
 
-Seven views into your intent architecture:
+**Structure.** Specs, ADRs, gates, and interfaces follow templates with typed frontmatter. No more intent buried in Notion pages and Slack threads.
 
-| View | What it shows |
-|------|--------------|
-| **Graph** | Force-directed knowledge graph. Drag, zoom, click to explore. |
-| **Impact Radar** | Select any node, see its blast radius in concentric rings. |
-| **Hierarchy** | Layered view: Components > Specs/Gates > ADRs |
-| **Coverage** | Health score (0-100%) based on spec coverage, ADR maturity, reference integrity |
-| **Drift** | Where your code and intent have diverged |
-| **Timeline** | Git-backed history of how your intent evolved |
-| **Matrix** | Dependency heatmap of node-to-node relationships |
+**Connections.** Wikilinks and typed edges (`depends_on`, `gated_by`, `decided_by`, ...) build a graph you can query, visualize, and diff. Ask "why does this file exist?" and get an answer: `sigil why src/auth.ts`.
 
-**Command palette**: `Cmd+K` to search nodes, switch views, or create new docs.
+**Enforcement.** Gates block PRs that violate your own stated intent. Pattern checks, coverage thresholds, lint rules — all defined in YAML, all run in CI with `sigil ci`.
 
-**Keyboard navigation**: `j`/`k` cycle nodes, `/` search, `g`/`r`/`h`/`c`/`d`/`t`/`m` switch views.
+**Visibility.** Eight interactive views in a bundled browser UI:
 
-**Live reload**: `sigil serve` auto-refreshes the viewer when intent docs change. Look for the green LIVE indicator.
+| View | Key | What it shows |
+|------|-----|--------------|
+| **Graph** | `g` | Force-directed knowledge graph — drag, zoom, click |
+| **Impact Radar** | `r` | Blast radius of any node in concentric rings |
+| **Hierarchy** | `h` | Layered: Components → Specs/Gates → ADRs |
+| **Coverage** | `c` | Health score (0–100%) across specs, ADRs, references |
+| **Drift** | `d` | Where code and intent have diverged |
+| **Timeline** | `t` | Git-backed evolution of your intent |
+| **Matrix** | `m` | Dependency heatmap across all nodes |
+| **Review** | `w` | Governance snapshot: coverage, gates, drift |
 
-**Human++** themed with the [Base24 color scheme](https://fielding.github.io/human-plus-plus/) and annotation markers (`!!` attention, `??` uncertainty, `>>` reference).
+Command palette (`Cmd+K`), keyboard nav (`j`/`k`, `/` to search), and live reload via `sigil serve`.
 
-## CLI
+## CLI Reference
 
-```
-sigil index      Build the knowledge graph from your repo
-sigil status     Terminal dashboard with health bar and stats
-sigil lint       Check intent docs for issues
-sigil check      Run gate enforcement
-sigil drift      Compare intent graph against actual code
-sigil review     Analyze git diff for intent coverage
-sigil suggest    Show which intent docs govern a file
-sigil ask        Search intent docs with natural language
-sigil timeline   Build evolution history from git log
-sigil new        Create a new spec or ADR from template
-sigil diff       Compute graph changes between commits
-sigil export     Generate self-contained HTML snapshot
-sigil badge      Generate coverage badge SVG for your README
-sigil serve      Dev server with live reload
-sigil init       Zero-to-working setup
-sigil fmt        Normalize intent doc formatting
-sigil bootstrap  Scan repo for missing component stubs
-sigil hook       Install/uninstall pre-commit hook
-sigil pr         Analyze GitHub PR and post intent coverage comment
-sigil doctor     Diagnose installation and repo health
-sigil scan       Deep-scan codebase: detect components, APIs, decisions, infra
-sigil ci         Run full CI pipeline in one command (index + lint + check + badge + review)
-sigil map        Terminal-rendered dependency map (tree, deps, or flat mode)
-sigil why        Explain why a file exists — trace its full intent chain
-```
-
-## Repo Structure
+The ones you'll use most:
 
 ```
-components/          Component registry (YAML)
-intent/              Specs and ADRs organized by component
-  {component}/
-    specs/           What we're building and why
-    adrs/            Architectural decisions
-interfaces/          API and event contracts
-gates/               Enforceable constraints
-templates/           Scaffolding for new docs
-.intent/             Generated artifacts (graph.json, badge, exports)
+sigil init         Zero-to-working setup: scaffold, index, open viewer
+sigil status       Terminal dashboard with health bar and stats
+sigil serve        Dev server with live reload
+sigil check        Run gate enforcement
+sigil drift        Find where code and intent have diverged
+sigil review       Analyze git diff for intent coverage
+sigil why          Trace the full intent chain for any file
+sigil ask          Search intent docs with natural language
+sigil ci           Full CI pipeline: index + lint + check + badge + review
+sigil pr           Post intent coverage analysis to a GitHub PR
 ```
+
+<details>
+<summary>Full command list</summary>
+
+| Command | Description |
+|---------|-------------|
+| `init` | Zero-to-working setup: scaffold, index, and open viewer |
+| `index` | Build the knowledge graph from your repo |
+| `status` | Terminal dashboard with health bar and stats |
+| `serve` | Dev server with file watching and auto-rebuild |
+| `new` | Create a new spec or ADR from template |
+| `lint` | Check intent docs for structural issues |
+| `fmt` | Normalize intent doc formatting (IDs, links) |
+| `bootstrap` | Scan repo and create missing component stubs |
+| `scan` | Deep-scan: detect components, APIs, decisions, infra |
+| `diff` | Compute graph changes between commits |
+| `drift` | Compare intent graph against actual code |
+| `check` | Run gate enforcement checks |
+| `review` | Analyze git diff for intent coverage |
+| `suggest` | Show which intent docs govern a file |
+| `ask` | Search intent docs with natural language |
+| `why` | Trace why a file exists through the intent chain |
+| `map` | Terminal-rendered dependency map (tree, deps, flat) |
+| `timeline` | Build evolution history from git log |
+| `export` | Generate self-contained HTML snapshot |
+| `badge` | Generate coverage badge SVG |
+| `hook` | Install/uninstall git pre-commit hook |
+| `pr` | Analyze GitHub PR and post intent coverage comment |
+| `doctor` | Diagnose installation and repo health |
+| `ci` | Full CI pipeline in one command |
+
+</details>
 
 ## CI Integration
-
-Add to your GitHub Actions workflow:
 
 ```yaml
 - run: sigil ci
 - run: sigil pr ${{ github.event.pull_request.number }}
 ```
 
-`sigil ci` runs the full pipeline in one command: index, lint, check gates, generate badge, and review changes. Add `--strict` to fail on any warnings.
+`sigil ci` runs index → lint → check → badge → review in one shot. Add `--strict` to fail on warnings.
 
-PRs get an automatic intent analysis comment with coverage percentage, governed/ungoverned changes, gate results, and links back to the intent graph.
+PRs get an automatic comment with coverage percentage, governed vs. ungoverned changes, gate results, and links to the intent graph.
 
-### Local PR analysis
+## Repo Structure
 
-```bash
-sigil pr           # analyzes current branch's PR
-sigil pr 42        # analyzes PR #42
-sigil pr --dry-run # preview without posting
+```
+components/          Component registry (YAML)
+intent/              Specs and ADRs, organized by component
+  {component}/
+    specs/           What we're building and why
+    adrs/            Architectural decisions
+interfaces/          API and event contracts
+gates/               Enforceable constraints (YAML)
+templates/           Scaffolding for new docs
+.intent/             Generated artifacts (graph.json, badge, exports)
 ```
 
 ## Node Types
@@ -129,7 +126,7 @@ sigil pr --dry-run # preview without posting
 
 ## Edge Types
 
-`belongs_to` `decided_by` `depends_on` `gated_by` `provides` `consumes` `relates_to` `supersedes`
+`belongs_to` · `decided_by` · `depends_on` · `gated_by` · `provides` · `consumes` · `relates_to` · `supersedes`
 
 ## License
 
