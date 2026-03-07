@@ -365,11 +365,15 @@ def write_graph_artifacts(repo_root: Path, g: Graph) -> None:
             nd["frontmatter"] = fm
         enriched_nodes.append(nd)
 
+    # Run gate checks and include results
+    gate_results = _run_gate_checks(repo_root, g)
+
     graph_json = {
         "version": "1.0",
         "generated_at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "nodes": enriched_nodes,
         "edges": [dataclasses.asdict(e) for e in g.edges],
+        "gates": gate_results,
     }
     (out_dir / "graph.json").write_text(json.dumps(graph_json, indent=2), encoding="utf-8")
 
@@ -1303,18 +1307,18 @@ def cmd_init(args) -> int:
     return 0
 
 
-def cmd_check(args) -> int:
-    """Run gate checks against the intent graph."""
-    repo = Path(args.repo).resolve()
-    g = build_graph(repo)
+def _run_gate_checks(repo: Path, g: Graph) -> list:
+    """Run all gate checks and return a list of gate result dicts.
+
+    Each result: {"id", "summary", "kind", "policy", "passed", "findings": [{"severity", "message"}]}
+    """
+    import fnmatch as _fnmatch
+
     gates_dir = repo / "gates"
     if not gates_dir.is_dir():
-        print("No gates/ directory found.")
-        return 0
+        return []
 
-    total_pass = 0
-    total_warn = 0
-    total_fail = 0
+    results = []
 
     for p in sorted(gates_dir.glob("*.yaml")):
         data = load_yaml(p) if yaml else {}
@@ -1327,7 +1331,7 @@ def cmd_check(args) -> int:
         kind = enforced_by.get("kind", "")
         checks = enforced_by.get("checks", [])
         policy = data.get("policy", {})
-        mode = policy.get("on_fail", "warn")
+        on_fail = policy.get("on_fail", "warn")
         docs = data.get("docs", {})
         summary = docs.get("summary", gid)
 
@@ -1349,10 +1353,7 @@ def cmd_check(args) -> int:
                 if e.dst == nid and e.type == "belongs_to":
                     governed_nodes.add(e.src)
 
-        print(f"\n  GATE {gid}: {summary}")
-        print(f"  scope: {len(governed_nodes)} node(s)")
-
-        gate_findings: list = []
+        findings: list = []
 
         if kind == "lint-rule":
             for check in checks:
@@ -1362,7 +1363,7 @@ def cmd_check(args) -> int:
                         if node and node.type == "spec":
                             md = read_text(repo / node.path)
                             if "## Acceptance Criteria" not in md:
-                                gate_findings.append(("FAIL", f"{nid}: missing ## Acceptance Criteria"))
+                                findings.append({"severity": "FAIL", "message": f"{nid}: missing ## Acceptance Criteria"})
 
                 elif check == "all_specs_have_status":
                     for nid in governed_nodes:
@@ -1371,7 +1372,7 @@ def cmd_check(args) -> int:
                             md = read_text(repo / node.path)
                             fm, _ = parse_front_matter(md)
                             if not fm.get("status"):
-                                gate_findings.append(("FAIL", f"{nid}: missing status in front matter"))
+                                findings.append({"severity": "FAIL", "message": f"{nid}: missing status in front matter"})
 
                 elif check == "all_adrs_have_status":
                     for nid in governed_nodes:
@@ -1380,13 +1381,13 @@ def cmd_check(args) -> int:
                             md = read_text(repo / node.path)
                             fm, _ = parse_front_matter(md)
                             if not fm.get("status"):
-                                gate_findings.append(("FAIL", f"{nid}: missing status in front matter"))
+                                findings.append({"severity": "FAIL", "message": f"{nid}: missing status in front matter"})
 
                 elif check == "no_dangling_references":
                     all_ids = set(g.nodes.keys())
                     for e in g.edges:
                         if e.src in governed_nodes and e.dst not in all_ids:
-                            gate_findings.append(("FAIL", f"{e.src}: dangling ref -> {e.dst}"))
+                            findings.append({"severity": "FAIL", "message": f"{e.src}: dangling ref -> {e.dst}"})
 
                 elif check == "no_draft_adrs_older_than_30_days":
                     for nid in governed_nodes:
@@ -1395,7 +1396,7 @@ def cmd_check(args) -> int:
                             md = read_text(repo / node.path)
                             fm, _ = parse_front_matter(md)
                             if fm.get("status") in ("draft", "proposed"):
-                                gate_findings.append(("WARN", f"{nid}: still in {fm['status']} status"))
+                                findings.append({"severity": "WARN", "message": f"{nid}: still in {fm['status']} status"})
 
         elif kind == "command":
             cmd = enforced_by.get("command", [])
@@ -1405,23 +1406,156 @@ def cmd_check(args) -> int:
                     result = subprocess.run(cmd, cwd=str(repo / workdir),
                                            capture_output=True, text=True, timeout=30)
                     if result.returncode != 0:
-                        gate_findings.append(("FAIL", f"command exited {result.returncode}: {result.stderr.strip()[:200]}"))
+                        stderr_snippet = result.stderr.strip()[:200] if result.stderr else result.stdout.strip()[:200]
+                        findings.append({"severity": "FAIL", "message": f"command exited {result.returncode}: {stderr_snippet}"})
                 except Exception as ex:
-                    gate_findings.append(("FAIL", f"command error: {ex}"))
+                    findings.append({"severity": "FAIL", "message": f"command error: {ex}"})
 
-        if gate_findings:
-            for sev, msg in gate_findings:
-                label = sev if mode == "block" or sev == "WARN" else "WARN"
-                print(f"    {label} {msg}")
-                if label == "FAIL":
-                    total_fail += 1
-                else:
-                    total_warn += 1
+        elif kind == "pattern":
+            patterns = enforced_by.get("patterns", [])
+            for pat_entry in patterns:
+                glob_pat = pat_entry.get("glob", "**/*")
+                regex_str = pat_entry.get("regex", "")
+                negate = pat_entry.get("negate", False)
+                label = pat_entry.get("label", regex_str)
+                if not regex_str:
+                    continue
+                try:
+                    regex = re.compile(regex_str)
+                except re.error as exc:
+                    findings.append({"severity": "FAIL", "message": f"invalid regex '{regex_str}': {exc}"})
+                    continue
+                for fpath in repo.glob(glob_pat):
+                    if not fpath.is_file():
+                        continue
+                    rel = str(fpath.relative_to(repo))
+                    if any(rel.startswith(s) for s in [".git/", ".intent/", "__pycache__/"]):
+                        continue
+                    try:
+                        content = fpath.read_text(encoding="utf-8", errors="replace")
+                    except Exception:
+                        continue
+                    matches = regex.findall(content)
+                    if negate:
+                        if not matches:
+                            findings.append({"severity": "FAIL", "message": f"{rel}: expected pattern '{label}' not found"})
+                    else:
+                        if matches:
+                            findings.append({"severity": "FAIL", "message": f"{rel}: forbidden pattern '{label}' found ({len(matches)} match(es))"})
+
+        elif kind == "threshold":
+            threshold_val = enforced_by.get("threshold", 0)
+            metric = enforced_by.get("metric", "intent_coverage")
+            if metric == "intent_coverage":
+                # Compute intent coverage using component path mappings
+                comp_paths: Dict[str, List[str]] = {}
+                components_dir = repo / "components"
+                if components_dir.is_dir():
+                    for cp in components_dir.glob("*.yaml"):
+                        cdata = load_yaml(cp) if yaml else {}
+                        cid = cdata.get("id") or f"COMP-{cp.stem}"
+                        cpaths = cdata.get("paths", [])
+                        if isinstance(cpaths, list):
+                            comp_paths[cid] = cpaths
+
+                # Get all tracked files
+                all_files = []
+                try:
+                    out = run_cmd(["git", "-C", str(repo), "ls-files", "--cached", "--others", "--exclude-standard"])
+                    all_files = [f for f in out.strip().split("\n") if f.strip()]
+                except Exception:
+                    for f in repo.rglob("*"):
+                        if f.is_file() and ".git/" not in str(f):
+                            all_files.append(str(f.relative_to(repo)))
+
+                skip_prefixes = [".intent/", ".git/", ".github/", "templates/", "components/", "intent/", "gates/", "interfaces/"]
+                code_files = [f for f in all_files if not any(f.startswith(s) for s in skip_prefixes)]
+                covered = 0
+                for cf in code_files:
+                    for cid, pats in comp_paths.items():
+                        if any(_fnmatch.fnmatch(cf, pat) for pat in pats):
+                            covered += 1
+                            break
+                coverage_pct = round(covered / max(len(code_files), 1) * 100) if code_files else 100
+                if coverage_pct < threshold_val:
+                    findings.append({"severity": "FAIL", "message": f"intent coverage {coverage_pct}% < threshold {threshold_val}%"})
+
+        has_fail = any(f["severity"] == "FAIL" for f in findings)
+        # Determine final pass/fail based on policy
+        if on_fail == "warn" and has_fail:
+            # Downgrade FAILs to WARNs when policy is warn
+            for f in findings:
+                if f["severity"] == "FAIL":
+                    f["severity"] = "WARN"
+            passed = True
+        else:
+            passed = not has_fail
+
+        results.append({
+            "id": gid,
+            "summary": summary,
+            "kind": kind,
+            "policy": on_fail,
+            "passed": passed,
+            "scope": len(governed_nodes),
+            "findings": findings,
+        })
+
+    return results
+
+
+def cmd_check(args) -> int:
+    """Run gate checks against the intent graph."""
+    repo = Path(args.repo).resolve()
+    g = build_graph(repo)
+    gates_dir = repo / "gates"
+    if not gates_dir.is_dir():
+        print("No gates/ directory found.")
+        return 0
+
+    use_json = getattr(args, "json", False)
+    results = _run_gate_checks(repo, g)
+
+    if use_json:
+        total_pass = sum(1 for r in results if r["passed"])
+        total_fail = sum(1 for r in results if not r["passed"])
+        print(json.dumps({"gates": results, "passed": total_pass, "failed": total_fail}, indent=2))
+        return 1 if total_fail > 0 else 0
+
+    if not results:
+        print("No active gates found.")
+        return 0
+
+    # Print per-gate details
+    for r in results:
+        print(f"\n  GATE {r['id']}: {r['summary']}")
+        print(f"  kind: {r['kind']}  |  policy: {r['policy']}  |  scope: {r['scope']} node(s)")
+        if r["findings"]:
+            for f in r["findings"]:
+                print(f"    {f['severity']} {f['message']}")
         else:
             print(f"    PASS")
-            total_pass += 1
 
-    print(f"\nGates: {total_pass} passed, {total_warn} warning(s), {total_fail} failure(s)")
+    # Summary table
+    total_pass = sum(1 for r in results if r["passed"])
+    total_fail = sum(1 for r in results if not r["passed"])
+    total_warn = sum(1 for r in results for f in r["findings"] if f["severity"] == "WARN")
+
+    print()
+    print("  " + "-" * 52)
+    print(f"  {'Gate':<16} {'Kind':<12} {'Policy':<8} {'Result':<8}")
+    print("  " + "-" * 52)
+    for r in results:
+        status_label = "PASS" if r["passed"] else "FAIL"
+        print(f"  {r['id']:<16} {r['kind']:<12} {r['policy']:<8} {status_label:<8}")
+    print("  " + "-" * 52)
+    print(f"\n  Gates: {total_pass} passed, {total_fail} failed, {total_warn} warning(s)")
+
+    # Write gate results to .intent/index/gates.json
+    out_dir = repo / ".intent" / "index"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "gates.json").write_text(json.dumps(results, indent=2), encoding="utf-8")
+
     return 1 if total_fail > 0 else 0
 
 
@@ -2577,77 +2711,8 @@ def cmd_pr(args) -> int:
         gates_list = [gl for gl in gates_list if gl["id"] not in seen and not seen.add(gl["id"])]
         comp_governance[cid] = {"specs": specs, "adrs": adrs, "gates": gates_list}
 
-    # Run gate checks (capture output)
-    gate_results = []
-    gates_dir = repo / "gates"
-    if gates_dir.is_dir():
-        for p in sorted(gates_dir.glob("*.yaml")):
-            data = load_yaml(p) if yaml else {}
-            gid = data.get("id", p.stem)
-            status = data.get("status", "inactive")
-            if status != "active":
-                continue
-            docs = data.get("docs", {})
-            summary = docs.get("summary", gid)
-
-            enforced_by = data.get("enforced_by", {})
-            kind = enforced_by.get("kind", "")
-            checks = enforced_by.get("checks", [])
-            applies_to = data.get("applies_to", [])
-            target_nodes = set()
-            for item in applies_to:
-                if isinstance(item, dict):
-                    n = item.get("node")
-                    if n:
-                        target_nodes.add(n)
-                elif isinstance(item, str):
-                    target_nodes.add(item)
-
-            governed_nodes = set()
-            for nid in target_nodes:
-                governed_nodes.add(nid)
-                for e in g.edges:
-                    if e.dst == nid and e.type == "belongs_to":
-                        governed_nodes.add(e.src)
-
-            findings = []
-            if kind == "lint-rule":
-                for check in checks:
-                    if check == "all_specs_have_acceptance_criteria":
-                        for nid in governed_nodes:
-                            node = g.nodes.get(nid)
-                            if node and node.type == "spec":
-                                md = read_text(repo / node.path)
-                                if "## Acceptance Criteria" not in md:
-                                    findings.append(f"{nid}: missing acceptance criteria")
-                    elif check == "all_specs_have_status":
-                        for nid in governed_nodes:
-                            node = g.nodes.get(nid)
-                            if node and node.type == "spec":
-                                md = read_text(repo / node.path)
-                                fm, _ = parse_front_matter(md)
-                                if not fm.get("status"):
-                                    findings.append(f"{nid}: missing status")
-                    elif check == "all_adrs_have_status":
-                        for nid in governed_nodes:
-                            node = g.nodes.get(nid)
-                            if node and node.type == "adr":
-                                md = read_text(repo / node.path)
-                                fm, _ = parse_front_matter(md)
-                                if not fm.get("status"):
-                                    findings.append(f"{nid}: missing status")
-                    elif check == "no_dangling_references":
-                        all_ids = set(g.nodes.keys())
-                        for e in g.edges:
-                            if e.src in governed_nodes and e.dst not in all_ids:
-                                findings.append(f"{e.src}: dangling ref -> {e.dst}")
-
-            gate_results.append({
-                "id": gid,
-                "summary": summary,
-                "passed": len(findings) == 0,
-                "findings": findings,
-            })
+    # Run gate checks
+    gate_results = _run_gate_checks(repo, g)
 
     # Compute stats
     total_code = len(code_changes)
@@ -2727,7 +2792,10 @@ def cmd_pr(args) -> int:
             status_mark = "✅" if gr["passed"] else "❌"
             md_lines.append(f"- {status_mark} **{gr['id']}**: {gr['summary']}")
             for finding in gr["findings"]:
-                md_lines.append(f"  - {finding}")
+                if isinstance(finding, dict):
+                    md_lines.append(f"  - {finding['severity']}: {finding['message']}")
+                else:
+                    md_lines.append(f"  - {finding}")
         md_lines.append("")
         md_lines.append("</details>")
         md_lines.append("")
@@ -3548,6 +3616,7 @@ def main() -> int:
     sp.set_defaults(fn=cmd_drift)
 
     sp = sub.add_parser("check", help="Run gate enforcement checks against the intent graph")
+    sp.add_argument("--json", action="store_true", default=False, help="Output results as JSON")
     sp.set_defaults(fn=cmd_check)
 
     sp = sub.add_parser("export", help="Generate self-contained HTML snapshot of the viewer")

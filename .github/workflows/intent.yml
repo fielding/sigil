@@ -23,6 +23,9 @@ jobs:
       - name: Run sigil CI pipeline
         run: sigil ci
 
+      - name: Gate enforcement
+        run: sigil check
+
       - name: Drift detection
         run: sigil drift || true
 
