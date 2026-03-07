@@ -1,0 +1,19 @@
+id: GATE-0000
+type: <openapi-compat|dependency-policy|spec-quality|command>
+status: active
+
+applies_to:
+  - node: <NODE-ID>
+
+enforced_by:
+  kind: command
+  workdir: .
+  command: ["bash", "-lc", "<check-script>"]
+
+policy:
+  mode: "warn"
+  on_fail: "block"
+
+docs:
+  summary: "<What this gate prevents>"
+  owner: "<team>"

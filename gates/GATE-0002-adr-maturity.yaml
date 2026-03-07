@@ -1,0 +1,20 @@
+id: GATE-0002
+type: spec-quality
+status: active
+
+applies_to:
+  - node: COMP-intent-system
+
+enforced_by:
+  kind: lint-rule
+  checks:
+    - all_adrs_have_status
+    - no_draft_adrs_older_than_30_days
+
+policy:
+  mode: "warn"
+  on_fail: "warn"
+
+docs:
+  summary: "Ensures ADRs progress beyond draft status in a timely manner"
+  owner: "sigil-team"

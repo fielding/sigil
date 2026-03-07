@@ -1,0 +1,19 @@
+id: COMP-intent-system
+name: Intent System
+
+owners:
+  - core-team
+
+paths:
+  - tools/intent/**
+  - tools/intent_viewer/**
+  - .intent/**
+
+interfaces:
+  provides:
+    - API-INTENT-CLI-V1
+  consumes: []
+
+attributes:
+  tier: 0
+  runtime: [cli, ci]

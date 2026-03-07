@@ -1,0 +1,18 @@
+id: COMP-sigil-viewer
+name: Sigil Viewer
+description: Interactive web-based intent graph explorer with 7 view modes, command palette, and human++ theming.
+
+owners:
+  - core-team
+
+paths:
+  - tools/intent_viewer/**
+
+interfaces:
+  provides: []
+  consumes:
+    - API-INTENT-CLI-V1
+
+attributes:
+  tier: 1
+  runtime: [browser]

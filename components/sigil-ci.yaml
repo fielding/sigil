@@ -1,0 +1,18 @@
+id: COMP-sigil-ci
+name: Sigil CI Pipeline
+description: GitHub Actions workflow that runs intent linting, gate checks, drift detection, and posts PR comments.
+
+owners:
+  - core-team
+
+paths:
+  - .github/workflows/intent.yml
+
+interfaces:
+  provides: []
+  consumes:
+    - API-INTENT-CLI-V1
+
+attributes:
+  tier: 1
+  runtime: [ci]

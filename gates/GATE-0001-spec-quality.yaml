@@ -1,0 +1,21 @@
+id: GATE-0001
+type: spec-quality
+status: active
+
+applies_to:
+  - node: COMP-intent-system
+
+enforced_by:
+  kind: lint-rule
+  checks:
+    - all_specs_have_acceptance_criteria
+    - all_specs_have_status
+    - no_dangling_references
+
+policy:
+  mode: "warn"
+  on_fail: "block"
+
+docs:
+  summary: "Ensures all specs under intent-system have acceptance criteria, status, and valid references"
+  owner: "sigil-team"

@@ -1,0 +1,2428 @@
+#!/usr/bin/env python3
+"""Sigil CLI — the kernel of the intent-first engineering system."""
+from __future__ import annotations
+
+import argparse
+import collections
+import dataclasses
+import datetime as dt
+import json
+import math
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
+
+try:
+    import yaml  # type: ignore
+except Exception:
+    yaml = None  # type: ignore
+
+
+# -----------------------------
+# Models
+# -----------------------------
+
+@dataclasses.dataclass
+class Node:
+    id: str
+    type: str
+    title: str
+    path: str
+    body_summary: str = ""
+
+@dataclasses.dataclass
+class Edge:
+    type: str
+    src: str
+    dst: str
+    confidence: float = 1.0
+    evidence: Optional[List[str]] = None
+
+@dataclasses.dataclass
+class Graph:
+    nodes: Dict[str, Node]
+    edges: List[Edge]
+
+
+# -----------------------------
+# Parsing
+# -----------------------------
+
+FRONT_MATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.S)
+WIKILINK_RE = re.compile(r"\[\[([A-Za-z0-9_-]+)\]\]")
+
+
+def read_text(p: Path, max_bytes: int = 400_000) -> str:
+    b = p.read_bytes()[:max_bytes]
+    return b.decode("utf-8", errors="replace")
+
+
+def parse_front_matter(md: str) -> Tuple[Dict[str, str], str]:
+    m = FRONT_MATTER_RE.match(md)
+    if not m:
+        return {}, md
+    raw = m.group(1)
+    body = md[m.end():]
+    data = {}
+    for line in raw.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if ":" in line:
+            k, v = line.split(":", 1)
+            data[k.strip()] = v.strip()
+    return data, body
+
+
+def parse_title(md_body: str, fallback: str) -> str:
+    for line in md_body.splitlines():
+        line = line.strip()
+        if line.startswith("# "):
+            return line[2:].strip()
+    return fallback
+
+
+def extract_wikilinks(md_body: str) -> List[str]:
+    return sorted(set(WIKILINK_RE.findall(md_body)))
+
+
+def extract_typed_links(md_body: str) -> List[Edge]:
+    edges: List[Edge] = []
+    lines = md_body.splitlines()
+
+    idxs = [i for i, ln in enumerate(lines) if ln.strip().lower() == "## links"]
+    if not idxs:
+        return edges
+    i0 = idxs[0] + 1
+
+    for i in range(i0, len(lines)):
+        ln = lines[i].rstrip()
+        if ln.startswith("#"):
+            break
+        ln_stripped = ln.strip()
+        if not ln_stripped.startswith("-"):
+            continue
+
+        m = re.match(r"^-+\s*([A-Za-z ]+)\s*:\s*(.*)$", ln_stripped)
+        if not m:
+            continue
+        key = m.group(1).strip().lower()
+        rest = m.group(2)
+        ids = WIKILINK_RE.findall(rest)
+        if not ids:
+            continue
+
+        edge_map = {
+            "belongs to": "belongs_to",
+            "belongs_to": "belongs_to",
+            "provides": "provides",
+            "consumes": "consumes",
+            "decided by": "decided_by",
+            "decided_by": "decided_by",
+            "depends on": "depends_on",
+            "depends_on": "depends_on",
+            "gates": "gated_by",
+            "gated by": "gated_by",
+            "gated_by": "gated_by",
+            "supersedes": "supersedes",
+            "for": "decided_by",
+            "provided by": "provides",
+            "consumed by": "consumes",
+        }
+        edge_type = edge_map.get(key, "relates_to")
+
+        for d in ids:
+            edges.append(Edge(type=edge_type, src="__SELF__", dst=d))
+
+    return edges
+
+
+# -----------------------------
+# Discovery
+# -----------------------------
+
+def load_yaml(p: Path) -> dict:
+    if yaml is None:
+        raise RuntimeError("PyYAML not installed — run: pip install pyyaml")
+    return yaml.safe_load(read_text(p)) or {}
+
+
+def discover_components(repo_root: Path) -> Dict[str, Node]:
+    components_dir = repo_root / "components"
+    nodes: Dict[str, Node] = {}
+    if not components_dir.is_dir():
+        return nodes
+    for p in components_dir.glob("*.yaml"):
+        data = load_yaml(p) if yaml else {}
+        cid = data.get("id") or f"COMP-{p.stem}"
+        title = data.get("name") or p.stem
+        summary = data.get("description", "") or ""
+        nodes[cid] = Node(id=cid, type="component", title=title,
+                          path=str(p.relative_to(repo_root)).replace("\\", "/"),
+                          body_summary=summary[:500])
+    return nodes
+
+
+def discover_interfaces(repo_root: Path) -> Dict[str, Node]:
+    nodes: Dict[str, Node] = {}
+    idir = repo_root / "interfaces"
+    if not idir.is_dir():
+        return nodes
+    for child in idir.iterdir():
+        if not child.is_dir():
+            continue
+        readme = child / "README.md"
+        iid = child.name
+        title = iid
+        if readme.exists():
+            body = read_text(readme)
+            _, md = parse_front_matter(body)
+            title = parse_title(md, iid)
+        path = str(readme.relative_to(repo_root)).replace("\\", "/") if readme.exists() else str(child.relative_to(repo_root)).replace("\\", "/")
+        nodes[iid] = Node(id=iid, type="interface", title=title, path=path)
+    return nodes
+
+
+def classify_intent_doc(path: Path) -> Optional[str]:
+    parts = [s.lower() for s in path.parts]
+    if "intent" not in parts:
+        return None
+    if "specs" in parts:
+        return "spec"
+    if "adrs" in parts:
+        return "adr"
+    if "risks" in parts:
+        return "risk"
+    if "rollouts" in parts:
+        return "rollout"
+    return "doc"
+
+
+ID_PREFIX_BY_TYPE = {
+    "spec": "SPEC-",
+    "adr": "ADR-",
+    "risk": "RISK-",
+    "rollout": "ROLLOUT-",
+}
+
+
+def _extract_summary(body: str, max_chars: int = 500) -> str:
+    """Extract the first meaningful section of markdown body as a summary."""
+    lines = body.splitlines()
+    out: list[str] = []
+    length = 0
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("# "):
+            continue
+        out.append(line)
+        length += len(line)
+        if length >= max_chars:
+            break
+    text = "\n".join(out).strip()
+    if len(text) > max_chars:
+        text = text[:max_chars].rsplit(" ", 1)[0] + "..."
+    return text
+
+
+def discover_intent_docs(repo_root: Path) -> Dict[str, Node]:
+    nodes: Dict[str, Node] = {}
+    intent_dir = repo_root / "intent"
+    if not intent_dir.is_dir():
+        return nodes
+    for md_path in intent_dir.rglob("*.md"):
+        t = classify_intent_doc(md_path)
+        if t is None:
+            continue
+        text = read_text(md_path)
+        fm, body = parse_front_matter(text)
+        doc_id = fm.get("id")
+        if not doc_id:
+            prefix = ID_PREFIX_BY_TYPE.get(t, "DOC-")
+            m = re.search(r"(SPEC-\d+|ADR-\d+|RISK-\d+|ROLLOUT-\d+)", md_path.name, re.I)
+            doc_id = m.group(1).upper() if m else f"{prefix}{md_path.stem.upper()}"
+        title = parse_title(body, md_path.stem)
+        summary = _extract_summary(body, 500)
+        nodes[doc_id] = Node(id=doc_id, type=t, title=title,
+                             path=str(md_path.relative_to(repo_root)).replace("\\", "/"),
+                             body_summary=summary)
+    return nodes
+
+
+def discover_gates(repo_root: Path) -> Dict[str, Node]:
+    nodes: Dict[str, Node] = {}
+    gates_dir = repo_root / "gates"
+    if not gates_dir.is_dir():
+        return nodes
+    for p in gates_dir.glob("*.yaml"):
+        data = load_yaml(p) if yaml else {}
+        gid = data.get("id") or f"GATE-{p.stem}"
+        title = data.get("docs", {}).get("summary", p.stem) if isinstance(data.get("docs"), dict) else p.stem
+        nodes[gid] = Node(id=gid, type="gate", title=title,
+                          path=str(p.relative_to(repo_root)).replace("\\", "/"))
+    return nodes
+
+
+def discover_gate_edges(repo_root: Path) -> List[Edge]:
+    """Extract gated_by edges from gate YAML applies_to fields."""
+    edges: List[Edge] = []
+    gates_dir = repo_root / "gates"
+    if not gates_dir.is_dir():
+        return edges
+    for p in gates_dir.glob("*.yaml"):
+        data = load_yaml(p) if yaml else {}
+        gid = data.get("id") or f"GATE-{p.stem}"
+        applies = data.get("applies_to", [])
+        if isinstance(applies, list):
+            for item in applies:
+                if isinstance(item, dict):
+                    node_ref = item.get("node")
+                    if node_ref:
+                        edges.append(Edge(type="gated_by", src=node_ref, dst=gid,
+                                          confidence=1.0, evidence=["gate applies_to"]))
+                elif isinstance(item, str):
+                    edges.append(Edge(type="gated_by", src=item, dst=gid,
+                                      confidence=1.0, evidence=["gate applies_to"]))
+    return edges
+
+
+def infer_belongs_to_edges(repo_root: Path, intent_nodes: Dict[str, Node], component_nodes: Dict[str, Node]) -> List[Edge]:
+    edges: List[Edge] = []
+    for nid, node in intent_nodes.items():
+        p = Path(node.path)
+        parts = list(p.parts)
+        try:
+            idx = parts.index("intent")
+            comp_slug = parts[idx + 1]
+        except Exception:
+            continue
+        comp_id_guess = f"COMP-{comp_slug}"
+        if comp_id_guess in component_nodes:
+            edges.append(Edge(type="belongs_to", src=nid, dst=comp_id_guess,
+                              confidence=0.95, evidence=["path inference"]))
+    return edges
+
+
+def build_graph(repo_root: Path) -> Graph:
+    nodes: Dict[str, Node] = {}
+    edges: List[Edge] = []
+
+    comp_nodes = discover_components(repo_root)
+    iface_nodes = discover_interfaces(repo_root)
+    intent_nodes = discover_intent_docs(repo_root)
+    gate_nodes = discover_gates(repo_root)
+
+    nodes.update(comp_nodes)
+    nodes.update(iface_nodes)
+    nodes.update(intent_nodes)
+    nodes.update(gate_nodes)
+
+    # Typed edges from Links blocks
+    for nid, n in intent_nodes.items():
+        md = read_text(repo_root / n.path)
+        _, body = parse_front_matter(md)
+        typed = extract_typed_links(body)
+        for e in typed:
+            edges.append(Edge(type=e.type, src=nid, dst=e.dst,
+                              confidence=1.0, evidence=["Links block"]))
+
+    # Inferred belongs_to
+    edges.extend(infer_belongs_to_edges(repo_root, intent_nodes, comp_nodes))
+
+    # Untyped relates_to from wikilinks
+    for nid, n in intent_nodes.items():
+        md = read_text(repo_root / n.path)
+        _, body = parse_front_matter(md)
+        for target in extract_wikilinks(body):
+            if any(e.src == nid and e.dst == target for e in edges):
+                continue
+            if target in nodes:
+                edges.append(Edge(type="relates_to", src=nid, dst=target,
+                                  confidence=0.5, evidence=["wikilink"]))
+
+    # Gate edges from applies_to
+    edges.extend(discover_gate_edges(repo_root))
+
+    return Graph(nodes=nodes, edges=edges)
+
+
+def write_graph_artifacts(repo_root: Path, g: Graph) -> None:
+    out_dir = repo_root / ".intent" / "index"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    # Enrich nodes with frontmatter for viewer features
+    enriched_nodes = []
+    for n in g.nodes.values():
+        nd = dataclasses.asdict(n)
+        if n.type in ("spec", "adr", "risk", "rollout"):
+            md = read_text(repo_root / n.path)
+            fm, _ = parse_front_matter(md)
+            nd["frontmatter"] = fm
+        enriched_nodes.append(nd)
+
+    graph_json = {
+        "version": "1.0",
+        "generated_at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "nodes": enriched_nodes,
+        "edges": [dataclasses.asdict(e) for e in g.edges],
+    }
+    (out_dir / "graph.json").write_text(json.dumps(graph_json, indent=2), encoding="utf-8")
+
+    search_json = {
+        "nodes": [
+            {"id": n.id, "type": n.type, "title": n.title, "path": n.path, "aliases": [n.title]}
+            for n in g.nodes.values()
+        ]
+    }
+    (out_dir / "search.json").write_text(json.dumps(search_json, indent=2), encoding="utf-8")
+
+    # Generate review.json for viewer Review mode
+    try:
+        _write_review_json(repo_root, g, out_dir / "review.json")
+    except Exception:
+        pass  # Non-critical; skip if git not available
+
+
+def _write_review_json(repo_root: Path, g: Graph, out_path: Path) -> None:
+    """Generate review.json with intent coverage for current working tree changes."""
+    import fnmatch as fnm
+
+    # Load component path patterns
+    comp_paths: Dict[str, List[str]] = {}
+    comp_dir = repo_root / "components"
+    if comp_dir.is_dir():
+        for p in comp_dir.glob("*.yaml"):
+            data = load_yaml(p) if yaml else {}
+            cid = data.get("id") or f"COMP-{p.stem}"
+            paths = data.get("paths", [])
+            if isinstance(paths, list):
+                comp_paths[cid] = paths
+
+    # Get changed files
+    try:
+        diff_out = run_cmd(["git", "-C", str(repo_root), "diff", "--name-status", "HEAD"], cwd=repo_root)
+    except Exception:
+        try:
+            diff_out = run_cmd(["git", "-C", str(repo_root), "status", "--porcelain"], cwd=repo_root)
+            lines = []
+            for line in diff_out.strip().split("\n"):
+                if line.strip():
+                    code = line[:2].strip() or "A"
+                    fpath = line[3:].strip()
+                    lines.append(f"{code[0]}\t{fpath}")
+            diff_out = "\n".join(lines)
+        except Exception:
+            diff_out = ""
+
+    changes = []
+    skip_prefixes = [".intent/index/", ".git/", "templates/", ".pytest_cache/"]
+    intent_prefixes = ["components/", "intent/", "interfaces/", "gates/"]
+
+    for line in diff_out.strip().split("\n"):
+        if not line.strip():
+            continue
+        parts = line.split("\t", 1)
+        if len(parts) == 2:
+            changes.append((parts[0].strip()[0] if parts[0].strip() else "M", parts[1].strip()))
+
+    intent_changes = []
+    code_changes = []
+    for status, fpath in changes:
+        if any(fpath.startswith(sp) for sp in skip_prefixes):
+            continue
+        if any(fpath.startswith(ip) for ip in intent_prefixes):
+            intent_changes.append({"status": status, "path": fpath})
+        else:
+            code_changes.append({"status": status, "path": fpath})
+
+    # Map to components
+    covered = {}
+    uncovered = []
+    for item in code_changes:
+        fpath = item["path"]
+        matched = False
+        for cid, patterns in comp_paths.items():
+            for pat in patterns:
+                if fnm.fnmatch(fpath, pat):
+                    covered.setdefault(cid, []).append(item)
+                    matched = True
+                    break
+            if matched:
+                break
+        if not matched:
+            uncovered.append(item)
+
+    covered_count = sum(len(v) for v in covered.values())
+    coverage_pct = round(covered_count / max(len(code_changes), 1) * 100) if code_changes else 100
+
+    report = {
+        "generated_at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "summary": {
+            "total_changes": len(changes),
+            "intent_changes": len(intent_changes),
+            "code_changes": len(code_changes),
+            "covered_files": covered_count,
+            "uncovered_files": len(uncovered),
+            "coverage_pct": coverage_pct,
+        },
+        "intent_changes": intent_changes,
+        "covered": {cid: files for cid, files in covered.items()},
+        "uncovered": uncovered,
+    }
+    out_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+
+
+# -----------------------------
+# Git helpers for diff
+# -----------------------------
+
+def run_cmd(cmd: List[str], cwd: Optional[Path] = None) -> str:
+    p = subprocess.run(cmd, cwd=str(cwd) if cwd else None,
+                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    if p.returncode != 0:
+        raise RuntimeError(f"Command failed: {cmd}\n{p.stderr}")
+    return p.stdout
+
+
+def checkout_tree(repo_root: Path, sha: str, dest: Path) -> None:
+    dest.mkdir(parents=True, exist_ok=True)
+    try:
+        run_cmd(["bash", "-lc",
+                 f"git -C {repo_root} archive {sha} components intent interfaces gates .intent 2>/dev/null | tar -x -C {dest}"])
+    except Exception:
+        run_cmd(["bash", "-lc",
+                 f"git -C {repo_root} archive {sha} | tar -x -C {dest}"])
+
+
+def graph_diff(base: Graph, head: Graph) -> dict:
+    base_nodes = set(base.nodes.keys())
+    head_nodes = set(head.nodes.keys())
+
+    def edge_key(e: Edge) -> Tuple[str, str, str]:
+        return (e.type, e.src, e.dst)
+
+    base_edges = set(edge_key(e) for e in base.edges)
+    head_edges = set(edge_key(e) for e in head.edges)
+
+    nodes_added = sorted(head_nodes - base_nodes)
+    nodes_removed = sorted(base_nodes - head_nodes)
+    nodes_changed = []
+    for nid in sorted(base_nodes & head_nodes):
+        b = base.nodes[nid]
+        h = head.nodes[nid]
+        if (b.type, b.title, b.path) != (h.type, h.title, h.path):
+            nodes_changed.append(nid)
+
+    edges_added = sorted(list(head_edges - base_edges))
+    edges_removed = sorted(list(base_edges - head_edges))
+
+    return {
+        "nodes_added": nodes_added,
+        "nodes_removed": nodes_removed,
+        "nodes_changed": nodes_changed,
+        "edges_added": [{"type": t, "src": s, "dst": d} for (t, s, d) in edges_added],
+        "edges_removed": [{"type": t, "src": s, "dst": d} for (t, s, d) in edges_removed],
+    }
+
+
+def diff_to_markdown(d: dict, head_graph: Graph) -> str:
+    def title(nid: str) -> str:
+        n = head_graph.nodes.get(nid)
+        return n.title if n else nid
+
+    lines = ["## Intent Graph Diff", ""]
+    if d["nodes_added"]:
+        lines.append("### Nodes added")
+        for nid in d["nodes_added"]:
+            lines.append(f"- `{nid}` ({title(nid)})")
+        lines.append("")
+    if d["nodes_changed"]:
+        lines.append("### Nodes changed")
+        for nid in d["nodes_changed"]:
+            lines.append(f"- `{nid}` ({title(nid)})")
+        lines.append("")
+    if d["nodes_removed"]:
+        lines.append("### Nodes removed")
+        for nid in d["nodes_removed"]:
+            lines.append(f"- `{nid}`")
+        lines.append("")
+    if d["edges_added"]:
+        lines.append("### Edges added")
+        for e in d["edges_added"]:
+            lines.append(f"- `{e['src']}` **{e['type']}** -> `{e['dst']}`")
+        lines.append("")
+    if d["edges_removed"]:
+        lines.append("### Edges removed")
+        for e in d["edges_removed"]:
+            lines.append(f"- `{e['src']}` **{e['type']}** -> `{e['dst']}`")
+        lines.append("")
+
+    if not any(d[k] for k in ["nodes_added", "nodes_changed", "nodes_removed", "edges_added", "edges_removed"]):
+        lines.append("No intent graph changes detected.")
+        lines.append("")
+
+    lines.append("> Generated by `sigil diff`.")
+    return "\n".join(lines)
+
+
+# -----------------------------
+# Ask / search
+# -----------------------------
+
+_STOP_WORDS = {
+    "a", "an", "the", "is", "in", "it", "of", "to", "and", "or", "for",
+    "with", "this", "that", "was", "are", "be", "by", "at", "as", "from",
+    "on", "have", "has", "had", "do", "does", "did", "will", "would",
+    "could", "should", "may", "might", "can", "not", "we", "our", "my",
+    "i", "you", "he", "she", "they", "them", "their", "its", "us",
+    "so", "but", "if", "then", "than", "also", "any", "all", "no",
+    "why", "what", "how", "when", "where", "who", "which",
+}
+
+
+def _tokenize(text: str) -> List[str]:
+    return [t.lower() for t in re.findall(r"[A-Za-z0-9]+", text)
+            if t.lower() not in _STOP_WORDS and len(t) > 1]
+
+
+def _score_node(query_tokens: List[str], body_tokens: List[str], title_tokens: List[str]) -> float:
+    """TF-based scoring with title boost (3x)."""
+    if not query_tokens:
+        return 0.0
+    body_counter = collections.Counter(body_tokens)
+    title_set = set(title_tokens)
+    total_body = max(len(body_tokens), 1)
+    score = 0.0
+    for qt in query_tokens:
+        tf = body_counter.get(qt, 0) / total_body
+        title_bonus = 3.0 if qt in title_set else 0.0
+        score += tf + title_bonus
+    return score
+
+
+def _find_excerpt(body: str, query_tokens: List[str], max_chars: int = 300) -> str:
+    """Return the lines most relevant to query_tokens."""
+    lines = body.splitlines()
+    if not lines:
+        return ""
+    query_set = set(query_tokens)
+    best_score = -1
+    best_idx = 0
+    for i, line in enumerate(lines):
+        tokens = set(re.findall(r"[A-Za-z0-9]+", line.lower()))
+        s = len(tokens & query_set)
+        if s > best_score:
+            best_score = s
+            best_idx = i
+    if best_score == 0:
+        return " ".join(lines[:5])[:max_chars]
+    start = max(0, best_idx - 1)
+    end = min(len(lines), best_idx + 4)
+    excerpt = "\n".join(lines[start:end]).strip()
+    if len(excerpt) > max_chars:
+        excerpt = excerpt[:max_chars].rsplit(" ", 1)[0] + "..."
+    return excerpt
+
+
+def search_nodes(query: str, graph: Graph, repo_root: Path,
+                 top_n: int = 5) -> List[Tuple[str, float, str]]:
+    """Search graph nodes by relevance. Returns [(node_id, score, excerpt)]."""
+    query_tokens = _tokenize(query)
+    if not query_tokens:
+        return []
+    results = []
+    for nid, node in graph.nodes.items():
+        try:
+            full_text = read_text(repo_root / node.path)
+        except Exception:
+            full_text = node.title + " " + node.body_summary
+        _, body = parse_front_matter(full_text)
+        body_tokens = _tokenize(body)
+        title_tokens = _tokenize(node.title)
+        score = _score_node(query_tokens, body_tokens, title_tokens)
+        if score > 0:
+            excerpt = _find_excerpt(body, query_tokens)
+            results.append((nid, score, excerpt))
+    results.sort(key=lambda x: x[1], reverse=True)
+    return results[:top_n]
+
+
+def cmd_ask(args) -> int:
+    repo = Path(args.repo).resolve()
+    question = args.question
+    top_n = getattr(args, "top", 5)
+
+    g = build_graph(repo)
+    if not g.nodes:
+        print("No nodes found. Run `sigil index` to build the graph.")
+        return 0
+
+    results = search_nodes(question, g, repo, top_n=top_n)
+    if not results:
+        print("No matching nodes found.")
+        return 0
+
+    print(f"Query: {question}\n")
+    for nid, score, excerpt in results:
+        node = g.nodes[nid]
+        print(f"[{nid}] {node.title}  ({node.type})")
+        print(f"  path: {node.path}")
+        if excerpt:
+            for line in excerpt.splitlines():
+                print(f"  | {line}")
+        print()
+    return 0
+
+
+# -----------------------------
+# CLI commands
+# -----------------------------
+
+def cmd_status(args) -> int:
+    """Print a concise status report of the intent graph's health."""
+    repo = Path(args.repo).resolve()
+    g = build_graph(repo)
+
+    types: Dict[str, int] = {}
+    for n in g.nodes.values():
+        types[n.type] = types.get(n.type, 0) + 1
+
+    edge_types: Dict[str, int] = {}
+    for e in g.edges:
+        edge_types[e.type] = edge_types.get(e.type, 0) + 1
+
+    # Health scoring (same algorithm as viewer)
+    components = [n for n in g.nodes.values() if n.type == "component"]
+    specs = [n for n in g.nodes.values() if n.type == "spec"]
+    adrs = [n for n in g.nodes.values() if n.type == "adr"]
+    gates = [n for n in g.nodes.values() if n.type == "gate"]
+
+    comps_with_spec = set()
+    for e in g.edges:
+        if e.type == "belongs_to":
+            comps_with_spec.add(e.dst)
+
+    # Check statuses
+    accepted_adrs = 0
+    draft_adrs = 0
+    for nid, n in g.nodes.items():
+        if n.type != "adr":
+            continue
+        md = read_text(repo / n.path)
+        fm, _ = parse_front_matter(md)
+        if fm.get("status") in ("accepted", "active"):
+            accepted_adrs += 1
+        elif fm.get("status") in ("draft", "proposed"):
+            draft_adrs += 1
+
+    node_ids = set(g.nodes.keys())
+    dangling = sum(1 for e in g.edges if e.dst not in node_ids)
+
+    # Compute score
+    score = 0.0
+    max_score = 0.0
+    if components:
+        score += (len(comps_with_spec & set(n.id for n in components)) / len(components)) * 40
+        max_score += 40
+    if adrs:
+        score += (accepted_adrs / len(adrs)) * 30
+        max_score += 30
+    if specs:
+        max_score += 20
+        score += 20  # Simplified: all have status
+    if g.edges:
+        clean = len(g.edges) - dangling
+        score += (clean / len(g.edges)) * 10
+        max_score += 10
+    pct = round((score / max_score) * 100) if max_score > 0 else 0
+
+    # Output
+    bar_len = 20
+    filled = round(pct / 100 * bar_len)
+    bar = "#" * filled + "-" * (bar_len - filled)
+
+    print()
+    print(f"  Sigil Intent Status")
+    print(f"  ====================")
+    print(f"  Health: [{bar}] {pct}%")
+    print()
+    print(f"  Nodes: {len(g.nodes)}")
+    for t in ["component", "spec", "adr", "gate", "interface"]:
+        if types.get(t, 0):
+            print(f"    {t}: {types[t]}")
+    print(f"  Edges: {len(g.edges)}")
+    for et in sorted(edge_types, key=lambda k: -edge_types[k]):
+        print(f"    {et}: {edge_types[et]}")
+    print()
+
+    issues = []
+    uncomps = [n for n in components if n.id not in comps_with_spec]
+    if uncomps:
+        issues.append(f"  {len(uncomps)} component(s) have no governing spec")
+    if draft_adrs:
+        issues.append(f"  {draft_adrs} ADR(s) still in draft/proposed")
+    if dangling:
+        issues.append(f"  {dangling} dangling reference(s)")
+
+    if issues:
+        print("  Issues:")
+        for i in issues:
+            print(f"    - {i}")
+    else:
+        print("  No issues found.")
+    print()
+    return 0
+
+
+def cmd_index(args) -> int:
+    repo = Path(args.repo).resolve()
+    g = build_graph(repo)
+    write_graph_artifacts(repo, g)
+    print(f"Indexed {len(g.nodes)} nodes, {len(g.edges)} edges")
+    print("Wrote .intent/index/graph.json and search.json")
+    return 0
+
+
+def cmd_diff(args) -> int:
+    repo = Path(args.repo).resolve()
+    with tempfile.TemporaryDirectory() as td:
+        base_dir = Path(td) / "base"
+        head_dir = Path(td) / "head"
+        checkout_tree(repo, args.base, base_dir)
+        checkout_tree(repo, args.head, head_dir)
+
+        g_base = build_graph(base_dir)
+        g_head = build_graph(head_dir)
+        d = graph_diff(g_base, g_head)
+
+        if args.out:
+            Path(args.out).write_text(json.dumps(d, indent=2), encoding="utf-8")
+        md = diff_to_markdown(d, g_head)
+        if args.md:
+            Path(args.md).write_text(md, encoding="utf-8")
+        print(md)
+    return 0
+
+
+def cmd_new(args) -> int:
+    repo = Path(args.repo).resolve()
+    node_type = args.type
+    component = args.component
+    title = args.title
+
+    templates_dir = repo / "templates"
+    config_path = repo / ".intent" / "config.yaml"
+
+    # Read config for next ID
+    next_num = 1
+    if config_path.exists() and yaml:
+        cfg = load_yaml(config_path)
+        counters = cfg.get("id_counters", {})
+        prefix = node_type.upper()
+        next_num = counters.get(prefix, 0) + 1
+
+    type_to_template = {
+        "spec": "SPEC.md",
+        "adr": "ADR.md",
+    }
+    template_file = type_to_template.get(node_type)
+    if not template_file:
+        print(f"Unknown type: {node_type}. Supported: spec, adr")
+        return 1
+
+    template_path = templates_dir / template_file
+    if not template_path.exists():
+        print(f"Template not found: {template_path}")
+        return 1
+
+    prefix = node_type.upper()
+    node_id = f"{prefix}-{next_num:04d}"
+    slug = title.lower().replace(" ", "-").replace("/", "-")
+    filename = f"{node_id}-{slug}.md"
+
+    subdir_map = {"spec": "specs", "adr": "adrs"}
+    subdir = subdir_map.get(node_type, node_type + "s")
+    dest_dir = repo / "intent" / component / subdir
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest = dest_dir / filename
+
+    content = read_text(template_path)
+    content = content.replace(f"{prefix}-0000", node_id)
+    content = content.replace("<Title>", title)
+    content = content.replace("<Decision>", title)
+    content = content.replace("<component>", component)
+
+    dest.write_text(content, encoding="utf-8")
+    print(f"Created {dest.relative_to(repo)}")
+    print(f"  ID: {node_id}")
+    return 0
+
+
+VALID_STATUSES = {"draft", "proposed", "accepted", "rejected", "deprecated", "active", "superseded"}
+
+LINT_SEVERITIES = {"error", "warn", "info"}
+
+
+def _lint_emit(items: List[Tuple[str, str, str]], severity: str, node_id: str, msg: str) -> None:
+    items.append((severity, node_id, msg))
+
+
+def cmd_lint(args) -> int:
+    repo = Path(args.repo).resolve()
+    g = build_graph(repo)
+    min_severity = getattr(args, "min_severity", "warn")
+
+    severity_rank = {"error": 0, "warn": 1, "info": 2}
+    min_rank = severity_rank.get(min_severity, 1)
+
+    findings: List[Tuple[str, str, str]] = []  # (severity, id, message)
+
+    for nid, node in g.nodes.items():
+        if node.type not in ("spec", "adr"):
+            continue
+        md = read_text(repo / node.path)
+        fm, body = parse_front_matter(md)
+
+        # ID must be present in front matter
+        if not fm.get("id"):
+            _lint_emit(findings, "error", nid, "missing 'id' field in front matter")
+
+        # ID must match node id
+        elif fm.get("id") != nid:
+            _lint_emit(findings, "error", nid, f"front matter id '{fm['id']}' does not match derived id '{nid}'")
+
+        # Status field
+        status = fm.get("status", "")
+        if not status:
+            _lint_emit(findings, "warn", nid, "missing 'status' field in front matter")
+        elif status not in VALID_STATUSES:
+            _lint_emit(findings, "warn", nid, f"unknown status '{status}' (expected: {', '.join(sorted(VALID_STATUSES))})")
+
+        if node.type == "spec":
+            required = ["Intent", "Goals", "Non-goals", "Design", "Acceptance Criteria", "Links"]
+            for section in required:
+                if f"## {section}" not in body:
+                    _lint_emit(findings, "warn", nid, f"missing section '## {section}'")
+
+            # Check for belongs_to link
+            typed = extract_typed_links(body)
+            has_belongs_to = any(e.type == "belongs_to" for e in typed)
+            if not has_belongs_to:
+                inferred = any(e.src == nid and e.type == "belongs_to" for e in g.edges)
+                if not inferred:
+                    _lint_emit(findings, "warn", nid, "no 'Belongs to' link (explicit or inferred)")
+
+        if node.type == "adr":
+            required = ["Context", "Decision", "Consequences", "Links"]
+            for section in required:
+                if f"## {section}" not in body:
+                    _lint_emit(findings, "warn", nid, f"missing section '## {section}'")
+
+    # Dangling references
+    all_ids = set(g.nodes.keys())
+    for e in g.edges:
+        if e.dst not in all_ids:
+            _lint_emit(findings, "warn", e.src, f"dangling reference -> {e.dst}")
+
+    # Filter and print
+    warnings = 0
+    errors = 0
+    for sev, nid, msg in sorted(findings, key=lambda x: (severity_rank.get(x[0], 99), x[1])):
+        rank = severity_rank.get(sev, 99)
+        if rank > min_rank:
+            continue
+        label = sev.upper()
+        print(f"{label} {nid}: {msg}")
+        if sev == "error":
+            errors += 1
+        else:
+            warnings += 1
+
+    print(f"\nLint: {warnings} warning(s), {errors} error(s)")
+    return 1 if errors > 0 else 0
+
+
+def cmd_fmt(args) -> int:
+    """Normalize intent documents: ensure front matter has id, insert ## Links section if missing."""
+    repo = Path(args.repo).resolve()
+    intent_dir = repo / "intent"
+    if not intent_dir.is_dir():
+        print("No intent/ directory found.")
+        return 0
+
+    changed = 0
+    checked = 0
+
+    for md_path in sorted(intent_dir.rglob("*.md")):
+        t = classify_intent_doc(md_path)
+        if t is None:
+            continue
+        checked += 1
+        text = read_text(md_path)
+        fm, body = parse_front_matter(text)
+        original = text
+
+        # Derive canonical ID from filename if not in front matter
+        if not fm.get("id"):
+            prefix = ID_PREFIX_BY_TYPE.get(t, "DOC-")
+            m = re.search(r"(SPEC-\d+|ADR-\d+|RISK-\d+|ROLLOUT-\d+)", md_path.name, re.I)
+            derived_id = m.group(1).upper() if m else None
+            if derived_id:
+                # Insert id into front matter
+                if FRONT_MATTER_RE.match(text):
+                    text = FRONT_MATTER_RE.sub(
+                        lambda mo: f"---\nid: {derived_id}\n{mo.group(1)}\n---\n",
+                        text, count=1
+                    )
+                else:
+                    text = f"---\nid: {derived_id}\n---\n\n" + text
+                fm["id"] = derived_id
+
+        # Ensure ## Links section exists
+        _, cur_body = parse_front_matter(text)
+        has_links = any(ln.strip().lower() == "## links" for ln in cur_body.splitlines())
+        if not has_links:
+            if text.endswith("\n"):
+                text = text + "\n## Links\n\n"
+            else:
+                text = text + "\n\n## Links\n\n"
+
+        if text != original:
+            md_path.write_text(text, encoding="utf-8")
+            print(f"fmt {md_path.relative_to(repo)}")
+            changed += 1
+
+    print(f"\nfmt: checked {checked} file(s), updated {changed}")
+    return 0
+
+
+# Patterns used by bootstrap to detect source components
+_MANIFEST_PATTERNS = [
+    ("package.json", "js"),
+    ("pyproject.toml", "python"),
+    ("setup.py", "python"),
+    ("go.mod", "go"),
+    ("Cargo.toml", "rust"),
+    ("pom.xml", "java"),
+    ("build.gradle", "java"),
+]
+
+_SKIP_DIRS = {".git", ".intent", "node_modules", "__pycache__", ".venv", "venv", "dist", "build"}
+
+
+def cmd_bootstrap(args) -> int:
+    """Scan repo heuristically and create missing COMPONENT.yaml stubs."""
+    repo = Path(args.repo).resolve()
+    dry_run = getattr(args, "dry_run", False)
+
+    # Collect existing component ids/names from the registry
+    existing_paths = set()
+    components_dir = repo / "components"
+    if components_dir.is_dir():
+        for p in components_dir.glob("*.yaml"):
+            existing_paths.add(p.stem)
+
+    discovered: List[Tuple[str, str, str]] = []  # (slug, lang, detected_via)
+
+    for child in sorted(repo.iterdir()):
+        if not child.is_dir():
+            continue
+        if child.name.startswith(".") or child.name in _SKIP_DIRS:
+            continue
+        # Check for manifest files
+        for manifest, lang in _MANIFEST_PATTERNS:
+            if (child / manifest).exists():
+                slug = child.name.lower().replace(" ", "-")
+                discovered.append((slug, lang, manifest))
+                break
+
+    if not discovered:
+        print("No source components detected (no package.json, pyproject.toml, go.mod, etc. found in top-level dirs).")
+        return 0
+
+    created = 0
+    skipped = 0
+
+    for slug, lang, via in discovered:
+        if slug in existing_paths:
+            print(f"skip  {slug}  (components/{slug}.yaml already exists)")
+            skipped += 1
+            continue
+
+        comp_id = f"COMP-{slug}"
+        yaml_content = (
+            f"id: {comp_id}\n"
+            f"name: {slug.replace('-', ' ').title()}\n"
+            f"lang: {lang}\n"
+            f"status: active\n"
+            f"# bootstrapped from {via}\n"
+        )
+        dest = components_dir / f"{slug}.yaml"
+
+        if dry_run:
+            print(f"[dry-run] would create  {dest.relative_to(repo)}")
+        else:
+            components_dir.mkdir(exist_ok=True)
+            dest.write_text(yaml_content, encoding="utf-8")
+            print(f"created  {dest.relative_to(repo)}")
+        created += 1
+
+    action = "would create" if dry_run else "created"
+    print(f"\nbootstrap: {action} {created} component(s), skipped {skipped}")
+    return 0
+
+
+def cmd_init(args) -> int:
+    """Zero-to-working setup: create dirs, bootstrap components, index, and open viewer."""
+    repo = Path(args.repo).resolve()
+
+    print()
+    print("  ┌─────────────────────────────────────┐")
+    print("  │         SIGIL — init                 │")
+    print("  │   Intent-first engineering system    │")
+    print("  └─────────────────────────────────────┘")
+    print()
+
+    # Create directory structure
+    dirs = ["components", "intent", "interfaces", "gates", "templates", ".intent"]
+    created_dirs = 0
+    for d in dirs:
+        p = repo / d
+        if not p.exists():
+            p.mkdir(parents=True, exist_ok=True)
+            created_dirs += 1
+    if created_dirs:
+        print(f"  [1/5] Created {created_dirs} directories")
+    else:
+        print(f"  [1/5] Directory structure exists")
+
+    # Create .intent/config.yaml if missing
+    config_path = repo / ".intent" / "config.yaml"
+    if not config_path.exists():
+        config_path.write_text("# Sigil intent system config\nid_counters: {}\n", encoding="utf-8")
+
+    # Create default templates if missing
+    templates_dir = repo / "templates"
+    spec_tmpl = templates_dir / "SPEC.md"
+    adr_tmpl = templates_dir / "ADR.md"
+    if not spec_tmpl.exists():
+        spec_tmpl.write_text(
+            "---\nid: SPEC-0000\nstatus: draft\n---\n\n# <Title>\n\n## Intent\n\nWhat are we building and why?\n\n"
+            "## Goals\n\n- \n\n## Non-goals\n\n- \n\n## Design\n\n## Acceptance Criteria\n\n- [ ] \n\n## Links\n\n"
+            "- Belongs to: [[COMP-<component>]]\n", encoding="utf-8")
+    if not adr_tmpl.exists():
+        adr_tmpl.write_text(
+            "---\nid: ADR-0000\nstatus: draft\n---\n\n# <Decision>\n\n## Context\n\nWhat is the background?\n\n"
+            "## Options Considered\n\n1. \n2. \n\n## Decision\n\n## Consequences\n\n## Links\n\n"
+            "- Belongs to: [[COMP-<component>]]\n", encoding="utf-8")
+    print(f"  [2/5] Templates ready")
+
+    # Bootstrap components from manifest files
+    class BootArgs:
+        repo = str(repo)
+        dry_run = False
+    # Capture bootstrap output
+    comp_dir = repo / "components"
+    had_comps = bool(list(comp_dir.glob("*.yaml"))) if comp_dir.is_dir() else False
+    cmd_bootstrap(BootArgs())
+    has_comps = bool(list(comp_dir.glob("*.yaml"))) if comp_dir.is_dir() else False
+    if has_comps:
+        print(f"  [3/5] Components bootstrapped")
+    else:
+        print(f"  [3/5] No components detected (add YAML to components/)")
+
+    # Build index
+    g = build_graph(repo)
+    write_graph_artifacts(repo, g)
+    print(f"  [4/5] Graph indexed: {len(g.nodes)} nodes, {len(g.edges)} edges")
+
+    # Open viewer
+    viewer = repo / "tools" / "intent_viewer" / "index.html"
+    if viewer.exists():
+        import webbrowser
+        import threading
+        from http.server import HTTPServer, SimpleHTTPRequestHandler
+
+        port = int(getattr(args, "port", 0) or 8787)
+
+        class Handler(SimpleHTTPRequestHandler):
+            def __init__(self, *a, **kw):
+                super().__init__(*a, directory=str(repo), **kw)
+            def log_message(self, format, *a):
+                pass  # suppress logs
+
+        try:
+            httpd = HTTPServer(("127.0.0.1", port), Handler)
+        except OSError:
+            port = 0
+            httpd = HTTPServer(("127.0.0.1", port), Handler)
+            port = httpd.server_address[1]
+
+        url = f"http://127.0.0.1:{port}/tools/intent_viewer/index.html"
+        print(f"  [5/5] Viewer ready")
+        print()
+        print(f"  Viewer:   {url}")
+        print(f"  Palette:  Cmd+K")
+        print(f"  New doc:  sigil new spec <component> <title>")
+        print(f"  Suggest:  sigil suggest <filepath>")
+        print(f"  Status:   sigil status")
+        print()
+        print(f"  Press Ctrl+C to stop.")
+        print()
+        threading.Timer(0.5, lambda: webbrowser.open(url)).start()
+        try:
+            httpd.serve_forever()
+        except KeyboardInterrupt:
+            print("\nStopped.")
+            httpd.server_close()
+    else:
+        print(f"  [5/5] Viewer not found. Run from a sigil-enabled repo.")
+
+    return 0
+
+
+def cmd_check(args) -> int:
+    """Run gate checks against the intent graph."""
+    repo = Path(args.repo).resolve()
+    g = build_graph(repo)
+    gates_dir = repo / "gates"
+    if not gates_dir.is_dir():
+        print("No gates/ directory found.")
+        return 0
+
+    total_pass = 0
+    total_warn = 0
+    total_fail = 0
+
+    for p in sorted(gates_dir.glob("*.yaml")):
+        data = load_yaml(p) if yaml else {}
+        gid = data.get("id", p.stem)
+        status = data.get("status", "inactive")
+        if status != "active":
+            continue
+
+        enforced_by = data.get("enforced_by", {})
+        kind = enforced_by.get("kind", "")
+        checks = enforced_by.get("checks", [])
+        policy = data.get("policy", {})
+        mode = policy.get("on_fail", "warn")
+        docs = data.get("docs", {})
+        summary = docs.get("summary", gid)
+
+        applies_to = data.get("applies_to", [])
+        target_nodes = set()
+        for item in applies_to:
+            if isinstance(item, dict):
+                n = item.get("node")
+                if n:
+                    target_nodes.add(n)
+            elif isinstance(item, str):
+                target_nodes.add(item)
+
+        # Find all nodes that belong to the target nodes
+        governed_nodes = set()
+        for nid in target_nodes:
+            governed_nodes.add(nid)
+            for e in g.edges:
+                if e.dst == nid and e.type == "belongs_to":
+                    governed_nodes.add(e.src)
+
+        print(f"\n  GATE {gid}: {summary}")
+        print(f"  scope: {len(governed_nodes)} node(s)")
+
+        gate_findings: list = []
+
+        if kind == "lint-rule":
+            for check in checks:
+                if check == "all_specs_have_acceptance_criteria":
+                    for nid in governed_nodes:
+                        node = g.nodes.get(nid)
+                        if node and node.type == "spec":
+                            md = read_text(repo / node.path)
+                            if "## Acceptance Criteria" not in md:
+                                gate_findings.append(("FAIL", f"{nid}: missing ## Acceptance Criteria"))
+
+                elif check == "all_specs_have_status":
+                    for nid in governed_nodes:
+                        node = g.nodes.get(nid)
+                        if node and node.type == "spec":
+                            md = read_text(repo / node.path)
+                            fm, _ = parse_front_matter(md)
+                            if not fm.get("status"):
+                                gate_findings.append(("FAIL", f"{nid}: missing status in front matter"))
+
+                elif check == "all_adrs_have_status":
+                    for nid in governed_nodes:
+                        node = g.nodes.get(nid)
+                        if node and node.type == "adr":
+                            md = read_text(repo / node.path)
+                            fm, _ = parse_front_matter(md)
+                            if not fm.get("status"):
+                                gate_findings.append(("FAIL", f"{nid}: missing status in front matter"))
+
+                elif check == "no_dangling_references":
+                    all_ids = set(g.nodes.keys())
+                    for e in g.edges:
+                        if e.src in governed_nodes and e.dst not in all_ids:
+                            gate_findings.append(("FAIL", f"{e.src}: dangling ref -> {e.dst}"))
+
+                elif check == "no_draft_adrs_older_than_30_days":
+                    for nid in governed_nodes:
+                        node = g.nodes.get(nid)
+                        if node and node.type == "adr":
+                            md = read_text(repo / node.path)
+                            fm, _ = parse_front_matter(md)
+                            if fm.get("status") in ("draft", "proposed"):
+                                gate_findings.append(("WARN", f"{nid}: still in {fm['status']} status"))
+
+        elif kind == "command":
+            cmd = enforced_by.get("command", [])
+            workdir = enforced_by.get("workdir", ".")
+            if cmd:
+                try:
+                    result = subprocess.run(cmd, cwd=str(repo / workdir),
+                                           capture_output=True, text=True, timeout=30)
+                    if result.returncode != 0:
+                        gate_findings.append(("FAIL", f"command exited {result.returncode}: {result.stderr.strip()[:200]}"))
+                except Exception as ex:
+                    gate_findings.append(("FAIL", f"command error: {ex}"))
+
+        if gate_findings:
+            for sev, msg in gate_findings:
+                label = sev if mode == "block" or sev == "WARN" else "WARN"
+                print(f"    {label} {msg}")
+                if label == "FAIL":
+                    total_fail += 1
+                else:
+                    total_warn += 1
+        else:
+            print(f"    PASS")
+            total_pass += 1
+
+    print(f"\nGates: {total_pass} passed, {total_warn} warning(s), {total_fail} failure(s)")
+    return 1 if total_fail > 0 else 0
+
+
+def cmd_drift(args) -> int:
+    """Detect drift between intent graph and actual codebase."""
+    import fnmatch
+
+    repo = Path(args.repo).resolve()
+    g = build_graph(repo)
+
+    # Load component path patterns
+    comp_paths: Dict[str, List[str]] = {}  # comp_id -> [glob patterns]
+    components_dir = repo / "components"
+    if components_dir.is_dir():
+        for p in components_dir.glob("*.yaml"):
+            data = load_yaml(p) if yaml else {}
+            cid = data.get("id") or f"COMP-{p.stem}"
+            paths = data.get("paths", [])
+            if isinstance(paths, list):
+                comp_paths[cid] = paths
+
+    # Scan all files (tracked + untracked)
+    tracked = []
+    try:
+        out = run_cmd(["git", "-C", str(repo), "ls-files", "--cached", "--others", "--exclude-standard"])
+        tracked = [f for f in out.strip().split("\n") if f.strip()]
+    except Exception:
+        pass
+    if not tracked:
+        for f in repo.rglob("*"):
+            if f.is_file() and not any(s in str(f) for s in [".git/", "__pycache__", "node_modules", ".intent/"]):
+                tracked.append(str(f.relative_to(repo)))
+
+    # Map files to components
+    file_to_comp: Dict[str, str] = {}
+    unowned: List[str] = []
+    skip_prefixes = [".intent/", ".git/", ".github/", "templates/", "components/", "intent/", "gates/", "interfaces/"]
+
+    for fpath in tracked:
+        if not fpath.strip():
+            continue
+        if any(fpath.startswith(sp) for sp in skip_prefixes):
+            continue
+        matched = False
+        for cid, patterns in comp_paths.items():
+            for pat in patterns:
+                if fnmatch.fnmatch(fpath, pat):
+                    file_to_comp[fpath] = cid
+                    matched = True
+                    break
+            if matched:
+                break
+        if not matched:
+            unowned.append(fpath)
+
+    # Check which components have governing specs
+    comps_with_spec = set()
+    for e in g.edges:
+        if e.type == "belongs_to" and e.dst in comp_paths:
+            node = g.nodes.get(e.src)
+            if node and node.type == "spec":
+                comps_with_spec.add(e.dst)
+
+    # Check for stale specs (accepted but component has new files)
+    stale_specs: List[str] = []
+    for cid, patterns in comp_paths.items():
+        comp_files = [f for f, c in file_to_comp.items() if c == cid]
+        if not comp_files:
+            continue
+        if cid not in comps_with_spec:
+            stale_specs.append(f"{cid}: {len(comp_files)} code file(s) but no governing spec")
+
+    # Output drift report
+    findings: list = []
+
+    print(f"\n  Drift Detection Report")
+    print(f"  {'='*40}")
+    print(f"  Files scanned: {len(tracked)}")
+    print(f"  Files mapped to components: {len(file_to_comp)}")
+    print(f"  Unowned files: {len(unowned)}")
+    print()
+
+    if unowned:
+        print(f"  DRIFT: {len(unowned)} file(s) not mapped to any component")
+        for f in sorted(unowned)[:15]:
+            print(f"    - {f}")
+        if len(unowned) > 15:
+            print(f"    ... and {len(unowned) - 15} more")
+        findings.append({"type": "unowned_files", "count": len(unowned), "files": sorted(unowned)})
+        print()
+
+    if stale_specs:
+        print(f"  DRIFT: {len(stale_specs)} component(s) have code but no governing spec")
+        for msg in stale_specs:
+            print(f"    - {msg}")
+        findings.append({"type": "no_spec", "items": stale_specs})
+        print()
+
+    # Components with specs but zero code files
+    empty_comps = []
+    for cid in comp_paths:
+        comp_files = [f for f, c in file_to_comp.items() if c == cid]
+        if not comp_files and cid in comps_with_spec:
+            empty_comps.append(cid)
+    if empty_comps:
+        print(f"  INFO: {len(empty_comps)} component(s) have specs but no matching code files")
+        for cid in empty_comps:
+            print(f"    - {cid}")
+        findings.append({"type": "spec_no_code", "items": empty_comps})
+        print()
+
+    # Summary
+    total_drift = len(unowned) + len(stale_specs)
+    if total_drift == 0:
+        print("  No drift detected. Intent and code are aligned.")
+    else:
+        print(f"  Total drift signals: {total_drift}")
+
+    # Write drift report
+    out_dir = repo / ".intent" / "index"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    drift_json = {
+        "scanned": len(tracked),
+        "mapped": len(file_to_comp),
+        "unowned": len(unowned),
+        "findings": findings,
+    }
+    (out_dir / "drift.json").write_text(json.dumps(drift_json, indent=2), encoding="utf-8")
+
+    return 1 if total_drift > 0 else 0
+
+
+def cmd_export(args) -> int:
+    """Generate a self-contained HTML snapshot of the intent viewer."""
+    repo = Path(args.repo).resolve()
+
+    # Build fresh graph
+    g = build_graph(repo)
+    write_graph_artifacts(repo, g)
+
+    viewer_path = repo / "tools" / "intent_viewer" / "index.html"
+    if not viewer_path.exists():
+        print("Viewer not found at tools/intent_viewer/index.html")
+        return 1
+
+    graph_path = repo / ".intent" / "index" / "graph.json"
+    graph_json = graph_path.read_text(encoding="utf-8")
+    viewer_html = viewer_path.read_text(encoding="utf-8")
+
+    # Collect all intent file contents for inline viewing
+    file_contents: Dict[str, str] = {}
+    for n in g.nodes.values():
+        p = repo / n.path
+        if p.exists():
+            file_contents[n.path] = read_text(p)
+
+    # Load optional artifacts for embedding
+    drift_json = "{}"
+    drift_path = repo / ".intent" / "index" / "drift.json"
+    if drift_path.exists():
+        drift_json = drift_path.read_text(encoding="utf-8")
+
+    timeline_json = '{"events":[]}'
+    timeline_path = repo / ".intent" / "index" / "timeline.json"
+    if timeline_path.exists():
+        timeline_json = timeline_path.read_text(encoding="utf-8")
+
+    # Build self-contained HTML: inject graph data and file contents
+    inject_script = f"""
+    <script>
+    // Injected by sigil export — no server needed
+    window.__SIGIL_GRAPH__ = {graph_json};
+    window.__SIGIL_FILES__ = {json.dumps(file_contents)};
+    window.__SIGIL_DRIFT__ = {drift_json};
+    window.__SIGIL_TIMELINE__ = {timeline_json};
+
+    // Override fetch to serve embedded data
+    const _origFetch = window.fetch;
+    window.fetch = function(url, opts) {{
+      const urlStr = String(url);
+      if (urlStr.includes('graph.json')) {{
+        return Promise.resolve(new Response(JSON.stringify(window.__SIGIL_GRAPH__), {{status: 200}}));
+      }}
+      if (urlStr.includes('drift.json')) {{
+        return Promise.resolve(new Response(JSON.stringify(window.__SIGIL_DRIFT__), {{status: 200}}));
+      }}
+      if (urlStr.includes('timeline.json')) {{
+        return Promise.resolve(new Response(JSON.stringify(window.__SIGIL_TIMELINE__), {{status: 200}}));
+      }}
+      // Check file contents
+      for (const [path, content] of Object.entries(window.__SIGIL_FILES__)) {{
+        if (urlStr.endsWith(path) || urlStr.includes(path)) {{
+          return Promise.resolve(new Response(content, {{status: 200}}));
+        }}
+      }}
+      return _origFetch(url, opts);
+    }};
+    </script>
+    """
+
+    # Insert before the closing </head>
+    export_html = viewer_html.replace("</head>", inject_script + "\n</head>")
+    # Update title
+    export_html = export_html.replace(
+        "<title>Sigil",
+        f"<title>Sigil Export ({len(g.nodes)} nodes) —"
+    )
+
+    out_path = Path(args.output) if args.output else repo / ".intent" / "export.html"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(export_html, encoding="utf-8")
+    print(f"Exported to {out_path}")
+    print(f"  {len(g.nodes)} nodes, {len(g.edges)} edges")
+    print(f"  {len(file_contents)} file(s) embedded")
+    print(f"  Open in any browser — no server needed.")
+    return 0
+
+
+def cmd_badge(args) -> int:
+    """Generate an intent coverage badge SVG."""
+    repo = Path(args.repo).resolve()
+    g = build_graph(repo)
+
+    # Compute coverage using same logic as viewer
+    components = [n for n in g.nodes.values() if n.type == "component"]
+    specs = [n for n in g.nodes.values() if n.type == "spec"]
+    adrs = [n for n in g.nodes.values() if n.type == "adr"]
+
+    comps_with_spec = set()
+    for e in g.edges:
+        if e.type == "belongs_to":
+            comps_with_spec.add(e.dst)
+
+    accepted_adrs = 0
+    for n in adrs:
+        md = read_text(repo / n.path)
+        fm, _ = parse_front_matter(md)
+        if fm.get("status") == "accepted":
+            accepted_adrs += 1
+
+    score = 0
+    weight = 0
+    if components:
+        score += (len(comps_with_spec) / len(components)) * 40
+        weight += 40
+    if adrs:
+        score += (accepted_adrs / len(adrs)) * 30
+        weight += 30
+    if specs:
+        score += 20  # Simplified: assume specs exist = 20 points
+        weight += 20
+    score += 10  # Base points
+    weight += 10
+
+    pct = round((score / weight) * 100) if weight else 0
+
+    # Color
+    if pct >= 80:
+        color = "#04b372"
+    elif pct >= 60:
+        color = "#458ae2"
+    elif pct >= 40:
+        color = "#f2a633"
+    else:
+        color = "#e7349c"
+
+    label = "intent coverage"
+    value = f"{pct}%"
+    label_width = len(label) * 6.5 + 12
+    value_width = len(value) * 7 + 12
+    total_width = label_width + value_width
+
+    svg = f"""<svg xmlns="http://www.w3.org/2000/svg" width="{total_width}" height="20" role="img" aria-label="{label}: {value}">
+  <linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#bbb" stop-opacity=".1"/><stop offset="1" stop-opacity=".1"/></linearGradient>
+  <clipPath id="r"><rect width="{total_width}" height="20" rx="3" fill="#fff"/></clipPath>
+  <g clip-path="url(#r)">
+    <rect width="{label_width}" height="20" fill="#1a1c22"/>
+    <rect x="{label_width}" width="{value_width}" height="20" fill="{color}"/>
+    <rect width="{total_width}" height="20" fill="url(#s)"/>
+  </g>
+  <g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" font-size="11">
+    <text x="{label_width/2}" y="14" fill="#dbd6cc">{label}</text>
+    <text x="{label_width + value_width/2}" y="14" font-weight="bold">{value}</text>
+  </g>
+</svg>"""
+
+    out_path = Path(args.output) if args.output else repo / ".intent" / "badge.svg"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(svg, encoding="utf-8")
+    print(f"Badge: {out_path}")
+    print(f"  Score: {pct}% ({len(g.nodes)} nodes, {len(g.edges)} edges)")
+    return 0
+
+
+def cmd_serve(args) -> int:
+    """Start a dev server with file watching. Rebuilds graph on changes."""
+    import webbrowser
+    import threading
+    import time
+    from http.server import HTTPServer, SimpleHTTPRequestHandler
+
+    repo = Path(args.repo).resolve()
+    port = int(args.port)
+
+    # Initial build
+    g = build_graph(repo)
+    write_graph_artifacts(repo, g)
+    print(f"Indexed {len(g.nodes)} nodes, {len(g.edges)} edges")
+
+    # Live reload version counter
+    rebuild_version = [1]
+
+    class Handler(SimpleHTTPRequestHandler):
+        def __init__(self, *a, **kw):
+            super().__init__(*a, directory=str(repo), **kw)
+        def log_message(self, fmt, *a):
+            pass
+        def do_GET(self):
+            if self.path == "/api/version":
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Cache-Control", "no-cache")
+                self.end_headers()
+                self.wfile.write(json.dumps({"version": rebuild_version[0]}).encode())
+                return
+            return super().do_GET()
+        def do_POST(self):
+            if self.path == "/api/new":
+                length = int(self.headers.get("Content-Length", 0))
+                body = json.loads(self.rfile.read(length)) if length else {}
+                node_type = body.get("type", "spec")
+                component = body.get("component", "")
+                title = body.get("title", "Untitled")
+                if not component:
+                    self.send_response(400)
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"error": "component required"}).encode())
+                    return
+                # Create new doc using same logic as cmd_new
+                templates_dir = repo / "templates"
+                config_path = repo / ".intent" / "config.yaml"
+                next_num = 1
+                if config_path.exists() and yaml:
+                    cfg = load_yaml(config_path)
+                    counters = cfg.get("id_counters", {})
+                    prefix = node_type.upper()
+                    next_num = counters.get(prefix, 0) + 1
+                type_to_template = {"spec": "SPEC.md", "adr": "ADR.md"}
+                template_file = type_to_template.get(node_type)
+                if not template_file:
+                    self.send_response(400)
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"error": f"unknown type: {node_type}"}).encode())
+                    return
+                template_path = templates_dir / template_file
+                if not template_path.exists():
+                    self.send_response(400)
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"error": "template not found"}).encode())
+                    return
+                prefix = node_type.upper()
+                node_id = f"{prefix}-{next_num:04d}"
+                slug = title.lower().replace(" ", "-").replace("/", "-")
+                filename = f"{node_id}-{slug}.md"
+                subdir_map = {"spec": "specs", "adr": "adrs"}
+                subdir = subdir_map.get(node_type, node_type + "s")
+                dest_dir = repo / "intent" / component / subdir
+                dest_dir.mkdir(parents=True, exist_ok=True)
+                dest = dest_dir / filename
+                content = read_text(template_path)
+                content = content.replace(f"{prefix}-0000", node_id)
+                content = content.replace("<Title>", title)
+                content = content.replace("<Decision>", title)
+                content = content.replace("<component>", component)
+                dest.write_text(content, encoding="utf-8")
+                # Rebuild graph
+                g2 = build_graph(repo)
+                write_graph_artifacts(repo, g2)
+                print(f"  created: {node_id} ({dest.relative_to(repo)})")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    "id": node_id, "type": node_type, "title": title,
+                    "path": str(dest.relative_to(repo)).replace("\\", "/"),
+                    "nodes": len(g2.nodes), "edges": len(g2.edges)
+                }).encode())
+                return
+            self.send_response(404)
+            self.end_headers()
+        def do_OPTIONS(self):
+            self.send_response(200)
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+            self.end_headers()
+
+    try:
+        httpd = HTTPServer(("127.0.0.1", port), Handler)
+    except OSError:
+        httpd = HTTPServer(("127.0.0.1", 0), Handler)
+        port = httpd.server_address[1]
+
+    url = f"http://127.0.0.1:{port}/tools/intent_viewer/index.html"
+
+    # File watcher: poll for changes every 2 seconds
+    watch_dirs = ["components", "intent", "interfaces", "gates"]
+    last_mtimes: Dict[str, float] = {}
+
+    def scan_mtimes() -> Dict[str, float]:
+        mtimes: Dict[str, float] = {}
+        for wd in watch_dirs:
+            d = repo / wd
+            if not d.is_dir():
+                continue
+            for f in d.rglob("*"):
+                if f.is_file():
+                    try:
+                        mtimes[str(f)] = f.stat().st_mtime
+                    except OSError:
+                        pass
+        return mtimes
+
+    last_mtimes = scan_mtimes()
+
+    def watcher():
+        nonlocal last_mtimes
+        while True:
+            time.sleep(2)
+            current = scan_mtimes()
+            if current != last_mtimes:
+                changed = set(current.keys()) ^ set(last_mtimes.keys())
+                modified = {k for k in current if k in last_mtimes and current[k] != last_mtimes[k]}
+                changed.update(modified)
+                last_mtimes = current
+                try:
+                    g2 = build_graph(repo)
+                    write_graph_artifacts(repo, g2)
+                    rebuild_version[0] += 1
+                    n_changed = len(changed)
+                    print(f"  rebuilt: {len(g2.nodes)} nodes, {len(g2.edges)} edges ({n_changed} file(s) changed) [v{rebuild_version[0]}]")
+                except Exception as ex:
+                    print(f"  rebuild error: {ex}")
+
+    t = threading.Thread(target=watcher, daemon=True)
+    t.start()
+
+    print(f"\n  Sigil dev server")
+    print(f"  Viewer: {url}")
+    print(f"  Watching: {', '.join(watch_dirs)}")
+    print(f"  Live reload: enabled (viewer auto-updates on changes)")
+    print(f"  Press Ctrl+C to stop.\n")
+
+    threading.Timer(0.5, lambda: webbrowser.open(url)).start()
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        print("\nStopped.")
+        httpd.server_close()
+    return 0
+
+
+def cmd_suggest(args) -> int:
+    """Given a file path, show which intent docs govern it."""
+    import fnmatch as fnm
+
+    repo = Path(args.repo).resolve()
+    target = args.path
+    g = build_graph(repo)
+
+    # Resolve relative path
+    target_path = Path(target)
+    if target_path.is_absolute():
+        try:
+            target_path = target_path.relative_to(repo)
+        except ValueError:
+            pass
+    target_str = str(target_path).replace("\\", "/")
+
+    # 1. Find which component owns this file via path globs
+    owning_components: List[str] = []
+    comp_dir = repo / "components"
+    if comp_dir.is_dir():
+        for p in comp_dir.glob("*.yaml"):
+            data = load_yaml(p) if yaml else {}
+            cid = data.get("id") or f"COMP-{p.stem}"
+            paths = data.get("paths", [])
+            for pattern in paths:
+                if fnm.fnmatch(target_str, pattern):
+                    owning_components.append(cid)
+                    break
+
+    if not owning_components:
+        print(f"  File: {target_str}")
+        print(f"  No component owns this file.")
+        print(f"  Consider adding a path pattern to a component YAML.")
+        return 0
+
+    # 2. Find all intent docs connected to those components
+    print(f"\n  File: {target_str}")
+    print(f"  {'=' * 40}")
+
+    for comp_id in owning_components:
+        comp = g.nodes.get(comp_id)
+        if not comp:
+            continue
+        print(f"\n  Component: {comp.title} ({comp_id})")
+
+        # Find all nodes that belong to this component
+        related_specs: List[str] = []
+        related_adrs: List[str] = []
+        related_gates: List[str] = []
+        related_interfaces: List[str] = []
+
+        for e in g.edges:
+            if e.dst == comp_id and e.type == "belongs_to":
+                node = g.nodes.get(e.src)
+                if node:
+                    if node.type == "spec":
+                        related_specs.append(e.src)
+                    elif node.type == "adr":
+                        related_adrs.append(e.src)
+                    elif node.type == "gate":
+                        related_gates.append(e.src)
+            if e.src == comp_id and e.type == "gated_by":
+                related_gates.append(e.dst)
+            if e.dst == comp_id and e.type == "gated_by":
+                related_gates.append(e.src)
+
+        # Also check interfaces
+        for e in g.edges:
+            if (e.src == comp_id or e.dst == comp_id) and e.type in ("provides", "consumes"):
+                target_id = e.dst if e.src == comp_id else e.src
+                if target_id in g.nodes and g.nodes[target_id].type == "interface":
+                    related_interfaces.append(target_id)
+
+        if related_specs:
+            print(f"\n  Governing Specs:")
+            for sid in sorted(set(related_specs)):
+                node = g.nodes[sid]
+                fm_raw = read_text(repo / node.path)
+                fm, _ = parse_front_matter(fm_raw)
+                status = fm.get("status", "?")
+                print(f"    [{status}] {sid}: {node.title}")
+                print(f"           {node.path}")
+
+        if related_adrs:
+            print(f"\n  Relevant ADRs:")
+            for aid in sorted(set(related_adrs)):
+                node = g.nodes[aid]
+                fm_raw = read_text(repo / node.path)
+                fm, _ = parse_front_matter(fm_raw)
+                status = fm.get("status", "?")
+                print(f"    [{status}] {aid}: {node.title}")
+
+        if related_gates:
+            print(f"\n  Enforced Gates:")
+            for gid in sorted(set(related_gates)):
+                node = g.nodes.get(gid)
+                if node:
+                    print(f"    {gid}: {node.title}")
+
+        if related_interfaces:
+            print(f"\n  Interfaces:")
+            for iid in sorted(set(related_interfaces)):
+                node = g.nodes.get(iid)
+                if node:
+                    print(f"    {iid}: {node.title}")
+
+    print()
+    return 0
+
+
+def cmd_timeline(args) -> int:
+    """Build a timeline of intent evolution from git history."""
+    repo = Path(args.repo).resolve()
+    max_commits = int(getattr(args, "max", 50))
+    out_path = Path(args.output) if args.output else repo / ".intent" / "index" / "timeline.json"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Get git log for intent-relevant files
+    intent_paths = ["components/", "intent/", "interfaces/", "gates/"]
+    events: List[dict] = []
+
+    try:
+        log_output = run_cmd(
+            ["git", "-C", str(repo), "log", "--pretty=format:%H|%aI|%s",
+             "--diff-filter=ACDMR", "--name-status", f"-{max_commits}", "--"]
+            + intent_paths,
+            cwd=repo
+        )
+    except Exception:
+        # No git history — fall back to file timestamps
+        g = build_graph(repo)
+        now = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        for nid, node in g.nodes.items():
+            p = repo / node.path
+            try:
+                mtime = dt.datetime.fromtimestamp(p.stat().st_mtime, tz=dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            except Exception:
+                mtime = now
+            events.append({
+                "date": mtime,
+                "sha": "working-tree",
+                "message": "current state",
+                "action": "added",
+                "node_id": nid,
+                "node_type": node.type,
+                "node_title": node.title,
+                "path": node.path,
+            })
+        events.sort(key=lambda e: e["date"])
+        timeline = {"events": events, "generated_at": now}
+        out_path.write_text(json.dumps(timeline, indent=2), encoding="utf-8")
+        print(f"Timeline: {out_path}")
+        print(f"  {len(events)} events (from file timestamps, no git history)")
+        return 0
+
+    # Parse git log
+    commits: List[dict] = []
+    current_commit = None
+
+    for line in log_output.strip().splitlines():
+        if not line.strip():
+            continue
+        if "|" in line and not line.startswith(("A\t", "M\t", "D\t", "R\t", "C\t")):
+            parts = line.split("|", 2)
+            if len(parts) >= 3:
+                current_commit = {"sha": parts[0], "date": parts[1], "message": parts[2], "files": []}
+                commits.append(current_commit)
+        elif current_commit and "\t" in line:
+            status_file = line.split("\t", 1)
+            if len(status_file) == 2:
+                action = {"A": "added", "M": "modified", "D": "removed"}.get(status_file[0][0], "modified")
+                current_commit["files"].append({"action": action, "path": status_file[1]})
+
+    # Build node ID mapping by checking out each commit's graph
+    # For efficiency, just map file paths to node IDs using current graph knowledge
+    g = build_graph(repo)
+    path_to_node: Dict[str, Tuple[str, str, str]] = {}  # path -> (id, type, title)
+    for nid, node in g.nodes.items():
+        path_to_node[node.path] = (nid, node.type, node.title)
+
+    for commit in commits:
+        for f in commit["files"]:
+            fpath = f["path"]
+            node_info = path_to_node.get(fpath)
+            if node_info:
+                nid, ntype, ntitle = node_info
+            else:
+                # Try to infer from filename
+                nid = fpath.split("/")[-1].replace(".yaml", "").replace(".md", "").upper()
+                ntype = "unknown"
+                ntitle = nid
+                # Classify from path
+                if "components/" in fpath:
+                    ntype = "component"
+                elif "specs/" in fpath:
+                    ntype = "spec"
+                elif "adrs/" in fpath:
+                    ntype = "adr"
+                elif "gates/" in fpath:
+                    ntype = "gate"
+                elif "interfaces/" in fpath:
+                    ntype = "interface"
+
+            events.append({
+                "date": commit["date"],
+                "sha": commit["sha"][:8],
+                "message": commit["message"],
+                "action": f["action"],
+                "node_id": nid,
+                "node_type": ntype,
+                "node_title": ntitle,
+                "path": fpath,
+            })
+
+    events.sort(key=lambda e: e["date"])
+    now = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    timeline = {"events": events, "generated_at": now}
+    out_path.write_text(json.dumps(timeline, indent=2), encoding="utf-8")
+    print(f"Timeline: {out_path}")
+    print(f"  {len(events)} events across {len(commits)} commits")
+    return 0
+
+
+def cmd_review(args) -> int:
+    """Analyze a git diff and show intent coverage for changed files."""
+    import fnmatch as fnm
+
+    repo = Path(args.repo).resolve()
+    base = getattr(args, "base", None)
+    head_ref = getattr(args, "head", None) or "HEAD"
+    staged = getattr(args, "staged", False)
+    output_json = getattr(args, "json", False)
+
+    g = build_graph(repo)
+
+    # Load component path patterns
+    comp_paths: Dict[str, List[str]] = {}
+    comp_dir = repo / "components"
+    if comp_dir.is_dir():
+        for p in comp_dir.glob("*.yaml"):
+            data = load_yaml(p) if yaml else {}
+            cid = data.get("id") or f"COMP-{p.stem}"
+            paths = data.get("paths", [])
+            if isinstance(paths, list):
+                comp_paths[cid] = paths
+
+    # Get changed files from git
+    try:
+        if staged:
+            diff_out = run_cmd(["git", "-C", str(repo), "diff", "--cached", "--name-status"], cwd=repo)
+        elif base:
+            diff_out = run_cmd(["git", "-C", str(repo), "diff", "--name-status", base, head_ref], cwd=repo)
+        else:
+            diff_out = run_cmd(["git", "-C", str(repo), "diff", "--name-status", "HEAD"], cwd=repo)
+            # Also pick up untracked files
+            try:
+                untracked = run_cmd(
+                    ["git", "-C", str(repo), "ls-files", "--others", "--exclude-standard"],
+                    cwd=repo,
+                )
+                for f in untracked.strip().split("\n"):
+                    if f.strip():
+                        diff_out += f"A\t{f.strip()}\n"
+            except Exception:
+                pass
+    except Exception:
+        # Fallback: treat all files as changed (no git history)
+        diff_out = ""
+        for f in repo.rglob("*"):
+            if f.is_file() and not any(s in str(f) for s in [".git/", "__pycache__", "node_modules", ".intent/index"]):
+                rel = str(f.relative_to(repo))
+                diff_out += f"A\t{rel}\n"
+
+    # Parse diff output
+    changes: List[Tuple[str, str]] = []  # (status, path)
+    for line in diff_out.strip().split("\n"):
+        if not line.strip():
+            continue
+        parts = line.split("\t", 1)
+        if len(parts) == 2:
+            status_code = parts[0].strip()[0] if parts[0].strip() else "M"
+            fpath = parts[1].strip()
+            changes.append((status_code, fpath))
+
+    if not changes:
+        print("\n  No changes to review.")
+        return 0
+
+    # Classify changes
+    skip_prefixes = [".intent/index/", ".git/", "templates/", ".pytest_cache/"]
+    intent_prefixes = ["components/", "intent/", "interfaces/", "gates/"]
+
+    intent_changes: List[Tuple[str, str]] = []
+    code_changes: List[Tuple[str, str]] = []
+
+    for status, fpath in changes:
+        if any(fpath.startswith(sp) for sp in skip_prefixes):
+            continue
+        if any(fpath.startswith(ip) for ip in intent_prefixes):
+            intent_changes.append((status, fpath))
+        else:
+            code_changes.append((status, fpath))
+
+    # Map code files to components
+    covered: Dict[str, List[Tuple[str, str]]] = {}  # comp_id -> [(status, path)]
+    uncovered: List[Tuple[str, str]] = []
+
+    for status, fpath in code_changes:
+        matched = False
+        for cid, patterns in comp_paths.items():
+            for pat in patterns:
+                if fnm.fnmatch(fpath, pat):
+                    covered.setdefault(cid, []).append((status, fpath))
+                    matched = True
+                    break
+            if matched:
+                break
+        if not matched:
+            uncovered.append((status, fpath))
+
+    # Build review report
+    status_labels = {"A": "added", "M": "modified", "D": "deleted", "R": "renamed"}
+
+    # Collect component-level governance info
+    comp_governance: Dict[str, dict] = {}
+    for cid in covered:
+        specs = []
+        adrs = []
+        gates = []
+        for e in g.edges:
+            if e.dst == cid and e.type == "belongs_to":
+                node = g.nodes.get(e.src)
+                if node:
+                    if node.type == "spec":
+                        fm_raw = read_text(repo / node.path)
+                        fm, _ = parse_front_matter(fm_raw)
+                        specs.append({"id": e.src, "title": node.title, "status": fm.get("status", "?")})
+                    elif node.type == "adr":
+                        fm_raw = read_text(repo / node.path)
+                        fm, _ = parse_front_matter(fm_raw)
+                        adrs.append({"id": e.src, "title": node.title, "status": fm.get("status", "?")})
+            if e.type == "gated_by" and (e.src == cid or e.dst == cid):
+                gid = e.dst if e.src == cid else e.src
+                gnode = g.nodes.get(gid)
+                if gnode:
+                    gates.append({"id": gid, "title": gnode.title})
+        # Deduplicate
+        seen_ids = set()
+        specs = [s for s in specs if s["id"] not in seen_ids and not seen_ids.add(s["id"])]
+        seen_ids.clear()
+        adrs = [a for a in adrs if a["id"] not in seen_ids and not seen_ids.add(a["id"])]
+        seen_ids.clear()
+        gates = [g for g in gates if g["id"] not in seen_ids and not seen_ids.add(g["id"])]
+        comp_governance[cid] = {"specs": specs, "adrs": adrs, "gates": gates}
+
+    # JSON output
+    if output_json:
+        report = {
+            "summary": {
+                "total_changes": len(changes),
+                "intent_changes": len(intent_changes),
+                "code_changes": len(code_changes),
+                "covered_files": sum(len(v) for v in covered.values()),
+                "uncovered_files": len(uncovered),
+                "coverage_pct": round(
+                    sum(len(v) for v in covered.values()) / max(len(code_changes), 1) * 100
+                ),
+            },
+            "intent_changes": [{"status": s, "path": p} for s, p in intent_changes],
+            "covered": {
+                cid: {
+                    "files": [{"status": s, "path": p} for s, p in files],
+                    "governance": comp_governance.get(cid, {}),
+                }
+                for cid, files in covered.items()
+            },
+            "uncovered": [{"status": s, "path": p} for s, p in uncovered],
+        }
+        print(json.dumps(report, indent=2))
+        return 0
+
+    # Terminal output
+    total_code = len(code_changes)
+    covered_count = sum(len(v) for v in covered.values())
+    coverage_pct = round(covered_count / max(total_code, 1) * 100)
+
+    # Coverage color
+    if coverage_pct >= 80:
+        cov_label = "GOOD"
+    elif coverage_pct >= 50:
+        cov_label = "FAIR"
+    else:
+        cov_label = "LOW"
+
+    print(f"\n  Sigil Review")
+    print(f"  {'=' * 50}")
+    print(f"  {len(changes)} file(s) changed  |  intent coverage: {coverage_pct}% ({cov_label})")
+    print()
+
+    if intent_changes:
+        print(f"  Intent Documents Changed ({len(intent_changes)}):")
+        for status, fpath in intent_changes:
+            label = status_labels.get(status, status)
+            print(f"    [{label}] {fpath}")
+        print()
+
+    if covered:
+        print(f"  Governed Code Changes ({covered_count} files):")
+        for cid, files in sorted(covered.items()):
+            comp = g.nodes.get(cid)
+            comp_name = comp.title if comp else cid
+            gov = comp_governance.get(cid, {})
+            print(f"\n    {comp_name} ({cid})")
+            for status, fpath in files:
+                label = status_labels.get(status, status)
+                print(f"      [{label}] {fpath}")
+            if gov.get("specs"):
+                print(f"      Specs: {', '.join(s['id'] + ' [' + s['status'] + ']' for s in gov['specs'])}")
+            if gov.get("adrs"):
+                print(f"      ADRs:  {', '.join(a['id'] + ' [' + a['status'] + ']' for a in gov['adrs'])}")
+            if gov.get("gates"):
+                print(f"      Gates: {', '.join(g['id'] for g in gov['gates'])}")
+        print()
+
+    if uncovered:
+        print(f"  Ungoverned Changes ({len(uncovered)} files):")
+        for status, fpath in uncovered:
+            label = status_labels.get(status, status)
+            print(f"    [{label}] {fpath}")
+        print(f"\n  These files are not mapped to any component.")
+        print(f"  Run 'sigil suggest <path>' for governance recommendations.")
+        print()
+
+    # Warnings
+    warnings = []
+    for cid, gov in comp_governance.items():
+        if not gov.get("specs"):
+            comp = g.nodes.get(cid)
+            comp_name = comp.title if comp else cid
+            warnings.append(f"{comp_name}: code changes but no governing spec")
+        draft_specs = [s for s in gov.get("specs", []) if s["status"] == "draft"]
+        if draft_specs:
+            for s in draft_specs:
+                warnings.append(f"{s['id']} ({s['title']}): still in draft — consider promoting before merge")
+
+    if warnings:
+        print(f"  Warnings:")
+        for w in warnings:
+            print(f"    - {w}")
+        print()
+
+    return 0
+
+
+_HOOK_SCRIPT = """\
+#!/bin/sh
+# Sigil intent coverage check — installed by `sigil hook install`
+# Runs `sigil review --staged` on every commit to flag ungoverned changes.
+
+echo ""
+echo "  Sigil: checking intent coverage..."
+echo ""
+
+sigil_cmd=""
+if command -v sigil >/dev/null 2>&1; then
+    sigil_cmd="sigil"
+elif command -v python3 >/dev/null 2>&1; then
+    # Find sigil.py relative to repo root
+    repo_root="$(git rev-parse --show-toplevel 2>/dev/null)"
+    if [ -f "$repo_root/tools/intent/sigil.py" ]; then
+        sigil_cmd="python3 $repo_root/tools/intent/sigil.py"
+    fi
+fi
+
+if [ -z "$sigil_cmd" ]; then
+    echo "  Sigil: not found, skipping review."
+    exit 0
+fi
+
+$sigil_cmd review --staged
+
+# Non-blocking: always allow commit, just inform
+exit 0
+"""
+
+
+def cmd_hook(args) -> int:
+    """Install or uninstall the Sigil git pre-commit hook."""
+    repo = Path(args.repo).resolve()
+    action = args.action
+    hook_dir = repo / ".git" / "hooks"
+    hook_path = hook_dir / "pre-commit"
+    sigil_marker = "# Sigil intent coverage check"
+
+    if action == "install":
+        if not hook_dir.is_dir():
+            print(f"  Not a git repository (no .git/hooks at {hook_dir})")
+            return 1
+
+        if hook_path.exists():
+            existing = hook_path.read_text()
+            if sigil_marker in existing:
+                print(f"  Sigil hook already installed at {hook_path}")
+                return 0
+            # Append to existing hook
+            with open(hook_path, "a") as f:
+                f.write("\n\n" + _HOOK_SCRIPT)
+            print(f"  Appended Sigil hook to existing {hook_path}")
+        else:
+            hook_path.write_text(_HOOK_SCRIPT)
+            hook_path.chmod(0o755)
+            print(f"  Installed Sigil pre-commit hook at {hook_path}")
+
+        print(f"  Every commit will now show intent coverage for staged files.")
+        return 0
+
+    elif action == "uninstall":
+        if not hook_path.exists():
+            print(f"  No pre-commit hook found at {hook_path}")
+            return 0
+
+        content = hook_path.read_text()
+        if sigil_marker not in content:
+            print(f"  Sigil hook not found in {hook_path}")
+            return 0
+
+        # Remove the sigil hook section
+        lines = content.split("\n")
+        new_lines = []
+        skip = False
+        for line in lines:
+            if sigil_marker in line:
+                skip = True
+                # Also remove blank lines before the marker
+                while new_lines and not new_lines[-1].strip():
+                    new_lines.pop()
+                continue
+            if skip and line.startswith("exit 0"):
+                skip = False
+                continue
+            if skip:
+                continue
+            new_lines.append(line)
+
+        remaining = "\n".join(new_lines).strip()
+        if not remaining or remaining == "#!/bin/sh":
+            hook_path.unlink()
+            print(f"  Removed Sigil pre-commit hook ({hook_path})")
+        else:
+            hook_path.write_text(remaining + "\n")
+            print(f"  Removed Sigil section from {hook_path}")
+        return 0
+
+    elif action == "status":
+        if hook_path.exists() and sigil_marker in hook_path.read_text():
+            print(f"  Sigil pre-commit hook: installed")
+        else:
+            print(f"  Sigil pre-commit hook: not installed")
+            print(f"  Run 'sigil hook install' to enable intent review on commit.")
+        return 0
+
+    return 1
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(prog="sigil", description="Sigil — intent-first engineering CLI")
+    ap.add_argument("--repo", default=".", help="Repo root (default: cwd)")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+
+    sp = sub.add_parser("status", help="Show intent graph health status")
+    sp.set_defaults(fn=cmd_status)
+
+    sp = sub.add_parser("index", help="Build graph index from repo")
+    sp.set_defaults(fn=cmd_index)
+
+    sp = sub.add_parser("diff", help="Compute graph diff between two commits")
+    sp.add_argument("base", help="Base commit SHA")
+    sp.add_argument("head", help="Head commit SHA")
+    sp.add_argument("--out", default=None, help="Output diff JSON path")
+    sp.add_argument("--md", default=None, help="Output diff markdown path")
+    sp.set_defaults(fn=cmd_diff)
+
+    sp = sub.add_parser("new", help="Create a new intent document from template")
+    sp.add_argument("type", choices=["spec", "adr"], help="Document type")
+    sp.add_argument("component", help="Component slug")
+    sp.add_argument("title", help="Document title")
+    sp.set_defaults(fn=cmd_new)
+
+    sp = sub.add_parser("lint", help="Lint intent documents")
+    sp.add_argument("--min-severity", default="warn", choices=["error", "warn", "info"],
+                    dest="min_severity", help="Minimum severity to report (default: warn)")
+    sp.set_defaults(fn=cmd_lint)
+
+    sp = sub.add_parser("fmt", help="Normalize intent documents (IDs, Links section)")
+    sp.set_defaults(fn=cmd_fmt)
+
+    sp = sub.add_parser("bootstrap", help="Scan repo and create missing component stubs")
+    sp.add_argument("--dry-run", action="store_true", help="Print what would be created without writing files")
+    sp.set_defaults(fn=cmd_bootstrap)
+
+    sp = sub.add_parser("init", help="Zero-to-working setup: scaffold, index, and open viewer")
+    sp.add_argument("--port", default="8787", help="Port for local viewer server (default: 8787)")
+    sp.set_defaults(fn=cmd_init)
+
+    sp = sub.add_parser("drift", help="Detect drift between intent graph and codebase")
+    sp.set_defaults(fn=cmd_drift)
+
+    sp = sub.add_parser("check", help="Run gate enforcement checks against the intent graph")
+    sp.set_defaults(fn=cmd_check)
+
+    sp = sub.add_parser("export", help="Generate self-contained HTML snapshot of the viewer")
+    sp.add_argument("--output", "-o", default=None, help="Output path (default: .intent/export.html)")
+    sp.set_defaults(fn=cmd_export)
+
+    sp = sub.add_parser("badge", help="Generate intent coverage badge SVG")
+    sp.add_argument("--output", "-o", default=None, help="Output path (default: .intent/badge.svg)")
+    sp.set_defaults(fn=cmd_badge)
+
+    sp = sub.add_parser("serve", help="Start dev server with file watching and auto-rebuild")
+    sp.add_argument("--port", default="8787", help="Port for dev server (default: 8787)")
+    sp.set_defaults(fn=cmd_serve)
+
+    sp = sub.add_parser("ask", help="Search intent docs with a natural-language question")
+    sp.add_argument("question", help="Question to search for")
+    sp.add_argument("--top", type=int, default=5, help="Number of results to return (default: 5)")
+    sp.set_defaults(fn=cmd_ask)
+
+    sp = sub.add_parser("suggest", help="Show which intent docs govern a file")
+    sp.add_argument("path", help="File path to analyze")
+    sp.set_defaults(fn=cmd_suggest)
+
+    sp = sub.add_parser("review", help="Analyze git diff for intent coverage of changed files")
+    sp.add_argument("base", nargs="?", default=None, help="Base commit (default: HEAD)")
+    sp.add_argument("head", nargs="?", default=None, help="Head commit (default: working tree)")
+    sp.add_argument("--staged", action="store_true", help="Review staged changes only")
+    sp.add_argument("--json", action="store_true", help="Output JSON instead of terminal report")
+    sp.set_defaults(fn=cmd_review)
+
+    sp = sub.add_parser("timeline", help="Build a timeline of intent evolution from git history")
+    sp.add_argument("--max", default="50", help="Maximum number of commits to scan (default: 50)")
+    sp.add_argument("--output", "-o", default=None, help="Output path (default: .intent/index/timeline.json)")
+    sp.set_defaults(fn=cmd_timeline)
+
+    sp = sub.add_parser("hook", help="Install/uninstall Sigil git pre-commit hook")
+    sp.add_argument("action", choices=["install", "uninstall", "status"], help="Action to perform")
+    sp.set_defaults(fn=cmd_hook)
+
+    args = ap.parse_args()
+    return args.fn(args)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,20 @@
+id: COMP-<name>
+name: <Component Name>
+
+owners:
+  - <team>
+
+paths:
+  - <service-path>/**
+
+interfaces:
+  provides: []
+  consumes: []
+
+dependency_policy:
+  allowed_components: []
+
+attributes:
+  tier: 1
+  data: []
+  runtime: []
