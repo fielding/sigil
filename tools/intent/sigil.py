@@ -2418,13 +2418,12 @@ def cmd_suggest(args) -> int:
     target = args.path
     g = build_graph(repo)
 
-    # Resolve relative path
-    target_path = Path(target)
-    if target_path.is_absolute():
-        try:
-            target_path = target_path.relative_to(repo)
-        except ValueError:
-            pass
+    # Resolve path to be repo-relative
+    target_path = Path(target).resolve() if Path(target).is_absolute() else (Path.cwd() / target).resolve()
+    try:
+        target_path = target_path.relative_to(repo)
+    except ValueError:
+        target_path = Path(target)
     target_str = str(target_path).replace("\\", "/")
 
     # 1. Find which component owns this file via path globs
@@ -3494,13 +3493,12 @@ def cmd_why(args) -> int:
     target = args.path
     g = build_graph(repo)
 
-    # Resolve path
-    target_path = Path(target)
-    if target_path.is_absolute():
-        try:
-            target_path = target_path.relative_to(repo)
-        except ValueError:
-            pass
+    # Resolve path to be repo-relative
+    target_path = Path(target).resolve() if Path(target).is_absolute() else (Path.cwd() / target).resolve()
+    try:
+        target_path = target_path.relative_to(repo)
+    except ValueError:
+        target_path = Path(target)
     target_str = str(target_path).replace("\\", "/")
 
     # Check file exists
