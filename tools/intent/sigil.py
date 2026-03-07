@@ -1080,6 +1080,18 @@ def cmd_new(args) -> int:
     content = content.replace("<component>", component)
 
     dest.write_text(content, encoding="utf-8")
+
+    # Persist the updated counter so the next `sigil new` gets a fresh ID
+    if yaml and config_path.exists():
+        cfg = load_yaml(config_path)
+        counters = cfg.get("id_counters", {})
+        counters[prefix] = next_num
+        cfg["id_counters"] = counters
+        config_path.write_text(yaml.dump(cfg, default_flow_style=False), encoding="utf-8")
+    elif yaml:
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text(yaml.dump({"id_counters": {prefix: next_num}}, default_flow_style=False), encoding="utf-8")
+
     print(f"Created {dest.relative_to(repo)}")
     print(f"  ID: {node_id}")
     return 0
@@ -3465,6 +3477,160 @@ def cmd_why(args) -> int:
     return 0
 
 
+def _blast_radius(node_id: str, g: Graph, max_depth: int = 3) -> List[List[Dict]]:
+    """BFS traversal returning concentric rings of connected nodes.
+
+    Each ring is a list of dicts: {id, type, edge_type, direction}.
+    Ring 0 = direct connections, Ring 1 = secondary, etc.
+    """
+    rings: List[List[Dict]] = []
+    visited = {node_id}
+
+    def get_connected(nid: str) -> List[Dict]:
+        out: List[Dict] = []
+        for e in g.edges:
+            if e.src == nid and e.dst not in visited and e.dst in g.nodes:
+                out.append({"id": e.dst, "type": g.nodes[e.dst].type,
+                            "edge_type": e.type, "direction": "out"})
+            if e.dst == nid and e.src not in visited and e.src in g.nodes:
+                out.append({"id": e.src, "type": g.nodes[e.src].type,
+                            "edge_type": e.type, "direction": "in"})
+        return out
+
+    frontier = [node_id]
+    for _ in range(max_depth):
+        ring: List[Dict] = []
+        next_frontier: List[str] = []
+        for nid in frontier:
+            for item in get_connected(nid):
+                if item["id"] not in visited:
+                    visited.add(item["id"])
+                    ring.append(item)
+                    next_frontier.append(item["id"])
+        rings.append(ring)
+        frontier = next_frontier
+        if not frontier:
+            break
+
+    return rings
+
+
+def _resolve_node_id(query: str, g: Graph) -> Optional[str]:
+    """Resolve a query to a node ID, supporting exact match and fuzzy prefix."""
+    # Exact match
+    if query in g.nodes:
+        return query
+    # Case-insensitive exact
+    upper = query.upper()
+    for nid in g.nodes:
+        if nid.upper() == upper:
+            return nid
+    # Prefix match
+    matches = [nid for nid in g.nodes if nid.upper().startswith(upper)]
+    if len(matches) == 1:
+        return matches[0]
+    # Substring match
+    matches = [nid for nid in g.nodes if upper in nid.upper()]
+    if len(matches) == 1:
+        return matches[0]
+    # Title search
+    matches = [nid for nid in g.nodes if upper in g.nodes[nid].title.upper()]
+    if len(matches) == 1:
+        return matches[0]
+    if matches:
+        return None  # ambiguous
+    return None
+
+
+def cmd_impact(args) -> int:
+    """Show the blast radius of a node — what depends on it and what it affects."""
+    repo = Path(args.repo).resolve()
+    query = args.node
+    as_json = getattr(args, "json", False)
+    max_depth = int(getattr(args, "depth", 3))
+
+    g = build_graph(repo)
+
+    node_id = _resolve_node_id(query, g)
+    if not node_id:
+        # Show candidates
+        upper = query.upper()
+        candidates = [nid for nid in g.nodes if upper in nid.upper() or upper in g.nodes[nid].title.upper()]
+        if candidates:
+            print(f"  Ambiguous query '{query}'. Did you mean one of:")
+            for c in sorted(candidates)[:10]:
+                print(f"    {c}  {g.nodes[c].title}")
+        else:
+            print(f"  No node found matching '{query}'.")
+            print(f"  Available nodes: {', '.join(sorted(g.nodes.keys())[:20])}")
+        return 1
+
+    node = g.nodes[node_id]
+    rings = _blast_radius(node_id, g, max_depth=max_depth)
+
+    if as_json:
+        result = {
+            "node": {"id": node.id, "type": node.type, "title": node.title, "path": node.path},
+            "rings": [],
+            "summary": {},
+        }
+        type_counts: Dict[str, int] = collections.defaultdict(int)
+        for ri, ring in enumerate(rings):
+            ring_data = []
+            for item in ring:
+                ring_data.append(item)
+                type_counts[item["type"]] += 1
+            result["rings"].append({"depth": ri + 1, "nodes": ring_data})
+        total = sum(len(r) for r in rings)
+        result["summary"] = {"total": total, "by_type": dict(type_counts)}
+        print(json.dumps(result, indent=2))
+        return 0
+
+    # Terminal output
+    sym = {
+        "component": "\u25a0", "spec": "\u25c6", "adr": "\u25b2",
+        "gate": "\u25cf", "interface": "\u25c8",
+    }
+    ring_names = ["Direct", "Secondary", "Tertiary"]
+    # Extend ring names for deeper traversals
+    while len(ring_names) < max_depth:
+        ring_names.append(f"Ring {len(ring_names) + 1}")
+
+    dir_arrows = {"out": "\u2192", "in": "\u2190"}
+
+    print()
+    print(f"  sigil impact {node.id}")
+    print(f"  {'=' * 50}")
+    print(f"  {sym.get(node.type, '\u25cb')} {node.id}: {node.title}")
+    print(f"  {node.path}")
+
+    total = 0
+    type_counts: Dict[str, int] = collections.defaultdict(int)
+
+    for ri, ring in enumerate(rings):
+        if not ring:
+            continue
+        total += len(ring)
+        print(f"\n  {ring_names[ri]} ({len(ring)})")
+        print(f"  {'-' * 40}")
+        for item in sorted(ring, key=lambda x: (x["type"], x["id"])):
+            type_counts[item["type"]] += 1
+            s = sym.get(item["type"], "\u25cb")
+            arrow = dir_arrows.get(item["direction"], "\u2194")
+            target = g.nodes[item["id"]]
+            print(f"    {arrow} {s} {item['id']}  {target.title}  ({item['edge_type']})")
+
+    # Summary
+    print(f"\n  {'=' * 50}")
+    if total == 0:
+        print("  No connected nodes found — this node is isolated.")
+    else:
+        parts = [f"{count} {t}{'s' if count != 1 else ''}" for t, count in sorted(type_counts.items())]
+        print(f"  Blast radius: {total} node(s) — {', '.join(parts)}")
+    print()
+    return 0
+
+
 def cmd_scan(args) -> int:
     """Deep-scan a codebase to auto-detect components, APIs, decisions, and relationships."""
     repo = Path(args.repo).resolve()
@@ -3875,6 +4041,12 @@ def main() -> int:
     sp = sub.add_parser("why", help="Explain why a file exists by tracing its full intent chain")
     sp.add_argument("path", help="File path to trace")
     sp.set_defaults(fn=cmd_why)
+
+    sp = sub.add_parser("impact", help="Show blast radius — what depends on a node and what it affects")
+    sp.add_argument("node", help="Node ID or search term (e.g. COMP-auth, SPEC-0001)")
+    sp.add_argument("--depth", default="3", help="Max traversal depth (default: 3)")
+    sp.add_argument("--json", action="store_true", default=False, help="Output results as JSON")
+    sp.set_defaults(fn=cmd_impact)
 
     args = ap.parse_args()
     return args.fn(args)
