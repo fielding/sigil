@@ -1,0 +1,2915 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Sigil Export (18 nodes) — — Intent Graph Viewer</title>
+  <style>
+    :root {
+      --base00: #1a1c22; --base01: #282b31; --base02: #3a3d42; --base03: #5a5d62;
+      --base04: #828079; --base05: #dbd6cc; --base06: #eeeae2; --base07: #f8f6f2;
+      --base08: #e7349c; --base09: #f26c33; --base0A: #f2a633; --base0B: #04b372;
+      --base0C: #1ad0d6; --base0D: #458ae2; --base0E: #9871fe; --base0F: #bbff00;
+      --base10: #c8518f; --base11: #d68c6f; --base12: #dfb683; --base13: #61b186;
+      --base14: #91cbcd; --base15: #5e84b6; --base16: #8f72e3; --base17: #d2fc91;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+      background: var(--base00); color: var(--base05);
+      display: flex; flex-direction: column; height: 100vh; overflow: hidden;
+    }
+
+    /* Top bar */
+    #topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 16px; background: var(--base00);
+      border-bottom: 1px solid var(--base02); flex-shrink: 0;
+    }
+    #topbar-left { display: flex; align-items: center; gap: 12px; }
+    #topbar h1 {
+      font-size: 14px; font-weight: 700; color: var(--base0F);
+      letter-spacing: 2px; text-transform: uppercase;
+    }
+    .view-btn {
+      padding: 4px 10px; font-size: 11px; font-weight: 600;
+      color: var(--base04); background: transparent;
+      border: 1px solid var(--base02); border-radius: 4px;
+      cursor: pointer; font-family: inherit;
+      transition: all 0.15s;
+    }
+    .view-btn:hover { color: var(--base05); border-color: var(--base03); }
+    .view-btn.active { color: var(--base0F); border-color: var(--base0F); background: rgba(187,255,0,0.08); }
+
+    /* Health badge */
+    #health-badge {
+      display: flex; align-items: center; gap: 8px;
+      padding: 4px 12px; border-radius: 999px;
+      font-size: 12px; font-weight: 700;
+    }
+    .health-excellent { background: rgba(4,179,114,0.15); color: var(--base0B); }
+    .health-good { background: rgba(69,138,226,0.15); color: var(--base0D); }
+    .health-fair { background: rgba(242,166,51,0.15); color: var(--base0A); }
+    .health-poor { background: rgba(231,52,156,0.15); color: var(--base08); }
+
+    /* Main layout */
+    #main { display: flex; flex: 1; overflow: hidden; }
+
+    /* Graph panel */
+    #left {
+      width: 55%; border-right: 1px solid var(--base02);
+      position: relative; background: var(--base00);
+    }
+    #svg { width: 100%; height: 100%; }
+    #radar-svg { width: 100%; height: 100%; display: none; }
+    #hierarchy-svg { width: 100%; height: 100%; display: none; }
+
+    /* Detail panel */
+    #right {
+      width: 45%; display: flex; flex-direction: column;
+      background: var(--base01); overflow: hidden;
+    }
+    #search-bar {
+      padding: 10px 14px; border-bottom: 1px solid var(--base02);
+      background: var(--base00);
+    }
+    #search {
+      width: 100%; padding: 8px 12px;
+      background: var(--base01); color: var(--base05);
+      border: 1px solid var(--base02); border-radius: 6px;
+      font-family: inherit; font-size: 13px; outline: none;
+    }
+    #search:focus { border-color: var(--base0D); }
+    #search::placeholder { color: var(--base03); }
+
+    /* Breadcrumb */
+    #breadcrumb {
+      padding: 8px 14px; font-size: 12px; color: var(--base04);
+      border-bottom: 1px solid var(--base02); background: var(--base00);
+      white-space: nowrap; overflow-x: auto;
+    }
+    #breadcrumb span { cursor: pointer; }
+    #breadcrumb span:hover { color: var(--base0D); }
+    #breadcrumb .sep { color: var(--base03); margin: 0 6px; cursor: default; }
+
+    /* Node header */
+    #node-header {
+      padding: 14px; border-bottom: 1px solid var(--base02);
+      background: var(--base01);
+    }
+    #node-header h2 {
+      font-size: 16px; font-weight: 600; color: var(--base06);
+      margin-bottom: 6px;
+    }
+    .pill {
+      display: inline-block; padding: 2px 8px;
+      border-radius: 999px; font-size: 11px; font-weight: 600;
+      margin-right: 6px;
+    }
+    .pill-type { background: var(--base02); color: var(--base05); }
+    .pill-id { background: transparent; border: 1px solid var(--base03); color: var(--base04); }
+    .pill-status { color: var(--base00); font-weight: 700; }
+    .pill-status[data-status="accepted"] { background: var(--base0B); }
+    .pill-status[data-status="draft"] { background: var(--base0A); }
+    .pill-status[data-status="proposed"] { background: var(--base0E); }
+    .pill-status[data-status="rejected"] { background: var(--base08); }
+    .pill-status[data-status="superseded"] { background: var(--base03); }
+    .pill-status[data-status="active"] { background: var(--base0B); }
+
+    /* Tabs */
+    #tabs {
+      display: flex; border-bottom: 1px solid var(--base02);
+      background: var(--base01);
+    }
+    .tab {
+      padding: 8px 16px; font-size: 12px; font-weight: 600;
+      color: var(--base04); cursor: pointer; border-bottom: 2px solid transparent;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .tab:hover { color: var(--base05); }
+    .tab.active { color: var(--base0D); border-bottom-color: var(--base0D); }
+
+    /* Content area */
+    #content-area {
+      flex: 1; overflow-y: auto; padding: 16px 20px;
+    }
+
+    /* Markdown styles -- human++ */
+    .md-body h1 { font-size: 20px; color: var(--base07); margin: 20px 0 10px; font-weight: 700; }
+    .md-body h1:first-child { margin-top: 0; }
+    .md-body h2 { font-size: 16px; color: var(--base06); margin: 18px 0 8px; font-weight: 600; border-bottom: 1px solid var(--base02); padding-bottom: 4px; }
+    .md-body h3 { font-size: 14px; color: var(--base14); margin: 14px 0 6px; font-weight: 600; }
+    .md-body h4 { font-size: 13px; color: var(--base04); margin: 12px 0 4px; font-weight: 600; }
+    .md-body p { margin: 8px 0; line-height: 1.6; }
+    .md-body a { color: var(--base0D); text-decoration: none; }
+    .md-body a:hover { text-decoration: underline; }
+    .md-body strong { color: var(--base06); font-weight: 600; }
+    .md-body em { color: var(--base03); font-style: italic; }
+    .md-body code {
+      background: var(--base02); color: var(--base12);
+      padding: 2px 5px; border-radius: 3px; font-size: 12px;
+    }
+    .md-body pre {
+      background: var(--base00); border: 1px solid var(--base02);
+      padding: 12px; border-radius: 6px; overflow-x: auto;
+      margin: 10px 0; font-size: 12px; line-height: 1.5;
+    }
+    .md-body pre code { background: none; padding: 0; color: var(--base05); }
+    .md-body ul, .md-body ol { margin: 8px 0; padding-left: 22px; }
+    .md-body li { margin: 4px 0; line-height: 1.5; }
+    .md-body li code { font-size: 11px; }
+    .md-body blockquote {
+      border-left: 3px solid var(--base0E);
+      padding: 4px 12px; margin: 10px 0;
+      color: var(--base04); background: var(--base00);
+      border-radius: 0 4px 4px 0;
+    }
+    .md-body hr { border: none; border-top: 1px solid var(--base02); margin: 16px 0; }
+    .md-body table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 13px; }
+    .md-body th { background: var(--base02); color: var(--base06); text-align: left; padding: 6px 10px; font-weight: 600; }
+    .md-body td { border-top: 1px solid var(--base02); padding: 6px 10px; }
+    .md-body input[type="checkbox"] { margin-right: 6px; accent-color: var(--base0B); }
+
+    /* Human++ annotation markers */
+    .marker-attention {
+      background: var(--base0F); color: var(--base00);
+      padding: 2px 6px; border-radius: 4px; font-weight: bold; font-style: normal;
+    }
+    .marker-uncertainty {
+      background: var(--base0E); color: var(--base07);
+      padding: 2px 6px; border-radius: 4px; font-weight: bold; font-style: normal;
+    }
+    .marker-reference {
+      background: var(--base0C); color: var(--base00);
+      padding: 2px 6px; border-radius: 4px; font-weight: bold; font-style: normal;
+    }
+
+    /* Wikilinks */
+    .wikilink {
+      color: var(--base0D); cursor: pointer; text-decoration: none;
+      border-bottom: 1px dashed var(--base0D);
+    }
+    .wikilink:hover { color: var(--base0C); border-color: var(--base0C); }
+
+    /* Graph tab */
+    .edge-list { list-style: none; padding: 0; }
+    .edge-list li {
+      padding: 6px 0; border-bottom: 1px solid var(--base02);
+      font-size: 13px; display: flex; align-items: center; gap: 8px;
+    }
+    .edge-list li:last-child { border-bottom: none; }
+    .edge-type {
+      font-size: 11px; color: var(--base0E); background: var(--base02);
+      padding: 2px 6px; border-radius: 3px; font-weight: 600;
+    }
+    .edge-target { color: var(--base0D); cursor: pointer; }
+    .edge-target:hover { text-decoration: underline; }
+    .edge-dir { color: var(--base03); font-size: 12px; }
+
+    /* Edge labels on graph */
+    .edge-label {
+      font-size: 9px; fill: var(--base03);
+      pointer-events: none; opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .edge-label.visible { opacity: 1; }
+
+    /* Node glow for high-connectivity */
+    .node-glow {
+      filter: url(#glow);
+    }
+
+    /* Loading state */
+    .loading { color: var(--base03); font-style: italic; padding: 20px; }
+
+    /* Legend */
+    #legend {
+      position: absolute; bottom: 12px; left: 12px;
+      background: var(--base01); border: 1px solid var(--base02);
+      border-radius: 6px; padding: 8px 12px; font-size: 11px;
+    }
+    .legend-item { display: flex; align-items: center; gap: 6px; margin: 3px 0; }
+    .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+
+    /* Coverage dashboard */
+    .cov-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+      margin-bottom: 20px;
+    }
+    .cov-card {
+      background: var(--base00); border: 1px solid var(--base02);
+      border-radius: 8px; padding: 14px;
+    }
+    .cov-card-title { font-size: 11px; color: var(--base04); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+    .cov-card-value { font-size: 28px; font-weight: 700; }
+    .cov-card-sub { font-size: 12px; color: var(--base03); margin-top: 4px; }
+
+    .cov-bar-track {
+      width: 100%; height: 8px; background: var(--base02);
+      border-radius: 4px; margin-top: 8px; overflow: hidden;
+    }
+    .cov-bar-fill {
+      height: 100%; border-radius: 4px;
+      transition: width 0.5s ease;
+    }
+
+    .cov-finding {
+      display: flex; align-items: flex-start; gap: 8px;
+      padding: 8px 0; border-bottom: 1px solid var(--base02);
+      font-size: 13px;
+    }
+    .cov-finding:last-child { border-bottom: none; }
+    .cov-sev {
+      font-size: 10px; font-weight: 700; padding: 2px 6px;
+      border-radius: 3px; flex-shrink: 0;
+    }
+    .cov-sev-warn { background: var(--base0A); color: var(--base00); }
+    .cov-sev-info { background: var(--base0C); color: var(--base00); }
+    .cov-sev-ok { background: var(--base0B); color: var(--base00); }
+    .cov-finding-text { color: var(--base05); }
+    .cov-finding-text .cov-link { color: var(--base0D); cursor: pointer; }
+    .cov-finding-text .cov-link:hover { text-decoration: underline; }
+
+    /* Radar view */
+    .radar-ring-label {
+      font-size: 10px; fill: var(--base03);
+      text-anchor: middle; dominant-baseline: middle;
+    }
+    .radar-node { cursor: pointer; }
+    .radar-node text {
+      font-size: 9px; fill: var(--base04);
+      text-anchor: middle; dominant-baseline: hanging;
+    }
+    .radar-center-label {
+      font-size: 13px; fill: var(--base07); font-weight: 700;
+      text-anchor: middle; dominant-baseline: central;
+    }
+    .radar-edge { stroke: var(--base02); stroke-width: 1; }
+
+    /* Node tooltip */
+    #tooltip {
+      position: absolute; pointer-events: none;
+      background: var(--base01); border: 1px solid var(--base02);
+      border-radius: 8px; padding: 10px 14px;
+      max-width: 320px; font-size: 12px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+      opacity: 0; transition: opacity 0.15s;
+      z-index: 100;
+    }
+    #tooltip.show { opacity: 1; }
+    #tooltip .tt-id { color: var(--base0D); font-weight: 600; }
+    #tooltip .tt-type { color: var(--base04); font-size: 11px; margin-left: 6px; }
+    #tooltip .tt-title { color: var(--base06); margin: 4px 0; font-weight: 500; }
+    #tooltip .tt-summary { color: var(--base04); font-size: 11px; line-height: 1.4; margin-top: 4px; }
+    #tooltip .tt-status {
+      display: inline-block; font-size: 10px; font-weight: 700;
+      padding: 1px 6px; border-radius: 3px; margin-left: 6px;
+    }
+
+    /* Keyboard hint */
+    #keyhint {
+      position: absolute; bottom: 12px; right: 12px;
+      background: var(--base01); border: 1px solid var(--base02);
+      border-radius: 6px; padding: 6px 10px; font-size: 10px;
+      color: var(--base03);
+    }
+    .keyhint-key {
+      display: inline-block; background: var(--base02); color: var(--base04);
+      padding: 1px 5px; border-radius: 3px; font-weight: 600;
+      margin: 0 2px;
+    }
+
+    /* New doc modal */
+    #new-btn {
+      padding: 4px 10px; font-size: 11px; font-weight: 600;
+      color: var(--base0B); background: rgba(4,179,114,0.1);
+      border: 1px solid var(--base0B); border-radius: 4px;
+      cursor: pointer; font-family: inherit;
+      transition: all 0.15s; margin-left: 4px;
+    }
+    #new-btn:hover { background: rgba(4,179,114,0.2); }
+    #modal-overlay {
+      display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.6); z-index: 500;
+      align-items: center; justify-content: center;
+    }
+    #modal-overlay.show { display: flex; }
+    #modal {
+      background: var(--base01); border: 1px solid var(--base02);
+      border-radius: 10px; padding: 24px; width: 400px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    }
+    #modal h3 { color: var(--base06); font-size: 16px; margin-bottom: 16px; }
+    .modal-field { margin-bottom: 12px; }
+    .modal-field label {
+      display: block; font-size: 11px; font-weight: 600;
+      color: var(--base04); text-transform: uppercase;
+      letter-spacing: 0.5px; margin-bottom: 4px;
+    }
+    .modal-field input, .modal-field select {
+      width: 100%; padding: 8px 12px;
+      background: var(--base00); color: var(--base05);
+      border: 1px solid var(--base02); border-radius: 6px;
+      font-family: inherit; font-size: 13px; outline: none;
+    }
+    .modal-field input:focus, .modal-field select:focus { border-color: var(--base0D); }
+    .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+    .modal-actions button {
+      padding: 6px 16px; border-radius: 6px; font-family: inherit;
+      font-size: 12px; font-weight: 600; cursor: pointer; border: none;
+    }
+    .modal-cancel { background: var(--base02); color: var(--base05); }
+    .modal-cancel:hover { background: var(--base03); }
+    .modal-create { background: var(--base0B); color: var(--base00); }
+    .modal-create:hover { opacity: 0.9; }
+    .modal-error { color: var(--base08); font-size: 12px; margin-top: 8px; }
+    .modal-success { color: var(--base0B); font-size: 12px; margin-top: 8px; }
+
+    /* Timeline view */
+    #timeline-container {
+      width: 100%; height: 100%; display: none; overflow: auto;
+      background: var(--base00); padding: 20px;
+    }
+    .tl-header {
+      font-size: 14px; font-weight: 700; color: var(--base06);
+      margin-bottom: 16px;
+    }
+    .tl-header span { color: var(--base03); font-weight: 400; font-size: 12px; margin-left: 8px; }
+    .tl-swimlane {
+      position: relative; margin-bottom: 2px;
+      border-bottom: 1px solid var(--base02);
+      min-height: 36px; display: flex; align-items: center;
+    }
+    .tl-lane-label {
+      width: 100px; flex-shrink: 0; font-size: 11px; font-weight: 600;
+      color: var(--base04); text-transform: uppercase; letter-spacing: 0.5px;
+      padding: 0 8px;
+    }
+    .tl-lane-track {
+      flex: 1; position: relative; height: 36px; overflow: visible;
+    }
+    .tl-event {
+      position: absolute; top: 6px;
+      width: 24px; height: 24px; border-radius: 50%;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      font-size: 9px; font-weight: 700; color: var(--base00);
+      transition: transform 0.15s, box-shadow 0.15s;
+      z-index: 1;
+    }
+    .tl-event:hover {
+      transform: scale(1.4); z-index: 10;
+      box-shadow: 0 0 12px rgba(187,255,0,0.3);
+    }
+    .tl-event[data-action="added"] { }
+    .tl-event[data-action="modified"] { opacity: 0.7; }
+    .tl-event[data-action="removed"] { opacity: 0.5; border: 2px solid var(--base08); }
+    .tl-axis {
+      display: flex; align-items: center; padding: 8px 0 4px 100px;
+      border-top: 1px solid var(--base02); margin-top: 8px;
+    }
+    .tl-axis-label {
+      position: absolute; font-size: 10px; color: var(--base03);
+      transform: translateX(-50%); white-space: nowrap;
+    }
+    .tl-event-tooltip {
+      position: fixed; pointer-events: none;
+      background: var(--base01); border: 1px solid var(--base02);
+      border-radius: 6px; padding: 8px 12px; font-size: 12px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+      opacity: 0; transition: opacity 0.15s; z-index: 200;
+      max-width: 300px;
+    }
+    .tl-event-tooltip.show { opacity: 1; }
+    .tl-empty {
+      color: var(--base03); font-size: 13px; padding: 20px;
+      text-align: center;
+    }
+
+    /* Matrix view */
+    #matrix-container {
+      width: 100%; height: 100%; display: none; overflow: auto;
+      background: var(--base00); padding: 16px;
+    }
+    .matrix-table { border-collapse: collapse; font-size: 10px; }
+    .matrix-table th {
+      padding: 2px 4px; font-weight: 600; color: var(--base04);
+      max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .matrix-table th.row-header { text-align: right; padding-right: 8px; }
+    .matrix-table th.col-header {
+      writing-mode: vertical-rl; text-orientation: mixed;
+      transform: rotate(180deg); height: 80px; vertical-align: bottom; padding-bottom: 6px;
+    }
+    .matrix-cell {
+      width: 24px; height: 24px; cursor: pointer;
+      border: 1px solid var(--base01); transition: transform 0.1s;
+    }
+    .matrix-cell:hover { transform: scale(1.3); z-index: 10; position: relative; }
+    .matrix-diag { background: var(--base02); }
+
+    /* Command palette */
+    #cmd-overlay {
+      display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5); z-index: 600;
+      justify-content: center; padding-top: 15vh;
+    }
+    #cmd-overlay.show { display: flex; }
+    #cmd-palette {
+      background: var(--base01); border: 1px solid var(--base02);
+      border-radius: 10px; width: 480px; max-height: 400px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5); overflow: hidden;
+      align-self: flex-start;
+    }
+    #cmd-input {
+      width: 100%; padding: 14px 16px;
+      background: var(--base00); color: var(--base05);
+      border: none; border-bottom: 1px solid var(--base02);
+      font-family: inherit; font-size: 14px; outline: none;
+    }
+    #cmd-input::placeholder { color: var(--base03); }
+    #cmd-results {
+      max-height: 300px; overflow-y: auto; padding: 4px;
+    }
+    .cmd-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 12px; border-radius: 6px; cursor: pointer;
+      font-size: 13px; color: var(--base05);
+    }
+    .cmd-item:hover, .cmd-item.selected { background: var(--base02); }
+    .cmd-item-icon {
+      width: 20px; height: 20px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 700; color: var(--base00); flex-shrink: 0;
+    }
+    .cmd-item-text { flex: 1; }
+    .cmd-item-hint { font-size: 11px; color: var(--base03); }
+    .cmd-item-type { font-size: 10px; color: var(--base04); }
+
+    /* View badges */
+    .view-badge {
+      font-size: 9px; background: var(--base02); color: var(--base04);
+      padding: 1px 5px; border-radius: 8px; margin-left: 4px;
+    }
+
+    /* Scrollbar */
+    #content-area::-webkit-scrollbar { width: 6px; }
+    #content-area::-webkit-scrollbar-track { background: var(--base01); }
+    #content-area::-webkit-scrollbar-thumb { background: var(--base02); border-radius: 3px; }
+    #content-area::-webkit-scrollbar-thumb:hover { background: var(--base03); }
+  </style>
+
+    <script>
+    // Injected by sigil export — no server needed
+    window.__SIGIL_GRAPH__ = {
+  "version": "1.0",
+  "generated_at": "2026-03-07T00:07:18Z",
+  "nodes": [
+    {
+      "id": "COMP-sigil-ci",
+      "type": "component",
+      "title": "Sigil CI Pipeline",
+      "path": "components/sigil-ci.yaml",
+      "body_summary": "GitHub Actions workflow that runs intent linting, gate checks, drift detection, and posts PR comments."
+    },
+    {
+      "id": "COMP-sigil-viewer",
+      "type": "component",
+      "title": "Sigil Viewer",
+      "path": "components/sigil-viewer.yaml",
+      "body_summary": "Interactive web-based intent graph explorer with 7 view modes, command palette, and human++ theming."
+    },
+    {
+      "id": "COMP-intent-system",
+      "type": "component",
+      "title": "Intent System",
+      "path": "components/intent-system.yaml",
+      "body_summary": ""
+    },
+    {
+      "id": "API-INTENT-CLI-V1",
+      "type": "interface",
+      "title": "Intent CLI Interface v1",
+      "path": "interfaces/API-INTENT-CLI-V1/README.md",
+      "body_summary": ""
+    },
+    {
+      "id": "SPEC-0006",
+      "type": "spec",
+      "title": "CI Pipeline Spec",
+      "path": "intent/sigil-ci/specs/SPEC-0006-ci-pipeline.md",
+      "body_summary": "The Sigil CI workflow runs on every pull request and produces a comprehensive intent report.\n\n## Intent\n\nIntent drift happens silently. Without enforcement, teams write intent docs once and never update them. CI integration makes intent a living part of the development workflow.\n\n## Pipeline Steps\n\n1. `sigil index` -- build the knowledge graph\n2. `sigil lint` -- check docs for structural issues\n3. `sigil check` -- enforce gates\n4. `sigil drift` -- compare intent vs code\n5. `sigil timeline` --...",
+      "frontmatter": {
+        "id": "SPEC-0006",
+        "status": "accepted"
+      }
+    },
+    {
+      "id": "SPEC-0001",
+      "type": "spec",
+      "title": "Intent-First Review System",
+      "path": "intent/intent-system/specs/SPEC-0001-intent-first-review-system.md",
+      "body_summary": "## Intent\n\nReplace diff-centric code review with intent-centric review. Humans review what and why; machines verify that code conforms to stated intent.\n\n## Context\n\nCode review today is broken at scale. Reviewers scroll through thousands of lines of diffs without understanding the purpose, constraints, or risks of a change. This leads to rubber-stamping, slow cycles, and missed architectural issues.\n\n## Goals\n\n- Intent documents (specs, ADRs, interfaces, gates) become the primary review...",
+      "frontmatter": {
+        "id": "SPEC-0001",
+        "status": "accepted"
+      }
+    },
+    {
+      "id": "SPEC-0002",
+      "type": "spec",
+      "title": "Bootstrapper and Demo Strategy",
+      "path": "intent/intent-system/specs/SPEC-0002-bootstrapper-and-demo-strategy.md",
+      "body_summary": "## Intent\n\nProvide a way to adopt intent-first on existing projects by generating an \"as-built\" intent skeleton, and define a demo flow that makes the value proposition immediately visible.\n\n## Context\n\nGreenfield adoption is easy but rare. Most teams have existing codebases. A bootstrapper that generates components, interfaces, and spec skeletons from an existing repo removes the cold-start problem. A compelling demo sells the concept.\n\n## Goals\n\n- `intent bootstrap` scans a repo and generates...",
+      "frontmatter": {
+        "id": "SPEC-0002",
+        "status": "proposed"
+      }
+    },
+    {
+      "id": "SPEC-0004",
+      "type": "spec",
+      "title": "Sigil CLI",
+      "path": "intent/intent-system/specs/SPEC-0004-sigil-cli.md",
+      "body_summary": "## Intent\n\nProvide a single command-line tool that manages the full lifecycle of intent documents: scaffolding, indexing, linting, searching, and diffing. The CLI is the kernel that everything else builds on.\n\n!! If the CLI is slow or unreliable, nothing else works. Keep it fast and dependency-light.\n\n## Context\n\nEngineers already live in their terminal. A CLI that fits into existing workflows (git hooks, CI, editor tasks) has zero adoption friction. We chose Python because it's universal and...",
+      "frontmatter": {
+        "id": "SPEC-0004",
+        "status": "accepted"
+      }
+    },
+    {
+      "id": "SPEC-0003",
+      "type": "spec",
+      "title": "Sigil Viewer",
+      "path": "intent/intent-system/specs/SPEC-0003-sigil-viewer.md",
+      "body_summary": "## Intent\n\nBuild a browser-based graph explorer that makes the intent graph tangible. Engineers should be able to see their entire decision landscape at a glance, drill into any node to read the full spec/ADR, and understand blast radius before making changes.\n\n!! The viewer is the primary interface for non-CLI users. If it doesn't work well, Sigil doesn't work.\n\n## Context\n\nThe CLI kernel ([[SPEC-0001]]) produces `graph.json` with nodes and edges. Without a visual layer, that JSON is useful...",
+      "frontmatter": {
+        "id": "SPEC-0003",
+        "status": "accepted"
+      }
+    },
+    {
+      "id": "ADR-0003",
+      "type": "adr",
+      "title": "Gate Model",
+      "path": "intent/intent-system/adrs/ADR-0003-gate-model.md",
+      "body_summary": "## Context\n\nIf intent documents are the \"what and why,\" gates are the \"enforcement.\" We need a way to define constraints that are tied to intent nodes and can be run in CI.\n\n## Decision\n\nGates are YAML files in `/gates/` with:\n\n- An ID (`GATE-*`)\n- An `applies_to` list referencing intent nodes\n- An `enforced_by` block specifying how to check (command, builtin rule, or AI prompt)\n- A `policy` block specifying warn vs. block behavior\n\nGate types include: command (run a script), builtin...",
+      "frontmatter": {
+        "id": "ADR-0003",
+        "status": "accepted"
+      }
+    },
+    {
+      "id": "ADR-0002",
+      "type": "adr",
+      "title": "Repo Schema for Intent",
+      "path": "intent/intent-system/adrs/ADR-0002-repo-schema-for-intent.md",
+      "body_summary": "## Context\n\nIntent artifacts need a home. They could live in a database, a wiki, or the repo itself. We need a convention that is portable, versionable, and doesn't require a running service.\n\n## Decision\n\nStore all intent artifacts in the git repo using a structured directory layout:\n\n- `/components/` \u2014 component registry (YAML)\n- `/intent/<component>/specs/` \u2014 spec documents (Markdown + front matter)\n- `/intent/<component>/adrs/` \u2014 decision records\n- `/interfaces/` \u2014 contract definitions...",
+      "frontmatter": {
+        "id": "ADR-0002",
+        "status": "accepted"
+      }
+    },
+    {
+      "id": "ADR-0001",
+      "type": "adr",
+      "title": "Why Intent-First",
+      "path": "intent/intent-system/adrs/ADR-0001-why-intent-first.md",
+      "body_summary": "## Context\n\nTraditional code review focuses on diffs \u2014 line-by-line implementation details. At scale, this fails: reviewers lack context, rubber-stamp approvals, and miss architectural issues. Meanwhile, AI can generate code faster than humans can review it.\n\n## Decision\n\nAdopt an intent-first model where the primary review surface is structured intent documents (specs, ADRs, interface definitions) rather than code diffs. Implementation review is delegated to automated gates and AI conformance...",
+      "frontmatter": {
+        "id": "ADR-0001",
+        "status": "accepted"
+      }
+    },
+    {
+      "id": "ADR-0004",
+      "type": "adr",
+      "title": "IDs and Wikilinks",
+      "path": "intent/intent-system/adrs/ADR-0004-ids-and-wikilinks.md",
+      "body_summary": "## Context\n\nNodes in the intent graph need stable, human-readable identifiers. Relationships between nodes need a lightweight syntax that works in plain Markdown.\n\n## Decision\n\n- Every node gets a prefixed ID: `SPEC-0042`, `ADR-0001`, `COMP-user-service`, `API-USER-V1`, `GATE-0021`\n- IDs are declared in YAML front matter (`id: SPEC-0042`)\n- References use `[[ID]]` wikilink syntax: `[[COMP-user-service]]`, `[[API-USER-V1]]`\n- Typed relationships use a `## Links` section with labeled entries:\n ...",
+      "frontmatter": {
+        "id": "ADR-0004",
+        "status": "accepted"
+      }
+    },
+    {
+      "id": "ADR-0006",
+      "type": "adr",
+      "title": "Graph Storage Format",
+      "path": "intent/intent-system/adrs/ADR-0006-graph-storage-format.md",
+      "body_summary": "## Context\n\nThe intent indexer needs to persist the knowledge graph in a format that the viewer, CI, and search tools can all consume. The graph consists of nodes (components, specs, ADRs, interfaces, gates) and typed edges (belongs_to, decided_by, depends_on, etc.).\n\n?? We considered a database but decided it was overkill for a repo-local tool.\n\n## Decision\n\nUse a single JSON file (`.intent/index/graph.json`) as the canonical graph artifact. Structure:\n\n```json\n{\n  \"version\": \"1.0\",\n ...",
+      "frontmatter": {
+        "id": "ADR-0006",
+        "status": "accepted"
+      }
+    },
+    {
+      "id": "ADR-0005",
+      "type": "adr",
+      "title": "Human++ Integration",
+      "path": "intent/intent-system/adrs/ADR-0005-human++-integration.md",
+      "body_summary": "## Context\n\nSigil needed a visual identity for its viewer and a convention for annotating intent documents. The founder already maintained human++, a Base24 color scheme built around the thesis that \"code is cheap, intent is scarce.\" The scheme provides 24 colors in three tiers (grayscale, loud accents, quiet accents) plus three annotation markers for human judgment in code.\n\n!! Annotation markers are what make intent docs scannable. Without them, everything looks the same.\n\n## Decision\n\nAdopt...",
+      "frontmatter": {
+        "id": "ADR-0005",
+        "status": "accepted"
+      }
+    },
+    {
+      "id": "SPEC-0005",
+      "type": "spec",
+      "title": "Seven View Modes",
+      "path": "intent/sigil-viewer/specs/SPEC-0005-seven-view-modes.md",
+      "body_summary": "The Sigil viewer provides seven distinct visualizations of the intent graph, each optimized for a different analysis task.\n\n## Intent\n\nArchitects and developers need multiple lenses to understand a system's intent structure. A single graph view is not enough -- you need to see topology, hierarchy, coverage, drift, history, and coupling.\n\n## Views\n\n1. **Graph** -- force-directed knowledge graph with drag, zoom, glow effects on high-connectivity nodes, colored edges by type, and curved paths with...",
+      "frontmatter": {
+        "id": "SPEC-0005",
+        "status": "accepted"
+      }
+    },
+    {
+      "id": "GATE-0002",
+      "type": "gate",
+      "title": "Ensures ADRs progress beyond draft status in a timely manner",
+      "path": "gates/GATE-0002-adr-maturity.yaml",
+      "body_summary": ""
+    },
+    {
+      "id": "GATE-0001",
+      "type": "gate",
+      "title": "Ensures all specs under intent-system have acceptance criteria, status, and valid references",
+      "path": "gates/GATE-0001-spec-quality.yaml",
+      "body_summary": ""
+    }
+  ],
+  "edges": [
+    {
+      "type": "belongs_to",
+      "src": "SPEC-0006",
+      "dst": "COMP-sigil-ci",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "depends_on",
+      "src": "SPEC-0006",
+      "dst": "API-INTENT-CLI-V1",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "belongs_to",
+      "src": "SPEC-0001",
+      "dst": "COMP-intent-system",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "belongs_to",
+      "src": "SPEC-0002",
+      "dst": "COMP-intent-system",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "depends_on",
+      "src": "SPEC-0002",
+      "dst": "SPEC-0001",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "belongs_to",
+      "src": "SPEC-0004",
+      "dst": "COMP-intent-system",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "depends_on",
+      "src": "SPEC-0004",
+      "dst": "ADR-0002",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "decided_by",
+      "src": "SPEC-0004",
+      "dst": "ADR-0004",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "belongs_to",
+      "src": "SPEC-0003",
+      "dst": "COMP-intent-system",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "depends_on",
+      "src": "SPEC-0003",
+      "dst": "SPEC-0001",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "decided_by",
+      "src": "SPEC-0003",
+      "dst": "ADR-0005",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "decided_by",
+      "src": "ADR-0003",
+      "dst": "SPEC-0001",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "decided_by",
+      "src": "ADR-0002",
+      "dst": "SPEC-0001",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "decided_by",
+      "src": "ADR-0001",
+      "dst": "SPEC-0001",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "decided_by",
+      "src": "ADR-0004",
+      "dst": "SPEC-0001",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "decided_by",
+      "src": "ADR-0006",
+      "dst": "SPEC-0004",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "belongs_to",
+      "src": "ADR-0006",
+      "dst": "COMP-intent-system",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "decided_by",
+      "src": "ADR-0005",
+      "dst": "SPEC-0003",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "belongs_to",
+      "src": "ADR-0005",
+      "dst": "COMP-intent-system",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "belongs_to",
+      "src": "SPEC-0005",
+      "dst": "COMP-sigil-viewer",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "depends_on",
+      "src": "SPEC-0005",
+      "dst": "API-INTENT-CLI-V1",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "decided_by",
+      "src": "SPEC-0005",
+      "dst": "ADR-0005",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "belongs_to",
+      "src": "SPEC-0006",
+      "dst": "COMP-sigil-ci",
+      "confidence": 0.95,
+      "evidence": [
+        "path inference"
+      ]
+    },
+    {
+      "type": "belongs_to",
+      "src": "SPEC-0001",
+      "dst": "COMP-intent-system",
+      "confidence": 0.95,
+      "evidence": [
+        "path inference"
+      ]
+    },
+    {
+      "type": "belongs_to",
+      "src": "SPEC-0002",
+      "dst": "COMP-intent-system",
+      "confidence": 0.95,
+      "evidence": [
+        "path inference"
+      ]
+    },
+    {
+      "type": "belongs_to",
+      "src": "SPEC-0004",
+      "dst": "COMP-intent-system",
+      "confidence": 0.95,
+      "evidence": [
+        "path inference"
+      ]
+    },
+    {
+      "type": "belongs_to",
+      "src": "SPEC-0003",
+      "dst": "COMP-intent-system",
+      "confidence": 0.95,
+      "evidence": [
+        "path inference"
+      ]
+    },
+    {
+      "type": "belongs_to",
+      "src": "ADR-0003",
+      "dst": "COMP-intent-system",
+      "confidence": 0.95,
+      "evidence": [
+        "path inference"
+      ]
+    },
+    {
+      "type": "belongs_to",
+      "src": "ADR-0002",
+      "dst": "COMP-intent-system",
+      "confidence": 0.95,
+      "evidence": [
+        "path inference"
+      ]
+    },
+    {
+      "type": "belongs_to",
+      "src": "ADR-0001",
+      "dst": "COMP-intent-system",
+      "confidence": 0.95,
+      "evidence": [
+        "path inference"
+      ]
+    },
+    {
+      "type": "belongs_to",
+      "src": "ADR-0004",
+      "dst": "COMP-intent-system",
+      "confidence": 0.95,
+      "evidence": [
+        "path inference"
+      ]
+    },
+    {
+      "type": "belongs_to",
+      "src": "ADR-0006",
+      "dst": "COMP-intent-system",
+      "confidence": 0.95,
+      "evidence": [
+        "path inference"
+      ]
+    },
+    {
+      "type": "belongs_to",
+      "src": "ADR-0005",
+      "dst": "COMP-intent-system",
+      "confidence": 0.95,
+      "evidence": [
+        "path inference"
+      ]
+    },
+    {
+      "type": "belongs_to",
+      "src": "SPEC-0005",
+      "dst": "COMP-sigil-viewer",
+      "confidence": 0.95,
+      "evidence": [
+        "path inference"
+      ]
+    },
+    {
+      "type": "relates_to",
+      "src": "SPEC-0003",
+      "dst": "ADR-0001",
+      "confidence": 0.5,
+      "evidence": [
+        "wikilink"
+      ]
+    },
+    {
+      "type": "gated_by",
+      "src": "COMP-intent-system",
+      "dst": "GATE-0002",
+      "confidence": 1.0,
+      "evidence": [
+        "gate applies_to"
+      ]
+    },
+    {
+      "type": "gated_by",
+      "src": "COMP-intent-system",
+      "dst": "GATE-0001",
+      "confidence": 1.0,
+      "evidence": [
+        "gate applies_to"
+      ]
+    }
+  ]
+};
+    window.__SIGIL_FILES__ = {"components/sigil-ci.yaml": "id: COMP-sigil-ci\nname: Sigil CI Pipeline\ndescription: GitHub Actions workflow that runs intent linting, gate checks, drift detection, and posts PR comments.\n\nowners:\n  - core-team\n\npaths:\n  - .github/workflows/intent.yml\n\ninterfaces:\n  provides: []\n  consumes:\n    - API-INTENT-CLI-V1\n\nattributes:\n  tier: 1\n  runtime: [ci]\n", "components/sigil-viewer.yaml": "id: COMP-sigil-viewer\nname: Sigil Viewer\ndescription: Interactive web-based intent graph explorer with 7 view modes, command palette, and human++ theming.\n\nowners:\n  - core-team\n\npaths:\n  - tools/intent_viewer/**\n\ninterfaces:\n  provides: []\n  consumes:\n    - API-INTENT-CLI-V1\n\nattributes:\n  tier: 1\n  runtime: [browser]\n", "components/intent-system.yaml": "id: COMP-intent-system\nname: Intent System\n\nowners:\n  - core-team\n\npaths:\n  - tools/intent/**\n  - tools/intent_viewer/**\n  - .intent/**\n\ninterfaces:\n  provides:\n    - API-INTENT-CLI-V1\n  consumes: []\n\nattributes:\n  tier: 0\n  runtime: [cli, ci]\n", "interfaces/API-INTENT-CLI-V1/README.md": "---\nid: API-INTENT-CLI-V1\nstatus: active\n---\n\n# Intent CLI Interface v1\n\nThe Sigil CLI exposes 15 commands that operate on the intent graph. This interface is consumed by the viewer (via `sigil serve` HTTP API) and CI (via direct CLI invocation).\n\n## Commands\n\n| Command | Input | Output | Used by |\n|---------|-------|--------|---------|\n| `index` | repo root | graph.json, search.json | viewer, CI |\n| `status` | repo root | terminal health report | developer |\n| `diff` | base SHA, head SHA | diff.json, diff.md | CI |\n| `new` | type, component, title | new intent doc | viewer (via API), developer |\n| `lint` | repo root | lint results | CI |\n| `check` | repo root | gate results | CI |\n| `drift` | repo root | drift.json | viewer, CI |\n| `timeline` | repo root | timeline.json | viewer, CI |\n| `export` | repo root | self-contained HTML | CI, developer |\n| `badge` | repo root | badge.svg | CI |\n| `serve` | port | HTTP server + file watcher | viewer |\n| `ask` | query | search results | developer |\n| `init` | repo root | scaffolded repo + running server | developer |\n| `fmt` | repo root | normalized docs | developer |\n| `bootstrap` | repo root | component stubs | developer |\n\n## HTTP API (via `sigil serve`)\n\n| Endpoint | Method | Description |\n|----------|--------|-------------|\n| `/api/new` | POST | Create a new intent document |\n| `/**` | GET | Static file serving for viewer |\n\n## Links\n\n- Provided by: [[COMP-intent-system]]\n- Consumed by: [[COMP-sigil-viewer]], [[COMP-sigil-ci]]\n", "intent/sigil-ci/specs/SPEC-0006-ci-pipeline.md": "---\nid: SPEC-0006\nstatus: accepted\n---\n\n# CI Pipeline Spec\n\nThe Sigil CI workflow runs on every pull request and produces a comprehensive intent report.\n\n## Intent\n\nIntent drift happens silently. Without enforcement, teams write intent docs once and never update them. CI integration makes intent a living part of the development workflow.\n\n## Pipeline Steps\n\n1. `sigil index` -- build the knowledge graph\n2. `sigil lint` -- check docs for structural issues\n3. `sigil check` -- enforce gates\n4. `sigil drift` -- compare intent vs code\n5. `sigil timeline` -- build evolution history\n6. `sigil badge` -- generate coverage badge\n7. `sigil export` -- create self-contained HTML snapshot\n8. `sigil diff` -- compute graph changes between PR base and head\n\n## PR Comment\n\nThe workflow posts a comment with:\n- Stats table (nodes, edges, specs, ADRs, gates)\n- Graph diff showing what changed\n\n## Acceptance Criteria\n\n- [ ] Workflow runs on PR open, sync, and reopen\n- [ ] All artifacts uploaded (graph.json, diff.json, badge.svg, export.html, drift.json, timeline.json)\n- [ ] PR comment includes stats table and diff\n- [ ] Gate failures block merge (when configured)\n\n## Links\n\n- Belongs to: [[COMP-sigil-ci]]\n- Depends on: [[API-INTENT-CLI-V1]]\n", "intent/intent-system/specs/SPEC-0001-intent-first-review-system.md": "---\nid: SPEC-0001\nstatus: accepted\n---\n\n# Intent-First Review System\n\n## Intent\n\nReplace diff-centric code review with intent-centric review. Humans review what and why; machines verify that code conforms to stated intent.\n\n## Context\n\nCode review today is broken at scale. Reviewers scroll through thousands of lines of diffs without understanding the purpose, constraints, or risks of a change. This leads to rubber-stamping, slow cycles, and missed architectural issues.\n\n## Goals\n\n- Intent documents (specs, ADRs, interfaces, gates) become the primary review surface\n- A dependency graph connects components, interfaces, specs, and constraints\n- CI enforces conformance via gates tied to intent nodes\n- Adoption is low-friction: CLI-first, editor-integrated, repo-portable\n\n## Non-goals\n\n- Replacing version control (git remains the storage layer)\n- Eliminating all human review (humans still review intent; machines review implementation)\n- Building a full project management tool\n\n## Design\n\nThe system has four layers:\n\n1. **Repo conventions** \u2014 structured directories for components, intent docs, interfaces, and gates\n2. **CLI/indexer** \u2014 parses repo into a graph, produces diffs, runs lints\n3. **Editor plugin** \u2014 autocomplete for `[[ID]]` references, quick-fixes, inline lint\n4. **Platform UI** \u2014 graph explorer, intent review view, impact analysis, drift dashboard\n\n### Core node types\n\n- Component (COMP-*): a service, package, or module\n- Spec (SPEC-*): an intent plan describing what and why\n- Decision (ADR-*): architectural decision records\n- Interface (API-*, EVT-*, SCHEMA-*, PROTO-*): contract definitions\n- Gate (GATE-*): enforceable constraints tied to nodes\n\n### Edge vocabulary\n\n- belongs_to, decided_by, provides, consumes, depends_on, gated_by, supersedes, relates_to\n\n## Links\n\n- Belongs to: [[COMP-intent-system]]\n\n## Acceptance Criteria\n\n- [ ] Repo schema supports all core node types\n- [ ] CLI can index repo into graph.json\n- [ ] CLI can compute graph diff between two commits\n- [ ] Templates exist for all core node types\n- [ ] CI can post intent diff as PR comment\n- [ ] Editor plugin provides autocomplete for [[ID]] references\n", "intent/intent-system/specs/SPEC-0002-bootstrapper-and-demo-strategy.md": "---\nid: SPEC-0002\nstatus: proposed\n---\n\n# Bootstrapper and Demo Strategy\n\n## Intent\n\nProvide a way to adopt intent-first on existing projects by generating an \"as-built\" intent skeleton, and define a demo flow that makes the value proposition immediately visible.\n\n## Context\n\nGreenfield adoption is easy but rare. Most teams have existing codebases. A bootstrapper that generates components, interfaces, and spec skeletons from an existing repo removes the cold-start problem. A compelling demo sells the concept.\n\n## Goals\n\n- `intent bootstrap` scans a repo and generates components, interfaces, and spec skeletons\n- Bootstrap output includes confidence scores on inferred relationships\n- Demo flow: bootstrap -> index -> viewer -> make a change -> see graph diff in PR\n\n## Non-goals\n\n- Recovering true \"why\" from code (bootstrapper generates as-built maps, not real intent)\n- Production-grade inference (heuristics are sufficient for v1)\n\n## Design\n\n### Bootstrap pipeline\n\n1. **Repo scan** \u2014 discover services/packages/modules, interface files, deployment topology\n2. **Dependency extraction** \u2014 regex heuristics for imports, build graph analysis\n3. **Graph assembly** \u2014 create nodes and edges with confidence scores\n4. **Emit skeleton intent** \u2014 spec skeletons, component registry, interface nodes\n5. **Emit diagnostics** \u2014 low-confidence edges, unknown ownership, TODOs\n\n### Demo narrative\n\n1. \"Here's the system map\" (graph viewer after bootstrap)\n2. \"Here's an intent PR\" (SPEC + ADR + interface change)\n3. \"Here's the graph diff review\" (CI comment)\n4. \"Here's an implementation PR \u2014 it merges because gates pass\"\n\n## Links\n\n- Belongs to: [[COMP-intent-system]]\n- Depends on: [[SPEC-0001]]\n\n## Acceptance Criteria\n\n- [ ] `intent bootstrap` produces valid components/*.yaml from repo structure\n- [ ] Bootstrap detects interface artifacts (OpenAPI, protobuf, JSON Schema)\n- [ ] Inferred edges include confidence scores and evidence\n- [ ] DEMO.md walks through the full narrative\n", "intent/intent-system/specs/SPEC-0004-sigil-cli.md": "---\nid: SPEC-0004\nstatus: accepted\n---\n\n# Sigil CLI\n\n## Intent\n\nProvide a single command-line tool that manages the full lifecycle of intent documents: scaffolding, indexing, linting, searching, and diffing. The CLI is the kernel that everything else builds on.\n\n!! If the CLI is slow or unreliable, nothing else works. Keep it fast and dependency-light.\n\n## Context\n\nEngineers already live in their terminal. A CLI that fits into existing workflows (git hooks, CI, editor tasks) has zero adoption friction. We chose Python because it's universal and the YAML/markdown parsing ecosystem is mature.\n\n>> See [[ADR-0002]] for the repo schema that the CLI operates on.\n\n## Goals\n\n- **index** -- build the knowledge graph from repo contents into `.intent/index/graph.json`\n- **lint** -- validate intent documents (front matter, required sections, dangling refs)\n- **new** -- scaffold new specs/ADRs from templates with auto-incrementing IDs\n- **diff** -- compute structural graph changes between two git commits\n- **fmt** -- normalize front matter and ensure Links sections exist\n- **bootstrap** -- scan a repo for manifest files and create component stubs\n- **init** -- zero-to-working setup: scaffold dirs, bootstrap, index, open viewer\n- **ask** -- local keyword search across the intent corpus\n\n## Non-goals\n\n- GUI or TUI interface (use the viewer for that)\n- Package manager distribution yet (run from source for now)\n- LLM-powered features in the core CLI (keep it offline-first)\n\n## Design\n\n### Single-file architecture\n\nEverything lives in `tools/intent/sigil.py`. No package structure, no setup.py. One file, one entry point.\n\n?? Will this scale past 2000 lines? Probably fine for now. Split when it hurts.\n\n### Graph model\n\n- **Node**: id, type, title, path, body_summary\n- **Edge**: type, src, dst, confidence, evidence\n- **Graph**: dict of nodes + list of edges\n\nNodes are discovered from four directory scanners (components, interfaces, intent docs, gates). Edges come from three sources: typed Links blocks, path-inferred belongs_to, and wikilink-derived relates_to.\n\n### Output artifacts\n\n- `graph.json` -- full graph with frontmatter enrichment\n- `search.json` -- lightweight index for autocomplete/search\n\n## Links\n\n- Belongs to: [[COMP-intent-system]]\n- Depends on: [[ADR-0002]]\n- Decided by: [[ADR-0004]]\n\n## Acceptance Criteria\n\n- [x] All 7 commands work: index, lint, new, diff, fmt, bootstrap, init\n- [x] 45+ tests passing\n- [x] graph.json includes body_summary and frontmatter fields\n- [x] Zero external dependencies beyond PyYAML\n- [x] Runs on Python 3.11+\n- [ ] `ask` command with local keyword search\n", "intent/intent-system/specs/SPEC-0003-sigil-viewer.md": "---\nid: SPEC-0003\nstatus: accepted\n---\n\n# Sigil Viewer\n\n## Intent\n\nBuild a browser-based graph explorer that makes the intent graph tangible. Engineers should be able to see their entire decision landscape at a glance, drill into any node to read the full spec/ADR, and understand blast radius before making changes.\n\n!! The viewer is the primary interface for non-CLI users. If it doesn't work well, Sigil doesn't work.\n\n## Context\n\nThe CLI kernel ([[SPEC-0001]]) produces `graph.json` with nodes and edges. Without a visual layer, that JSON is useful only to scripts. Architects need a spatial view; new team members need a reading surface; reviewers need blast radius analysis.\n\n>> See [[ADR-0001]] for why we chose intent-first review over traditional code review.\n\n## Goals\n\n- Render the full intent graph as an interactive force-directed diagram\n- Click any node to read its full markdown content with proper rendering\n- Show blast radius (Impact Radar) for any selected node\n- Compute and display an Intent Coverage health score\n- Support the human++ color scheme and annotation markers (`!!`, `??`, `>>`)\n- Resolve `[[wikilinks]]` as clickable navigation within the viewer\n\n## Non-goals\n\n- Real-time collaboration (this is a local tool)\n- Editing intent docs from the viewer (use your editor)\n- Server-side rendering (static HTML + JS only)\n\n## Design\n\n### Architecture\n\nSingle `index.html` file with inline CSS and JS. Dependencies: D3.js (graph rendering), marked.js (markdown parsing). Loaded via CDN. No build step.\n\n### Views\n\n1. **Graph View** -- D3 force-directed layout. Nodes colored by type. Edge labels on hover. Zoom/pan via scroll/drag.\n2. **Impact Radar** -- Concentric ring visualization. Center = selected node. Rings = direct/secondary/tertiary connections. Click to navigate.\n3. **Coverage Dashboard** -- Health score (0-100%), stat cards, and actionable findings list.\n\n### Content Panel\n\nRight-side panel with tabs:\n- **Content** -- fetches the source file, strips YAML frontmatter, renders markdown with human++ markers\n- **Edges** -- lists all incoming/outgoing edges with type badges\n- **Blast Radius** -- text-based impact analysis\n- **Raw** -- JSON representation of the node\n\n### Human++ Integration\n\n?? Should we bundle the palette or fetch it from the human++ repo?\n\nCurrent approach: CSS variables with hardcoded Base24 hex values from the human++ palette.json. Annotation markers (`!!`, `??`, `>>`) and keyword aliases (FIXME, TODO, NOTE) are post-processed after markdown rendering.\n\n>> See [[ADR-0005]] for why we integrated human++.\n\n## Links\n\n- Belongs to: [[COMP-intent-system]]\n- Depends on: [[SPEC-0001]]\n- Decided by: [[ADR-0005]]\n\n## Acceptance Criteria\n\n- [x] Force-directed graph renders all nodes and edges from graph.json\n- [x] Clicking a node shows rendered markdown content\n- [x] Human++ annotation markers render as colored badges\n- [x] Wikilinks navigate to the referenced node in the graph\n- [x] Impact Radar shows blast radius in concentric rings\n- [x] Coverage Dashboard shows health score and findings\n- [x] Edge labels visible on hover\n- [x] Search matches node IDs, titles, and body content\n- [x] Breadcrumb navigation shows Component > Node chain\n", "intent/intent-system/adrs/ADR-0003-gate-model.md": "---\nid: ADR-0003\nstatus: accepted\n---\n\n# Gate Model\n\n## Context\n\nIf intent documents are the \"what and why,\" gates are the \"enforcement.\" We need a way to define constraints that are tied to intent nodes and can be run in CI.\n\n## Decision\n\nGates are YAML files in `/gates/` with:\n\n- An ID (`GATE-*`)\n- An `applies_to` list referencing intent nodes\n- An `enforced_by` block specifying how to check (command, builtin rule, or AI prompt)\n- A `policy` block specifying warn vs. block behavior\n\nGate types include: command (run a script), builtin (framework-provided rules like spec-quality checks), and AI (LLM conformance check against a spec).\n\n## Alternatives\n\n1. **Hardcoded CI checks** \u2014 inflexible, not tied to intent graph\n2. **Policy-as-code tools (OPA, Kyverno)** \u2014 powerful but separate from intent model\n3. **No enforcement** \u2014 intent becomes aspirational documentation\n\n## Consequences\n\n- Gates make intent actionable, not just documentary\n- CI becomes the enforcement layer, not human reviewers\n- Gate YAML is simple enough for non-infra engineers to author\n- Must be careful about gate proliferation; start with high-value checks\n\n## Links\n\n- For: [[SPEC-0001]]\n", "intent/intent-system/adrs/ADR-0002-repo-schema-for-intent.md": "---\nid: ADR-0002\nstatus: accepted\n---\n\n# Repo Schema for Intent\n\n## Context\n\nIntent artifacts need a home. They could live in a database, a wiki, or the repo itself. We need a convention that is portable, versionable, and doesn't require a running service.\n\n## Decision\n\nStore all intent artifacts in the git repo using a structured directory layout:\n\n- `/components/` \u2014 component registry (YAML)\n- `/intent/<component>/specs/` \u2014 spec documents (Markdown + front matter)\n- `/intent/<component>/adrs/` \u2014 decision records\n- `/interfaces/` \u2014 contract definitions (OpenAPI, protobuf, JSON Schema)\n- `/gates/` \u2014 constraint definitions (YAML)\n- `/.intent/` \u2014 tooling config and generated index\n\nFront matter provides machine-readable metadata (id, status). Markdown body provides human-readable content. `[[ID]]` wikilinks create typed relationships.\n\n## Alternatives\n\n1. **External database** \u2014 queryable but not versionable, not portable\n2. **Wiki (Notion, Confluence)** \u2014 easy to write but disconnected from code, no enforcement\n3. **Inline code annotations** \u2014 close to code but hard to get a system view\n\n## Consequences\n\n- Repo is the source of truth; no external dependency\n- Git history tracks intent evolution\n- Tooling (CLI, editor, CI) reads directly from the filesystem\n- Requires discipline: teams must follow conventions\n\n## Links\n\n- For: [[SPEC-0001]]\n", "intent/intent-system/adrs/ADR-0001-why-intent-first.md": "---\nid: ADR-0001\nstatus: accepted\n---\n\n# Why Intent-First\n\n## Context\n\nTraditional code review focuses on diffs \u2014 line-by-line implementation details. At scale, this fails: reviewers lack context, rubber-stamp approvals, and miss architectural issues. Meanwhile, AI can generate code faster than humans can review it.\n\n## Decision\n\nAdopt an intent-first model where the primary review surface is structured intent documents (specs, ADRs, interface definitions) rather than code diffs. Implementation review is delegated to automated gates and AI conformance checks.\n\n## Alternatives\n\n1. **Status quo (diff review)** \u2014 doesn't scale with AI-generated code velocity\n2. **PR templates / checklists** \u2014 lightweight but unstructured, no enforcement\n3. **Architecture-as-code tools (Backstage, etc.)** \u2014 catalog-focused, not review-focused\n\n## Consequences\n\n- Higher upfront cost: teams must write specs before (or alongside) implementation\n- Lower review cost: reviewers read intent, not diffs\n- Better traceability: every change links back to a spec and its constraints\n- Requires tooling investment: CLI, editor plugin, CI integration\n\n## Links\n\n- For: [[SPEC-0001]]\n", "intent/intent-system/adrs/ADR-0004-ids-and-wikilinks.md": "---\nid: ADR-0004\nstatus: accepted\n---\n\n# IDs and Wikilinks\n\n## Context\n\nNodes in the intent graph need stable, human-readable identifiers. Relationships between nodes need a lightweight syntax that works in plain Markdown.\n\n## Decision\n\n- Every node gets a prefixed ID: `SPEC-0042`, `ADR-0001`, `COMP-user-service`, `API-USER-V1`, `GATE-0021`\n- IDs are declared in YAML front matter (`id: SPEC-0042`)\n- References use `[[ID]]` wikilink syntax: `[[COMP-user-service]]`, `[[API-USER-V1]]`\n- Typed relationships use a `## Links` section with labeled entries:\n  ```\n  - Belongs to: [[COMP-user-service]]\n  - Provides: [[API-USER-V1]]\n  ```\n- The CLI resolves wikilinks to file paths via the generated index\n\n## Alternatives\n\n1. **UUIDs** \u2014 stable but unreadable\n2. **File paths as IDs** \u2014 fragile across renames\n3. **Custom DSL** \u2014 higher learning curve than Markdown conventions\n\n## Consequences\n\n- IDs are grep-friendly and human-readable\n- Wikilinks are familiar (Obsidian, Notion, wiki conventions)\n- Renaming requires updating references (mitigated by `intent fmt`)\n- Tooling must maintain an ID-to-path mapping\n\n## Links\n\n- For: [[SPEC-0001]]\n", "intent/intent-system/adrs/ADR-0006-graph-storage-format.md": "---\nid: ADR-0006\nstatus: accepted\n---\n\n# Graph Storage Format\n\n## Context\n\nThe intent indexer needs to persist the knowledge graph in a format that the viewer, CI, and search tools can all consume. The graph consists of nodes (components, specs, ADRs, interfaces, gates) and typed edges (belongs_to, decided_by, depends_on, etc.).\n\n?? We considered a database but decided it was overkill for a repo-local tool.\n\n## Decision\n\nUse a single JSON file (`.intent/index/graph.json`) as the canonical graph artifact. Structure:\n\n```json\n{\n  \"version\": \"1.0\",\n  \"generated_at\": \"ISO-8601 timestamp\",\n  \"nodes\": [\n    {\n      \"id\": \"SPEC-0001\",\n      \"type\": \"spec\",\n      \"title\": \"Intent-First Review System\",\n      \"path\": \"intent/intent-system/specs/SPEC-0001-intent-first-review-system.md\",\n      \"body_summary\": \"First 500 chars of markdown body...\",\n      \"frontmatter\": { \"id\": \"SPEC-0001\", \"status\": \"accepted\" }\n    }\n  ],\n  \"edges\": [\n    {\n      \"type\": \"belongs_to\",\n      \"src\": \"SPEC-0001\",\n      \"dst\": \"COMP-intent-system\",\n      \"confidence\": 1.0,\n      \"evidence\": [\"Links block\"]\n    }\n  ]\n}\n```\n\nKey design choices:\n\n1. **body_summary** (max 500 chars) -- enables content search and preview without loading source files\n2. **frontmatter** object -- enables the viewer to show status badges and the coverage engine to score document maturity\n3. **confidence + evidence** on edges -- not all edges are explicit; some are inferred from paths or wikilinks\n4. **Flat arrays** -- no nesting, easy to parse in any language\n\nA secondary `search.json` with lightweight node records is also generated for autocomplete use cases.\n\n## Alternatives\n\n1. **SQLite** -- full query power, but adds a binary dependency and doesn't diff well in git. Rejected.\n2. **Multiple JSON files** (one per node) -- avoids large single files, but complicates viewer loading. Rejected.\n3. **YAML graph** -- more readable, but slower to parse and D3 expects JSON anyway. Rejected.\n\n## Consequences\n\n- Single file load in the viewer (one fetch for the entire graph)\n- Git-friendly: graph.json can be diffed and tracked\n- Regenerated on every `sigil index` -- not a source of truth, just a cache\n- Will need pagination or streaming if graphs exceed ~10,000 nodes\n\n!! If graph.json ever becomes a bottleneck, consider splitting into chunks or adding lazy loading.\n\n>> See [[SPEC-0004]] for the CLI commands that produce this file.\n\n## Links\n\n- For: [[SPEC-0004]]\n- Belongs to: [[COMP-intent-system]]\n", "intent/intent-system/adrs/ADR-0005-human++-integration.md": "---\nid: ADR-0005\nstatus: accepted\n---\n\n# Human++ Integration\n\n## Context\n\nSigil needed a visual identity for its viewer and a convention for annotating intent documents. The founder already maintained human++, a Base24 color scheme built around the thesis that \"code is cheap, intent is scarce.\" The scheme provides 24 colors in three tiers (grayscale, loud accents, quiet accents) plus three annotation markers for human judgment in code.\n\n!! Annotation markers are what make intent docs scannable. Without them, everything looks the same.\n\n## Decision\n\nAdopt human++ as the default color scheme and annotation system for all Sigil surfaces.\n\n**Color palette:** All 24 Base24 colors from `palette.json`, applied via CSS variables (`--base00` through `--base17`). Dark background (base00: `#1a1c22`), muted syntax (base10-17), loud accents for diagnostics and human markers (base08-0F).\n\n**Annotation markers:**\n\n| Marker | Meaning | Color |\n|--------|---------|-------|\n| `!!` | Attention -- critical concern | base0F (lime `#bbff00`) |\n| `??` | Uncertainty -- low confidence | base0E (purple `#9871fe`) |\n| `>>` | Reference -- pointer to related context | base0C (cyan `#1ad0d6`) |\n\nKeyword aliases are also recognized: FIXME/BUG/XXX map to `!!`, TODO/HACK map to `??`, NOTE/NB map to `>>`.\n\n**Rendering:** Markers are post-processed after markdown-to-HTML conversion. Each marker becomes a styled `<span>` with colored background, bold text, and 4px border radius.\n\n## Alternatives\n\n1. **No theme** -- plain markdown rendering. Rejected: too bland, no visual distinction for human judgment markers.\n2. **Custom theme** -- build a Sigil-specific palette. Rejected: unnecessary work when human++ already exists and the founder uses it everywhere.\n3. **Configurable themes** -- let users pick their own Base16/24 scheme. Deferred: good idea for later, but premature for v1.\n\n## Consequences\n\n- Viewer has a strong visual identity out of the box\n- Intent docs can use `!!`, `??`, `>>` markers that render meaningfully in the viewer\n- VS Code users who install the human++ extension get consistent highlighting in both editor and viewer\n- Tight coupling to one color scheme -- will need a theme system if we open-source\n\n>> See [[SPEC-0003]] for how the viewer implements human++ rendering.\n\n## Links\n\n- For: [[SPEC-0003]]\n- Belongs to: [[COMP-intent-system]]\n", "intent/sigil-viewer/specs/SPEC-0005-seven-view-modes.md": "---\nid: SPEC-0005\nstatus: accepted\n---\n\n# Seven View Modes\n\nThe Sigil viewer provides seven distinct visualizations of the intent graph, each optimized for a different analysis task.\n\n## Intent\n\nArchitects and developers need multiple lenses to understand a system's intent structure. A single graph view is not enough -- you need to see topology, hierarchy, coverage, drift, history, and coupling.\n\n## Views\n\n1. **Graph** -- force-directed knowledge graph with drag, zoom, glow effects on high-connectivity nodes, colored edges by type, and curved paths with directional arrows\n2. **Impact Radar** -- concentric ring visualization showing blast radius from any selected node\n3. **Hierarchy** -- layered view with components at top, specs/gates in middle, ADRs at bottom\n4. **Coverage** -- health dashboard with weighted scoring (component coverage, ADR maturity, spec quality, reference integrity)\n5. **Drift** -- comparison of intent graph against actual codebase file structure\n6. **Timeline** -- swim-lane visualization of intent evolution from git history\n7. **Matrix** -- dependency grid showing node-to-node relationships as a heatmap\n\n## Acceptance Criteria\n\n- [ ] All seven views render without errors\n- [ ] Each view has a keyboard shortcut (g/r/h/c/d/t/m)\n- [ ] Views are accessible from command palette (Cmd+K)\n- [ ] View state persists across node selections\n\n## Links\n\n- Belongs to: [[COMP-sigil-viewer]]\n- Depends on: [[API-INTENT-CLI-V1]]\n- Decided by: [[ADR-0005]]\n", "gates/GATE-0002-adr-maturity.yaml": "id: GATE-0002\ntype: spec-quality\nstatus: active\n\napplies_to:\n  - node: COMP-intent-system\n\nenforced_by:\n  kind: lint-rule\n  checks:\n    - all_adrs_have_status\n    - no_draft_adrs_older_than_30_days\n\npolicy:\n  mode: \"warn\"\n  on_fail: \"warn\"\n\ndocs:\n  summary: \"Ensures ADRs progress beyond draft status in a timely manner\"\n  owner: \"sigil-team\"\n", "gates/GATE-0001-spec-quality.yaml": "id: GATE-0001\ntype: spec-quality\nstatus: active\n\napplies_to:\n  - node: COMP-intent-system\n\nenforced_by:\n  kind: lint-rule\n  checks:\n    - all_specs_have_acceptance_criteria\n    - all_specs_have_status\n    - no_dangling_references\n\npolicy:\n  mode: \"warn\"\n  on_fail: \"block\"\n\ndocs:\n  summary: \"Ensures all specs under intent-system have acceptance criteria, status, and valid references\"\n  owner: \"sigil-team\"\n"};
+    window.__SIGIL_DRIFT__ = {
+  "scanned": 41,
+  "mapped": 9,
+  "unowned": 10,
+  "findings": [
+    {
+      "type": "unowned_files",
+      "count": 10,
+      "files": [
+        ".gitignore",
+        "agents/tbd-engineer/AGENTS.md",
+        "agents/tbd-engineer/HEARTBEAT.md",
+        "agents/tbd-engineer/SOUL.md",
+        "docs/marketing/README-draft.md",
+        "docs/marketing/competitive-landscape.md",
+        "docs/marketing/launch-strategy.md",
+        "docs/marketing/positioning.md",
+        "docs/marketing/tagline-and-pitch.md",
+        "idea.md"
+      ]
+    }
+  ]
+};
+    window.__SIGIL_TIMELINE__ = {
+  "events": [
+    {
+      "date": "2026-03-06T02:07:49Z",
+      "sha": "working-tree",
+      "message": "current state",
+      "action": "added",
+      "node_id": "SPEC-0001",
+      "node_type": "spec",
+      "node_title": "Intent-First Review System",
+      "path": "intent/intent-system/specs/SPEC-0001-intent-first-review-system.md"
+    },
+    {
+      "date": "2026-03-06T02:07:56Z",
+      "sha": "working-tree",
+      "message": "current state",
+      "action": "added",
+      "node_id": "ADR-0001",
+      "node_type": "adr",
+      "node_title": "Why Intent-First",
+      "path": "intent/intent-system/adrs/ADR-0001-why-intent-first.md"
+    },
+    {
+      "date": "2026-03-06T02:08:05Z",
+      "sha": "working-tree",
+      "message": "current state",
+      "action": "added",
+      "node_id": "ADR-0002",
+      "node_type": "adr",
+      "node_title": "Repo Schema for Intent",
+      "path": "intent/intent-system/adrs/ADR-0002-repo-schema-for-intent.md"
+    },
+    {
+      "date": "2026-03-06T02:08:12Z",
+      "sha": "working-tree",
+      "message": "current state",
+      "action": "added",
+      "node_id": "ADR-0003",
+      "node_type": "adr",
+      "node_title": "Gate Model",
+      "path": "intent/intent-system/adrs/ADR-0003-gate-model.md"
+    },
+    {
+      "date": "2026-03-06T02:08:20Z",
+      "sha": "working-tree",
+      "message": "current state",
+      "action": "added",
+      "node_id": "ADR-0004",
+      "node_type": "adr",
+      "node_title": "IDs and Wikilinks",
+      "path": "intent/intent-system/adrs/ADR-0004-ids-and-wikilinks.md"
+    },
+    {
+      "date": "2026-03-06T02:08:33Z",
+      "sha": "working-tree",
+      "message": "current state",
+      "action": "added",
+      "node_id": "SPEC-0002",
+      "node_type": "spec",
+      "node_title": "Bootstrapper and Demo Strategy",
+      "path": "intent/intent-system/specs/SPEC-0002-bootstrapper-and-demo-strategy.md"
+    },
+    {
+      "date": "2026-03-06T20:23:16Z",
+      "sha": "working-tree",
+      "message": "current state",
+      "action": "added",
+      "node_id": "SPEC-0003",
+      "node_type": "spec",
+      "node_title": "Sigil Viewer",
+      "path": "intent/intent-system/specs/SPEC-0003-sigil-viewer.md"
+    },
+    {
+      "date": "2026-03-06T20:23:52Z",
+      "sha": "working-tree",
+      "message": "current state",
+      "action": "added",
+      "node_id": "SPEC-0004",
+      "node_type": "spec",
+      "node_title": "Sigil CLI",
+      "path": "intent/intent-system/specs/SPEC-0004-sigil-cli.md"
+    },
+    {
+      "date": "2026-03-06T20:24:16Z",
+      "sha": "working-tree",
+      "message": "current state",
+      "action": "added",
+      "node_id": "ADR-0005",
+      "node_type": "adr",
+      "node_title": "Human++ Integration",
+      "path": "intent/intent-system/adrs/ADR-0005-human++-integration.md"
+    },
+    {
+      "date": "2026-03-06T20:24:43Z",
+      "sha": "working-tree",
+      "message": "current state",
+      "action": "added",
+      "node_id": "ADR-0006",
+      "node_type": "adr",
+      "node_title": "Graph Storage Format",
+      "path": "intent/intent-system/adrs/ADR-0006-graph-storage-format.md"
+    },
+    {
+      "date": "2026-03-06T20:28:28Z",
+      "sha": "working-tree",
+      "message": "current state",
+      "action": "added",
+      "node_id": "GATE-0001",
+      "node_type": "gate",
+      "node_title": "Ensures all specs under intent-system have acceptance criteria, status, and valid references",
+      "path": "gates/GATE-0001-spec-quality.yaml"
+    },
+    {
+      "date": "2026-03-06T20:28:33Z",
+      "sha": "working-tree",
+      "message": "current state",
+      "action": "added",
+      "node_id": "GATE-0002",
+      "node_type": "gate",
+      "node_title": "Ensures ADRs progress beyond draft status in a timely manner",
+      "path": "gates/GATE-0002-adr-maturity.yaml"
+    },
+    {
+      "date": "2026-03-06T20:35:28Z",
+      "sha": "working-tree",
+      "message": "current state",
+      "action": "added",
+      "node_id": "COMP-intent-system",
+      "node_type": "component",
+      "node_title": "Intent System",
+      "path": "components/intent-system.yaml"
+    },
+    {
+      "date": "2026-03-06T20:52:45Z",
+      "sha": "working-tree",
+      "message": "current state",
+      "action": "added",
+      "node_id": "COMP-sigil-viewer",
+      "node_type": "component",
+      "node_title": "Sigil Viewer",
+      "path": "components/sigil-viewer.yaml"
+    },
+    {
+      "date": "2026-03-06T20:52:49Z",
+      "sha": "working-tree",
+      "message": "current state",
+      "action": "added",
+      "node_id": "COMP-sigil-ci",
+      "node_type": "component",
+      "node_title": "Sigil CI Pipeline",
+      "path": "components/sigil-ci.yaml"
+    },
+    {
+      "date": "2026-03-06T20:53:05Z",
+      "sha": "working-tree",
+      "message": "current state",
+      "action": "added",
+      "node_id": "API-INTENT-CLI-V1",
+      "node_type": "interface",
+      "node_title": "Intent CLI Interface v1",
+      "path": "interfaces/API-INTENT-CLI-V1/README.md"
+    },
+    {
+      "date": "2026-03-06T20:53:21Z",
+      "sha": "working-tree",
+      "message": "current state",
+      "action": "added",
+      "node_id": "SPEC-0005",
+      "node_type": "spec",
+      "node_title": "Seven View Modes",
+      "path": "intent/sigil-viewer/specs/SPEC-0005-seven-view-modes.md"
+    },
+    {
+      "date": "2026-03-06T20:53:31Z",
+      "sha": "working-tree",
+      "message": "current state",
+      "action": "added",
+      "node_id": "SPEC-0006",
+      "node_type": "spec",
+      "node_title": "CI Pipeline Spec",
+      "path": "intent/sigil-ci/specs/SPEC-0006-ci-pipeline.md"
+    }
+  ],
+  "generated_at": "2026-03-06T20:53:43Z"
+};
+
+    // Override fetch to serve embedded data
+    const _origFetch = window.fetch;
+    window.fetch = function(url, opts) {
+      const urlStr = String(url);
+      if (urlStr.includes('graph.json')) {
+        return Promise.resolve(new Response(JSON.stringify(window.__SIGIL_GRAPH__), {status: 200}));
+      }
+      if (urlStr.includes('drift.json')) {
+        return Promise.resolve(new Response(JSON.stringify(window.__SIGIL_DRIFT__), {status: 200}));
+      }
+      if (urlStr.includes('timeline.json')) {
+        return Promise.resolve(new Response(JSON.stringify(window.__SIGIL_TIMELINE__), {status: 200}));
+      }
+      // Check file contents
+      for (const [path, content] of Object.entries(window.__SIGIL_FILES__)) {
+        if (urlStr.endsWith(path) || urlStr.includes(path)) {
+          return Promise.resolve(new Response(content, {status: 200}));
+        }
+      }
+      return _origFetch(url, opts);
+    };
+    </script>
+    
+</head>
+<body>
+  <div id="topbar">
+    <div id="topbar-left">
+      <h1>Sigil</h1>
+      <button class="view-btn active" data-view="graph" onclick="switchView('graph')">Graph</button>
+      <button class="view-btn" data-view="radar" onclick="switchView('radar')">Impact Radar</button>
+      <button class="view-btn" data-view="hierarchy" onclick="switchView('hierarchy')">Hierarchy</button>
+      <button class="view-btn" data-view="coverage" onclick="switchView('coverage')">Coverage</button>
+      <button class="view-btn" data-view="drift" onclick="switchView('drift')">Drift</button>
+      <button class="view-btn" data-view="timeline" onclick="switchView('timeline')">Timeline</button>
+      <button class="view-btn" data-view="matrix" onclick="switchView('matrix')">Matrix</button>
+      <button id="new-btn" onclick="showNewModal()">+ New</button>
+    </div>
+    <div id="health-badge"></div>
+  </div>
+  <div id="main">
+    <div id="left">
+      <svg id="svg"></svg>
+      <svg id="radar-svg"></svg>
+      <svg id="hierarchy-svg"></svg>
+      <div id="timeline-container"></div>
+      <div id="matrix-container"></div>
+      <div id="legend"></div>
+      <div id="tooltip"></div>
+      <div id="keyhint">
+        <span class="keyhint-key">Cmd+K</span> palette
+        <span class="keyhint-key">j</span><span class="keyhint-key">k</span> cycle
+        <span class="keyhint-key">/</span> search
+        <span class="keyhint-key">g</span> graph
+        <span class="keyhint-key">r</span> radar
+        <span class="keyhint-key">h</span> hier
+        <span class="keyhint-key">c</span> cov
+        <span class="keyhint-key">d</span> drift
+        <span class="keyhint-key">t</span> time
+        <span class="keyhint-key">m</span> matrix
+      </div>
+    </div>
+    <div id="right">
+      <div id="search-bar"><input id="search" placeholder="Search nodes..." /></div>
+      <div id="breadcrumb"></div>
+      <div id="node-header"></div>
+      <div id="tabs">
+        <div class="tab active" data-tab="content">Content</div>
+        <div class="tab" data-tab="graph">Edges</div>
+        <div class="tab" data-tab="radar">Blast Radius</div>
+        <div class="tab" data-tab="raw">Raw</div>
+      </div>
+      <div id="content-area">
+        <div class="loading">Click a node to view its content.</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="cmd-overlay" onclick="if(event.target===this)hideCmdPalette()">
+    <div id="cmd-palette">
+      <input id="cmd-input" placeholder="Search nodes, switch views, or create..." autocomplete="off" />
+      <div id="cmd-results"></div>
+    </div>
+  </div>
+
+  <div id="modal-overlay" onclick="if(event.target===this)hideNewModal()">
+    <div id="modal">
+      <h3>New Intent Document</h3>
+      <div class="modal-field">
+        <label>Type</label>
+        <select id="new-type">
+          <option value="spec">Spec</option>
+          <option value="adr">ADR</option>
+        </select>
+      </div>
+      <div class="modal-field">
+        <label>Component</label>
+        <select id="new-component"></select>
+      </div>
+      <div class="modal-field">
+        <label>Title</label>
+        <input id="new-title" placeholder="e.g. User Authentication Flow" />
+      </div>
+      <div id="new-feedback"></div>
+      <div class="modal-actions">
+        <button class="modal-cancel" onclick="hideNewModal()">Cancel</button>
+        <button class="modal-create" onclick="createNewDoc()">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script>
+    let graphData = null;
+    let selectedNode = null;
+    let activeTab = "content";
+    let activeView = "graph";
+    let allNodes = [];
+    let sim = null;
+
+    const nodeColors = {
+      component: "#828079",
+      spec:      "#04b372",
+      interface: "#458ae2",
+      gate:      "#e7349c",
+      adr:       "#9871fe",
+      risk:      "#f26c33",
+      rollout:   "#1ad0d6"
+    };
+
+    const edgeColors = {
+      belongs_to: "var(--base03)",
+      decided_by: "var(--base16)",
+      depends_on: "var(--base09)",
+      gated_by: "var(--base10)",
+      provides: "var(--base13)",
+      consumes: "var(--base14)",
+      relates_to: "var(--base02)",
+      supersedes: "var(--base08)"
+    };
+
+    // ---- Utilities ----
+
+    function esc(s) {
+      return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    async function loadGraph() {
+      const res = await fetch("../../.intent/index/graph.json");
+      if (!res.ok) throw new Error("Failed to load graph.json -- run: python tools/intent/sigil.py index");
+      return await res.json();
+    }
+
+    // ---- Coverage Engine ----
+
+    function computeCoverage(graph) {
+      const nodes = graph.nodes;
+      const edges = graph.edges;
+      const components = nodes.filter(n => n.type === "component");
+      const specs = nodes.filter(n => n.type === "spec");
+      const adrs = nodes.filter(n => n.type === "adr");
+      const gates = nodes.filter(n => n.type === "gate");
+      const findings = [];
+
+      // Components with no governing spec
+      const compsWithSpec = new Set();
+      edges.filter(e => e.type === "belongs_to").forEach(e => {
+        compsWithSpec.add(e.dst);
+      });
+      const uncomps = components.filter(c => !compsWithSpec.has(c.id));
+      if (uncomps.length) {
+        findings.push({
+          sev: "warn",
+          text: `${uncomps.length} component(s) have no governing spec`,
+          nodes: uncomps
+        });
+      }
+
+      // Specs with no acceptance criteria
+      const specsNoAC = specs.filter(s => {
+        const fm = s.frontmatter || {};
+        const summary = s.body_summary || "";
+        return !summary.includes("Acceptance Criteria") && !summary.includes("acceptance criteria");
+      });
+      // Actually check the file content if we have frontmatter
+      // For now use body_summary as a heuristic
+      if (specsNoAC.length && specsNoAC.length < specs.length) {
+        findings.push({
+          sev: "info",
+          text: `${specsNoAC.length} spec(s) may be missing acceptance criteria`,
+          nodes: specsNoAC
+        });
+      }
+
+      // ADRs still in draft
+      const draftADRs = adrs.filter(a => {
+        const fm = a.frontmatter || {};
+        return fm.status === "draft" || fm.status === "proposed";
+      });
+      if (draftADRs.length) {
+        findings.push({
+          sev: "info",
+          text: `${draftADRs.length} ADR(s) still in draft/proposed`,
+          nodes: draftADRs
+        });
+      }
+
+      // Dangling edges
+      const nodeIds = new Set(nodes.map(n => n.id));
+      const dangling = edges.filter(e => !nodeIds.has(e.dst));
+      if (dangling.length) {
+        findings.push({
+          sev: "warn",
+          text: `${dangling.length} dangling reference(s) to missing nodes`,
+          nodes: []
+        });
+      }
+
+      // Components with specs -- positive
+      if (compsWithSpec.size) {
+        findings.push({
+          sev: "ok",
+          text: `${compsWithSpec.size} component(s) have governing specs`,
+          nodes: []
+        });
+      }
+
+      // All ADRs accepted -- positive
+      const acceptedADRs = adrs.filter(a => (a.frontmatter || {}).status === "accepted");
+      if (acceptedADRs.length) {
+        findings.push({
+          sev: "ok",
+          text: `${acceptedADRs.length} ADR(s) are accepted`,
+          nodes: []
+        });
+      }
+
+      // Coverage score: weighted
+      let score = 0;
+      let max = 0;
+
+      // Component coverage (40% weight)
+      if (components.length) {
+        score += (compsWithSpec.size / components.length) * 40;
+        max += 40;
+      }
+
+      // ADR maturity (30% weight)
+      if (adrs.length) {
+        score += (acceptedADRs.length / adrs.length) * 30;
+        max += 30;
+      }
+
+      // Spec quality -- have acceptance criteria (20% weight)
+      if (specs.length) {
+        const withAC = specs.length - specsNoAC.length;
+        score += (withAC / specs.length) * 20;
+        max += 20;
+      }
+
+      // No dangling refs (10% weight)
+      if (edges.length) {
+        const clean = edges.length - dangling.length;
+        score += (clean / edges.length) * 10;
+        max += 10;
+      }
+
+      const pct = max > 0 ? Math.round((score / max) * 100) : 0;
+
+      return {
+        score: pct,
+        stats: {
+          total: nodes.length,
+          components: components.length,
+          specs: specs.length,
+          adrs: adrs.length,
+          gates: gates.length,
+          edges: edges.length
+        },
+        findings
+      };
+    }
+
+    function renderHealthBadge(cov) {
+      const el = document.getElementById("health-badge");
+      let cls = "health-poor";
+      if (cov.score >= 80) cls = "health-excellent";
+      else if (cov.score >= 60) cls = "health-good";
+      else if (cov.score >= 40) cls = "health-fair";
+
+      el.className = cls;
+      el.innerHTML = `${cov.score}% intent health`;
+      el.id = "health-badge";
+    }
+
+    function renderCoverageDashboard(cov) {
+      const area = document.getElementById("content-area");
+      const barColor = cov.score >= 80 ? "var(--base0B)" :
+                       cov.score >= 60 ? "var(--base0D)" :
+                       cov.score >= 40 ? "var(--base0A)" : "var(--base08)";
+
+      const cards = `
+        <div class="cov-grid">
+          <div class="cov-card">
+            <div class="cov-card-title">Health Score</div>
+            <div class="cov-card-value" style="color:${barColor}">${cov.score}%</div>
+            <div class="cov-bar-track"><div class="cov-bar-fill" style="width:${cov.score}%;background:${barColor}"></div></div>
+          </div>
+          <div class="cov-card">
+            <div class="cov-card-title">Total Nodes</div>
+            <div class="cov-card-value" style="color:var(--base06)">${cov.stats.total}</div>
+            <div class="cov-card-sub">${cov.stats.components} comp / ${cov.stats.specs} spec / ${cov.stats.adrs} adr / ${cov.stats.gates} gate</div>
+          </div>
+          <div class="cov-card">
+            <div class="cov-card-title">Edges</div>
+            <div class="cov-card-value" style="color:var(--base0E)">${cov.stats.edges}</div>
+            <div class="cov-card-sub">relationships in the graph</div>
+          </div>
+          <div class="cov-card">
+            <div class="cov-card-title">Findings</div>
+            <div class="cov-card-value" style="color:var(--base0A)">${cov.findings.filter(f => f.sev !== "ok").length}</div>
+            <div class="cov-card-sub">issues to address</div>
+          </div>
+        </div>
+      `;
+
+      const findingsHtml = cov.findings.map(f => {
+        const sevCls = f.sev === "warn" ? "cov-sev-warn" : f.sev === "ok" ? "cov-sev-ok" : "cov-sev-info";
+        const sevLabel = f.sev === "warn" ? "WARN" : f.sev === "ok" ? "PASS" : "INFO";
+        const nodeLinks = f.nodes.map(n =>
+          `<span class="cov-link" onclick="switchView('graph');selectNodeById('${n.id}')">${n.id}</span>`
+        ).join(", ");
+        return `<div class="cov-finding">
+          <span class="cov-sev ${sevCls}">${sevLabel}</span>
+          <span class="cov-finding-text">${esc(f.text)}${nodeLinks ? " (" + nodeLinks + ")" : ""}</span>
+        </div>`;
+      }).join("");
+
+      area.innerHTML = cards + `
+        <h3 style="color:var(--base06);font-size:14px;margin-bottom:10px">Findings</h3>
+        ${findingsHtml}
+      `;
+    }
+
+    // ---- Drift Detection View ----
+
+    async function renderDriftDashboard() {
+      const area = document.getElementById("content-area");
+      document.getElementById("node-header").innerHTML = '<h2>Drift Detection</h2><div><span class="pill pill-type">intent vs code</span></div>';
+      document.getElementById("breadcrumb").innerHTML = '';
+      document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+
+      // Try to load drift.json
+      let drift;
+      try {
+        const res = await fetch("../../.intent/index/drift.json");
+        if (!res.ok) throw new Error();
+        drift = await res.json();
+      } catch {
+        area.innerHTML = `<div class="md-body">
+          <p>No drift data available. Run <code>python tools/intent/sigil.py drift</code> to generate.</p>
+        </div>`;
+        return;
+      }
+
+      const hasFindings = drift.findings && drift.findings.length > 0;
+      const statusColor = hasFindings ? "var(--base0A)" : "var(--base0B)";
+      const statusText = hasFindings ? "Drift detected" : "Aligned";
+
+      let html = `
+        <div class="cov-grid">
+          <div class="cov-card">
+            <div class="cov-card-title">Status</div>
+            <div class="cov-card-value" style="color:${statusColor}">${statusText}</div>
+          </div>
+          <div class="cov-card">
+            <div class="cov-card-title">Files Scanned</div>
+            <div class="cov-card-value" style="color:var(--base06)">${drift.scanned || 0}</div>
+          </div>
+          <div class="cov-card">
+            <div class="cov-card-title">Mapped to Components</div>
+            <div class="cov-card-value" style="color:var(--base0B)">${drift.mapped || 0}</div>
+          </div>
+          <div class="cov-card">
+            <div class="cov-card-title">Unowned Files</div>
+            <div class="cov-card-value" style="color:${drift.unowned ? 'var(--base09)' : 'var(--base0B)'}">${drift.unowned || 0}</div>
+          </div>
+        </div>
+      `;
+
+      if (drift.findings && drift.findings.length) {
+        html += '<h3 style="color:var(--base06);font-size:14px;margin-bottom:10px">Findings</h3>';
+        drift.findings.forEach(f => {
+          if (f.type === "unowned_files") {
+            html += `<div class="cov-finding">
+              <span class="cov-sev cov-sev-warn">DRIFT</span>
+              <span class="cov-finding-text">${f.count} file(s) not mapped to any component</span>
+            </div>`;
+            if (f.files) {
+              html += '<div style="margin:4px 0 12px 40px;font-size:12px;color:var(--base04)">';
+              f.files.slice(0, 20).forEach(fp => {
+                html += `<div style="margin:2px 0"><code style="background:var(--base02);padding:1px 4px;border-radius:2px;font-size:11px">${esc(fp)}</code></div>`;
+              });
+              if (f.files.length > 20) html += `<div>... and ${f.files.length - 20} more</div>`;
+              html += '</div>';
+            }
+          } else if (f.type === "no_spec") {
+            html += `<div class="cov-finding">
+              <span class="cov-sev cov-sev-warn">DRIFT</span>
+              <span class="cov-finding-text">Components with code but no governing spec</span>
+            </div>`;
+            if (f.items) {
+              html += '<div style="margin:4px 0 12px 40px;font-size:12px;color:var(--base04)">';
+              f.items.forEach(item => { html += `<div style="margin:2px 0">${esc(item)}</div>`; });
+              html += '</div>';
+            }
+          } else if (f.type === "spec_no_code") {
+            html += `<div class="cov-finding">
+              <span class="cov-sev cov-sev-info">INFO</span>
+              <span class="cov-finding-text">Components with specs but no matching code files</span>
+            </div>`;
+            if (f.items) {
+              html += '<div style="margin:4px 0 12px 40px;font-size:12px;color:var(--base04)">';
+              f.items.forEach(item => {
+                html += `<div style="margin:2px 0"><span class="cov-link" onclick="switchView(\'graph\');selectNodeById(\'${item}\')">${esc(item)}</span></div>`;
+              });
+              html += '</div>';
+            }
+          }
+        });
+      } else {
+        html += `<div class="cov-finding">
+          <span class="cov-sev cov-sev-ok">PASS</span>
+          <span class="cov-finding-text">All code files are mapped to components with governing specs</span>
+        </div>`;
+      }
+
+      area.innerHTML = html;
+    }
+
+    // ---- Impact Radar ----
+
+    function getBlastRadius(nodeId, graph) {
+      const rings = [[], [], []]; // direct, secondary, tertiary
+      const visited = new Set([nodeId]);
+
+      function getConnected(id) {
+        const out = [];
+        graph.edges.forEach(e => {
+          if (e.src === id && !visited.has(e.dst)) out.push({ id: e.dst, type: e.type, dir: "out" });
+          if (e.dst === id && !visited.has(e.src)) out.push({ id: e.src, type: e.type, dir: "in" });
+        });
+        return out;
+      }
+
+      // Ring 0: direct connections
+      const direct = getConnected(nodeId);
+      direct.forEach(d => { visited.add(d.id); rings[0].push(d); });
+
+      // Ring 1: secondary
+      direct.forEach(d => {
+        getConnected(d.id).forEach(s => {
+          if (!visited.has(s.id)) { visited.add(s.id); rings[1].push(s); }
+        });
+      });
+
+      // Ring 2: tertiary
+      rings[1].forEach(d => {
+        getConnected(d.id).forEach(t => {
+          if (!visited.has(t.id)) { visited.add(t.id); rings[2].push(t); }
+        });
+      });
+
+      return rings;
+    }
+
+    function renderRadarView(node) {
+      const radarSvg = d3.select("#radar-svg");
+      radarSvg.selectAll("*").remove();
+      if (!node) return;
+
+      const width = radarSvg.node().clientWidth;
+      const height = radarSvg.node().clientHeight;
+      const cx = width / 2, cy = height / 2;
+      const maxR = Math.min(width, height) / 2 - 40;
+      const rings = getBlastRadius(node.id, graphData);
+      const ringRadii = [maxR * 0.3, maxR * 0.6, maxR * 0.9];
+      const ringLabels = ["direct", "secondary", "tertiary"];
+      const ringColors = ["rgba(187,255,0,0.06)", "rgba(152,113,254,0.04)", "rgba(69,138,226,0.03)"];
+
+      const g = radarSvg.append("g");
+
+      // Draw rings
+      ringRadii.slice().reverse().forEach((r, i) => {
+        const idx = 2 - i;
+        g.append("circle")
+          .attr("cx", cx).attr("cy", cy).attr("r", r)
+          .attr("fill", ringColors[idx])
+          .attr("stroke", "var(--base02)").attr("stroke-width", 0.5);
+      });
+
+      // Ring labels
+      ringRadii.forEach((r, i) => {
+        g.append("text")
+          .attr("class", "radar-ring-label")
+          .attr("x", cx).attr("y", cy - r + 12)
+          .text(ringLabels[i] + " (" + rings[i].length + ")");
+      });
+
+      // Center node
+      g.append("circle")
+        .attr("cx", cx).attr("cy", cy).attr("r", 16)
+        .attr("fill", nodeColors[node.type] || "#5a5d62");
+      g.append("text")
+        .attr("class", "radar-center-label")
+        .attr("x", cx).attr("y", cy)
+        .text(node.id);
+
+      // Place nodes in rings
+      rings.forEach((ring, ri) => {
+        const r = ringRadii[ri];
+        ring.forEach((item, ni) => {
+          const angle = (2 * Math.PI * ni / ring.length) - Math.PI / 2;
+          const nx = cx + r * Math.cos(angle);
+          const ny = cy + r * Math.sin(angle);
+
+          const targetNode = graphData.nodes.find(n => n.id === item.id);
+          const color = targetNode ? (nodeColors[targetNode.type] || "#5a5d62") : "#5a5d62";
+
+          // Edge line
+          g.append("line")
+            .attr("class", "radar-edge")
+            .attr("x1", cx).attr("y1", cy)
+            .attr("x2", nx).attr("y2", ny);
+
+          // Node
+          const ng = g.append("g")
+            .attr("class", "radar-node")
+            .attr("transform", `translate(${nx},${ny})`)
+            .on("click", () => {
+              selectNodeById(item.id);
+              if (activeView === "radar") renderRadarView(allNodes.find(n => n.id === item.id));
+            });
+
+          ng.append("circle")
+            .attr("r", 7).attr("fill", color);
+          ng.append("text")
+            .attr("y", 12).text(item.id);
+        });
+      });
+
+      // Total blast radius count
+      const total = rings[0].length + rings[1].length + rings[2].length;
+      g.append("text")
+        .attr("x", 14).attr("y", 20)
+        .attr("fill", "var(--base04)").attr("font-size", 11)
+        .text(`Blast radius: ${total} node(s)`);
+    }
+
+    function renderBlastRadiusTab(node) {
+      const area = document.getElementById("content-area");
+      const rings = getBlastRadius(node.id, graphData);
+      const ringNames = ["Direct", "Secondary", "Tertiary"];
+
+      let html = `<h3 style="color:var(--base06);font-size:14px;margin-bottom:4px">Blast Radius for ${esc(node.id)}</h3>
+        <div style="color:var(--base03);font-size:12px;margin-bottom:14px">What depends on or is connected to this node</div>`;
+
+      rings.forEach((ring, i) => {
+        if (!ring.length) return;
+        html += `<h4 style="color:var(--base14);font-size:12px;margin:12px 0 6px">${ringNames[i]} (${ring.length})</h4>`;
+        html += `<ul class="edge-list">${ring.map(item => {
+          const targetNode = graphData.nodes.find(n => n.id === item.id);
+          const typeLabel = targetNode ? targetNode.type : "?";
+          return `<li>
+            <span class="edge-dir">${item.dir === "out" ? "&rarr;" : "&larr;"}</span>
+            <span class="edge-type">${item.type}</span>
+            <span class="edge-target" onclick="selectNodeById('${item.id}')">${item.id}</span>
+            <span style="color:var(--base03);font-size:11px">${typeLabel}</span>
+          </li>`;
+        }).join("")}</ul>`;
+      });
+
+      const total = rings[0].length + rings[1].length + rings[2].length;
+      if (!total) html += '<div style="color:var(--base03);font-size:13px;margin:10px 0">No connections found (isolated node).</div>';
+
+      area.innerHTML = html;
+    }
+
+    // ---- Hierarchy View ----
+
+    function renderHierarchyView() {
+      const hsvg = d3.select("#hierarchy-svg");
+      hsvg.selectAll("*").remove();
+      const width = hsvg.node().clientWidth;
+      const height = hsvg.node().clientHeight;
+      const g = hsvg.append("g");
+
+      // Zoom
+      hsvg.call(d3.zoom().scaleExtent([0.3, 4]).on("zoom", (ev) => {
+        g.attr("transform", ev.transform);
+      }));
+
+      // Layer assignment: components (0), specs/interfaces/gates (1), adrs (2)
+      const layerMap = { component: 0, interface: 0, spec: 1, gate: 1, adr: 2, risk: 2, rollout: 2 };
+      const layerNames = ["Components & Interfaces", "Specs & Gates", "ADRs & Decisions"];
+      const layers = [[], [], []];
+      const nodes = graphData.nodes;
+
+      nodes.forEach(n => {
+        const layer = layerMap[n.type] !== undefined ? layerMap[n.type] : 1;
+        layers[layer].push(n);
+      });
+
+      const layerHeight = height / (layers.length + 1);
+      const padding = 60;
+      const positions = {};
+
+      // Draw layer labels and position nodes
+      layers.forEach((layer, li) => {
+        const y = padding + (li + 0.5) * layerHeight;
+
+        // Layer label
+        g.append("text")
+          .attr("x", 16).attr("y", y - 20)
+          .attr("fill", "var(--base03)").attr("font-size", 10)
+          .attr("font-weight", 600).attr("text-transform", "uppercase")
+          .attr("letter-spacing", "1px")
+          .text(layerNames[li]);
+
+        // Divider line
+        if (li > 0) {
+          g.append("line")
+            .attr("x1", 0).attr("x2", width)
+            .attr("y1", y - layerHeight / 2).attr("y2", y - layerHeight / 2)
+            .attr("stroke", "var(--base02)").attr("stroke-dasharray", "4,4");
+        }
+
+        // Position nodes evenly
+        const nodeSpacing = (width - 2 * padding) / Math.max(layer.length, 1);
+        layer.forEach((n, ni) => {
+          const x = padding + nodeSpacing * (ni + 0.5);
+          positions[n.id] = { x, y };
+        });
+      });
+
+      // Draw edges
+      graphData.edges.forEach(e => {
+        const src = positions[e.src];
+        const dst = positions[e.dst];
+        if (!src || !dst) return;
+        g.append("line")
+          .attr("x1", src.x).attr("y1", src.y)
+          .attr("x2", dst.x).attr("y2", dst.y)
+          .attr("stroke", "var(--base02)").attr("stroke-width", 1);
+      });
+
+      // Draw nodes
+      nodes.forEach(n => {
+        const pos = positions[n.id];
+        if (!pos) return;
+        const ng = g.append("g")
+          .attr("transform", `translate(${pos.x},${pos.y})`)
+          .attr("cursor", "pointer")
+          .on("click", () => selectNodeById(n.id))
+          .on("mouseenter", (ev) => showTooltip(ev, n))
+          .on("mousemove", (ev) => moveTooltip(ev))
+          .on("mouseleave", () => hideTooltip());
+
+        ng.append("circle")
+          .attr("r", n.type === "component" ? 12 : 8)
+          .attr("fill", nodeColors[n.type] || "#5a5d62")
+          .attr("stroke", selectedNode && selectedNode.id === n.id ? "#f8f6f2" : "none")
+          .attr("stroke-width", 2);
+
+        ng.append("text")
+          .attr("dy", n.type === "component" ? -18 : -14)
+          .attr("text-anchor", "middle")
+          .attr("fill", "var(--base04)").attr("font-size", 10)
+          .text(n.id);
+      });
+    }
+
+    // ---- Matrix View ----
+
+    function renderMatrixView() {
+      const container = document.getElementById("matrix-container");
+      document.getElementById("node-header").innerHTML = '<h2>Dependency Matrix</h2><div><span class="pill pill-type">relationships grid</span></div>';
+      document.getElementById("breadcrumb").innerHTML = '';
+      document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+
+      if (!graphData || !graphData.nodes.length) {
+        container.innerHTML = '<div style="color:var(--base03);padding:20px">No nodes.</div>';
+        return;
+      }
+
+      const nodes = graphData.nodes;
+      const edges = graphData.edges;
+
+      // Build adjacency: src -> dst -> [edge types]
+      const adj = {};
+      edges.forEach(e => {
+        if (!adj[e.src]) adj[e.src] = {};
+        if (!adj[e.src][e.dst]) adj[e.src][e.dst] = [];
+        if (!adj[e.src][e.dst].includes(e.type)) adj[e.src][e.dst].push(e.type);
+      });
+
+      // Color intensity based on edge count
+      function cellColor(types) {
+        if (!types || !types.length) return "transparent";
+        const intensity = Math.min(types.length / 3, 1);
+        // Use edge type for color
+        const primary = types[0];
+        const base = edgeColors[primary] || "var(--base02)";
+        return `color-mix(in srgb, ${base} ${30 + intensity * 50}%, transparent)`;
+      }
+
+      // Build HTML table
+      let html = '<table class="matrix-table"><thead><tr><th></th>';
+      nodes.forEach(n => {
+        const color = nodeColors[n.type] || "var(--base04)";
+        html += `<th class="col-header" style="color:${color}" title="${n.id}: ${esc(n.title || '')}">${n.id}</th>`;
+      });
+      html += '</tr></thead><tbody>';
+
+      nodes.forEach(src => {
+        const srcColor = nodeColors[src.type] || "var(--base04)";
+        html += `<tr><th class="row-header" style="color:${srcColor}" title="${src.id}: ${esc(src.title || '')}">${src.id}</th>`;
+        nodes.forEach(dst => {
+          if (src.id === dst.id) {
+            html += '<td class="matrix-cell matrix-diag"></td>';
+          } else {
+            const types = (adj[src.id] && adj[src.id][dst.id]) || [];
+            const bg = cellColor(types);
+            const title = types.length ? `${src.id} → ${dst.id}: ${types.join(', ')}` : '';
+            html += `<td class="matrix-cell" style="background:${bg}" title="${title}"
+              onclick="${types.length ? `selectNodeById('${src.id}')` : ''}"></td>`;
+          }
+        });
+        html += '</tr>';
+      });
+      html += '</tbody></table>';
+
+      container.innerHTML = html;
+
+      // Summary in content area
+      const totalRelationships = edges.length;
+      const edgeTypeCounts = {};
+      edges.forEach(e => { edgeTypeCounts[e.type] = (edgeTypeCounts[e.type] || 0) + 1; });
+
+      const summaryHtml = `
+        <div class="cov-grid">
+          <div class="cov-card">
+            <div class="cov-card-title">Relationships</div>
+            <div class="cov-card-value" style="color:var(--base0E)">${totalRelationships}</div>
+          </div>
+          <div class="cov-card">
+            <div class="cov-card-title">Density</div>
+            <div class="cov-card-value" style="color:var(--base0D)">${(totalRelationships / (nodes.length * (nodes.length - 1)) * 100).toFixed(1)}%</div>
+            <div class="cov-card-sub">of possible connections</div>
+          </div>
+        </div>
+        <h3 style="color:var(--base06);font-size:14px;margin-bottom:10px">Edge Types</h3>
+        ${Object.entries(edgeTypeCounts).sort((a,b) => b[1]-a[1]).map(([type, count]) => `
+          <div class="cov-finding">
+            <span class="cov-sev" style="background:${edgeColors[type] || 'var(--base02)'};color:var(--base00)">${count}</span>
+            <span class="cov-finding-text">${type}</span>
+          </div>
+        `).join("")}
+      `;
+      document.getElementById("content-area").innerHTML = summaryHtml;
+    }
+
+    // ---- Timeline View ----
+
+    async function renderTimelineView() {
+      const container = document.getElementById("timeline-container");
+      document.getElementById("node-header").innerHTML = '<h2>Intent Timeline</h2><div><span class="pill pill-type">evolution history</span></div>';
+      document.getElementById("breadcrumb").innerHTML = '';
+      document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+
+      let timeline;
+      try {
+        const res = await fetch("../../.intent/index/timeline.json");
+        if (!res.ok) throw new Error();
+        timeline = await res.json();
+      } catch {
+        container.innerHTML = `<div class="tl-empty">
+          No timeline data. Run <code>python3 tools/intent/sigil.py timeline</code> to generate.
+        </div>`;
+        document.getElementById("content-area").innerHTML = container.innerHTML;
+        return;
+      }
+
+      const events = timeline.events || [];
+      if (!events.length) {
+        container.innerHTML = '<div class="tl-empty">No intent events found.</div>';
+        document.getElementById("content-area").innerHTML = container.innerHTML;
+        return;
+      }
+
+      // Group events by node type (swim lanes)
+      const laneOrder = ["component", "interface", "spec", "gate", "adr", "risk", "rollout", "unknown"];
+      const laneNames = { component: "Components", interface: "Interfaces", spec: "Specs", gate: "Gates", adr: "ADRs", risk: "Risks", rollout: "Rollouts", unknown: "Other" };
+      const lanes = {};
+      events.forEach(ev => {
+        const lane = laneOrder.includes(ev.node_type) ? ev.node_type : "unknown";
+        if (!lanes[lane]) lanes[lane] = [];
+        lanes[lane].push(ev);
+      });
+
+      // Time range
+      const dates = events.map(e => new Date(e.date).getTime());
+      const minDate = Math.min(...dates);
+      const maxDate = Math.max(...dates);
+      const range = maxDate - minDate || 1;
+
+      // Build HTML
+      const trackWidth = container.clientWidth - 140;
+      const actionIcons = { added: "+", modified: "~", removed: "x" };
+
+      let html = `<div class="tl-header">Intent Evolution<span>${events.length} events</span></div>`;
+
+      // Tooltip element
+      html += '<div id="tl-tooltip" class="tl-event-tooltip"></div>';
+
+      laneOrder.forEach(laneKey => {
+        if (!lanes[laneKey]) return;
+        const laneEvents = lanes[laneKey];
+
+        html += `<div class="tl-swimlane">
+          <div class="tl-lane-label" style="color:${nodeColors[laneKey] || 'var(--base04)'}">${laneNames[laneKey]}</div>
+          <div class="tl-lane-track">`;
+
+        // Deduplicate overlapping positions
+        const positions = [];
+        laneEvents.forEach((ev, i) => {
+          const t = new Date(ev.date).getTime();
+          let pct = ((t - minDate) / range) * 100;
+          // Nudge if too close to previous
+          while (positions.some(p => Math.abs(p - pct) < 3)) pct += 3;
+          positions.push(pct);
+
+          const color = nodeColors[laneKey] || '#5a5d62';
+          const icon = actionIcons[ev.action] || "?";
+          html += `<div class="tl-event" data-action="${ev.action}" data-idx="${i}" data-lane="${laneKey}"
+            style="left:calc(${Math.min(pct, 95)}% - 12px);background:${color}"
+            onclick="selectNodeById('${ev.node_id}')"
+            onmouseenter="showTlTooltip(event, ${JSON.stringify(ev).replace(/"/g, '&quot;')})"
+            onmouseleave="hideTlTooltip()">${icon}</div>`;
+        });
+
+        html += `</div></div>`;
+      });
+
+      // Time axis
+      const tickCount = Math.min(6, events.length);
+      html += '<div class="tl-axis" style="position:relative;height:24px">';
+      for (let i = 0; i < tickCount; i++) {
+        const t = minDate + (range * i / (tickCount - 1 || 1));
+        const d = new Date(t);
+        const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+        const pct = (i / (tickCount - 1 || 1)) * 100;
+        html += `<span class="tl-axis-label" style="left:${pct}%">${label}</span>`;
+      }
+      html += '</div>';
+
+      // Summary stats in content area
+      const nodesSeen = new Set(events.map(e => e.node_id));
+      const addEvents = events.filter(e => e.action === "added").length;
+      const modEvents = events.filter(e => e.action === "modified").length;
+      const uniqueCommits = new Set(events.map(e => e.sha)).size;
+
+      const summaryHtml = `
+        <div class="cov-grid">
+          <div class="cov-card">
+            <div class="cov-card-title">Total Events</div>
+            <div class="cov-card-value" style="color:var(--base0F)">${events.length}</div>
+          </div>
+          <div class="cov-card">
+            <div class="cov-card-title">Nodes Touched</div>
+            <div class="cov-card-value" style="color:var(--base0D)">${nodesSeen.size}</div>
+          </div>
+          <div class="cov-card">
+            <div class="cov-card-title">Additions</div>
+            <div class="cov-card-value" style="color:var(--base0B)">${addEvents}</div>
+          </div>
+          <div class="cov-card">
+            <div class="cov-card-title">Modifications</div>
+            <div class="cov-card-value" style="color:var(--base0A)">${modEvents}</div>
+          </div>
+        </div>
+        <h3 style="color:var(--base06);font-size:14px;margin-bottom:10px">Event Log</h3>
+        ${events.slice().reverse().map(ev => `
+          <div class="cov-finding">
+            <span class="cov-sev ${ev.action === 'added' ? 'cov-sev-ok' : ev.action === 'removed' ? 'cov-sev-warn' : 'cov-sev-info'}">${ev.action.toUpperCase()}</span>
+            <span class="cov-finding-text">
+              <span class="cov-link" onclick="switchView('graph');selectNodeById('${ev.node_id}')">${ev.node_id}</span>
+              ${esc(ev.node_title || '')}
+              <span style="color:var(--base03);font-size:11px;margin-left:6px">${ev.sha === 'working-tree' ? 'working tree' : ev.sha}</span>
+            </span>
+          </div>
+        `).join("")}
+      `;
+
+      container.innerHTML = html;
+      document.getElementById("content-area").innerHTML = summaryHtml;
+    }
+
+    function showTlTooltip(ev, data) {
+      const tt = document.getElementById("tl-tooltip");
+      if (!tt) return;
+      const date = new Date(data.date).toLocaleString();
+      tt.innerHTML = `
+        <div style="color:var(--base0D);font-weight:600">${esc(data.node_id)}</div>
+        <div style="color:var(--base06);margin:2px 0">${esc(data.node_title || '')}</div>
+        <div style="color:var(--base04);font-size:11px">${data.action} &middot; ${date}</div>
+        <div style="color:var(--base03);font-size:11px;margin-top:2px">${esc(data.message || '')}</div>
+      `;
+      tt.classList.add("show");
+      tt.style.left = (ev.clientX + 12) + "px";
+      tt.style.top = (ev.clientY - 60) + "px";
+    }
+
+    function hideTlTooltip() {
+      const tt = document.getElementById("tl-tooltip");
+      if (tt) tt.classList.remove("show");
+    }
+
+    // ---- View Switching ----
+
+    function switchView(view) {
+      activeView = view;
+      document.querySelectorAll(".view-btn").forEach(b => b.classList.toggle("active", b.dataset.view === view));
+
+      const svgEl = document.getElementById("svg");
+      const radarEl = document.getElementById("radar-svg");
+      const legend = document.getElementById("legend");
+      const hierEl = document.getElementById("hierarchy-svg");
+      const tlEl = document.getElementById("timeline-container");
+      const mtxEl = document.getElementById("matrix-container");
+
+      // Hide all first
+      svgEl.style.display = "none";
+      radarEl.style.display = "none";
+      hierEl.style.display = "none";
+      tlEl.style.display = "none";
+      mtxEl.style.display = "none";
+      legend.style.display = "none";
+
+      if (view === "graph") {
+        svgEl.style.display = "block";
+        legend.style.display = "block";
+        if (selectedNode) showTab(activeTab);
+      } else if (view === "radar") {
+        radarEl.style.display = "block";
+        if (selectedNode) {
+          renderRadarView(selectedNode);
+          showTab("radar");
+        }
+      } else if (view === "hierarchy") {
+        hierEl.style.display = "block";
+        legend.style.display = "block";
+        renderHierarchyView();
+        if (selectedNode) showTab(activeTab);
+      } else if (view === "coverage") {
+        document.getElementById("node-header").innerHTML = '<h2>Intent Coverage Dashboard</h2><div><span class="pill pill-type">health report</span></div>';
+        document.getElementById("breadcrumb").innerHTML = '';
+        document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+        renderCoverageDashboard(computeCoverage(graphData));
+      } else if (view === "drift") {
+        renderDriftDashboard();
+      } else if (view === "timeline") {
+        tlEl.style.display = "block";
+        renderTimelineView();
+      } else if (view === "matrix") {
+        mtxEl.style.display = "block";
+        renderMatrixView();
+      }
+    }
+
+    // ---- Core UI ----
+
+    function buildLegend() {
+      const types = [...new Set(graphData.nodes.map(n => n.type))];
+      const el = document.getElementById("legend");
+      el.innerHTML = types.map(t =>
+        `<div class="legend-item"><div class="legend-dot" style="background:${nodeColors[t] || '#5a5d62'}"></div>${t}</div>`
+      ).join("");
+    }
+
+    function buildBreadcrumb(node) {
+      const el = document.getElementById("breadcrumb");
+      if (!node) { el.innerHTML = ""; return; }
+
+      // Walk up the hierarchy: ADR → Spec (via decided_by) → Component (via belongs_to)
+      const chain = [node];
+      const visited = new Set([node.id]);
+
+      function findParent(id) {
+        // Try decided_by first (ADR → Spec), then belongs_to (Spec/ADR → Component)
+        for (const relType of ["decided_by", "belongs_to"]) {
+          const edge = graphData.edges.find(e => e.src === id && e.type === relType && !visited.has(e.dst));
+          if (edge) {
+            const parent = graphData.nodes.find(n => n.id === edge.dst);
+            if (parent) return parent;
+          }
+        }
+        return null;
+      }
+
+      let current = node;
+      while (current) {
+        const parent = findParent(current.id);
+        if (parent) {
+          visited.add(parent.id);
+          chain.unshift(parent);
+          current = parent;
+        } else {
+          break;
+        }
+      }
+
+      el.innerHTML = chain.map((n, i) => {
+        const sep = i > 0 ? '<span class="sep">&rsaquo;</span>' : '';
+        const label = n.type === "component" ? n.title || n.id : n.id;
+        return `${sep}<span onclick="selectNodeById('${n.id}')">${label}</span>`;
+      }).join("");
+    }
+
+    function renderHeader(node) {
+      const el = document.getElementById("node-header");
+      const fm = node.frontmatter || node._frontmatter || {};
+      const status = fm.status;
+      const statusPill = status
+        ? `<span class="pill pill-status" data-status="${status}">${status}</span>`
+        : '';
+      // Blast radius count
+      const rings = getBlastRadius(node.id, graphData);
+      const total = rings[0].length + rings[1].length + rings[2].length;
+      const radiusPill = total > 0
+        ? `<span class="pill" style="background:var(--base02);color:var(--base09)">${total} connected</span>`
+        : '';
+      el.innerHTML = `
+        <h2>${esc(node.title || node.id)}</h2>
+        <div>
+          <span class="pill pill-type">${node.type}</span>
+          <span class="pill pill-id">${node.id}</span>
+          ${statusPill}${radiusPill}
+        </div>`;
+    }
+
+    function processHumanPP(html) {
+      html = html.replace(/(?<![<\w])!!([^!\n]+?)!!/g, '<span class="marker-attention">!! $1</span>');
+      html = html.replace(/(?<![<\w])!!\s/g, '<span class="marker-attention">!!</span> ');
+      html = html.replace(/(?<![<\w])\?\?([^?\n]+?)\?\?/g, '<span class="marker-uncertainty">?? $1</span>');
+      html = html.replace(/(?<![<\w])\?\?\s/g, '<span class="marker-uncertainty">??</span> ');
+      html = html.replace(/(?<![<\w])&gt;&gt;([^<\n]+?)(?=<|$)/gm, '<span class="marker-reference">&gt;&gt; $1</span>');
+      html = html.replace(/(?<![<\w])&gt;&gt;\s/g, '<span class="marker-reference">&gt;&gt;</span> ');
+      html = html.replace(/\b(FIXME|BUG|XXX)\b/g, '<span class="marker-attention">$1</span>');
+      html = html.replace(/\b(TODO|HACK)\b/g, '<span class="marker-uncertainty">$1</span>');
+      html = html.replace(/\b(NOTE|NB)\b/g, '<span class="marker-reference">$1</span>');
+      html = html.replace(/\[\[([A-Z]+-[A-Za-z0-9-]+)\]\]/g,
+        '<span class="wikilink" onclick="selectNodeById(\'$1\')">$1</span>');
+      return html;
+    }
+
+    async function renderContent(node) {
+      const area = document.getElementById("content-area");
+
+      if (node.type === "component") {
+        area.innerHTML = '<div class="loading">Loading component...</div>';
+        try {
+          const res = await fetch("../../" + node.path);
+          const text = await res.text();
+          area.innerHTML = `<div class="md-body"><pre><code>${esc(text)}</code></pre></div>`;
+        } catch {
+          area.innerHTML = '<div class="loading">Could not load file.</div>';
+        }
+        return;
+      }
+
+      area.innerHTML = '<div class="loading">Loading...</div>';
+      try {
+        const res = await fetch("../../" + node.path);
+        const text = await res.text();
+        let body = text;
+        const fmMatch = text.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+        if (fmMatch) {
+          body = fmMatch[2];
+          const fm = {};
+          fmMatch[1].split("\n").forEach(line => {
+            const kv = line.match(/^(\w+):\s*(.+)$/);
+            if (kv) fm[kv[1]] = kv[2];
+          });
+          node._frontmatter = fm;
+          renderHeader(node);
+        }
+        let html = marked.parse(body);
+        html = processHumanPP(html);
+        area.innerHTML = `<div class="md-body">${html}</div>`;
+      } catch {
+        area.innerHTML = '<div class="loading">Could not load file content.</div>';
+      }
+    }
+
+    function renderGraph(node) {
+      const area = document.getElementById("content-area");
+      const outgoing = graphData.edges.filter(e => e.src === node.id);
+      const incoming = graphData.edges.filter(e => e.dst === node.id);
+      const dedup = (edges) => {
+        const seen = new Set();
+        return edges.filter(e => {
+          const key = `${e.type}-${e.src}-${e.dst}`;
+          if (seen.has(key)) return false;
+          seen.add(key); return true;
+        });
+      };
+      const renderEdges = (edges, dir) => {
+        if (!edges.length) return '<div style="color:var(--base03);font-size:13px;margin:6px 0">None</div>';
+        return `<ul class="edge-list">${dedup(edges).map(e => {
+          const target = dir === "out" ? e.dst : e.src;
+          return `<li>
+            <span class="edge-dir">${dir === "out" ? "&rarr;" : "&larr;"}</span>
+            <span class="edge-type">${e.type}</span>
+            <span class="edge-target" onclick="selectNodeById('${target}')">${target}</span>
+          </li>`;
+        }).join("")}</ul>`;
+      };
+      area.innerHTML = `
+        <h3 style="color:var(--base06);font-size:14px;margin-bottom:8px">Outgoing (${dedup(outgoing).length})</h3>
+        ${renderEdges(outgoing, "out")}
+        <h3 style="color:var(--base06);font-size:14px;margin:16px 0 8px">Incoming (${dedup(incoming).length})</h3>
+        ${renderEdges(incoming, "in")}
+      `;
+    }
+
+    function renderRaw(node) {
+      const area = document.getElementById("content-area");
+      const clean = {...node};
+      delete clean._frontmatter;
+      delete clean.x; delete clean.y;
+      delete clean.vx; delete clean.vy;
+      delete clean.fx; delete clean.fy;
+      delete clean.index;
+      area.innerHTML = `<div class="md-body"><pre><code>${esc(JSON.stringify(clean, null, 2))}</code></pre></div>`;
+    }
+
+    function showTab(tab) {
+      activeTab = tab;
+      document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.tab === tab));
+      if (!selectedNode) return;
+      if (tab === "content") renderContent(selectedNode);
+      else if (tab === "graph") renderGraph(selectedNode);
+      else if (tab === "radar") renderBlastRadiusTab(selectedNode);
+      else if (tab === "raw") renderRaw(selectedNode);
+    }
+
+    function selectNodeById(id) {
+      const node = allNodes.find(n => n.id === id);
+      if (node) selectNode(node);
+    }
+
+    function selectNode(node) {
+      selectedNode = node;
+      renderHeader(node);
+      buildBreadcrumb(node);
+      showTab(activeTab);
+      d3.selectAll("#svg circle")
+        .attr("stroke", d => d && d.id === node.id ? "#f8f6f2" : "none")
+        .attr("stroke-width", d => d && d.id === node.id ? 2.5 : 0);
+      if (activeView === "radar") renderRadarView(node);
+    }
+
+    // ---- Tooltip ----
+
+    function showTooltip(ev, d) {
+      const tt = document.getElementById("tooltip");
+      const fm = d.frontmatter || {};
+      const statusColor = {
+        accepted: "var(--base0B)", draft: "var(--base0A)",
+        proposed: "var(--base0E)", active: "var(--base0B)",
+        rejected: "var(--base08)"
+      };
+      const statusHtml = fm.status
+        ? `<span class="tt-status" style="background:${statusColor[fm.status] || 'var(--base03)'};color:var(--base00)">${fm.status}</span>`
+        : '';
+      const summary = d.body_summary
+        ? `<div class="tt-summary">${esc(d.body_summary.substring(0, 200))}${d.body_summary.length > 200 ? '...' : ''}</div>`
+        : '';
+      tt.innerHTML = `
+        <span class="tt-id">${esc(d.id)}</span>
+        <span class="tt-type">${d.type}</span>
+        ${statusHtml}
+        <div class="tt-title">${esc(d.title || '')}</div>
+        ${summary}
+      `;
+      tt.classList.add("show");
+      moveTooltip(ev);
+    }
+
+    function moveTooltip(ev) {
+      const tt = document.getElementById("tooltip");
+      const left = document.getElementById("left");
+      const rect = left.getBoundingClientRect();
+      let x = ev.clientX - rect.left + 16;
+      let y = ev.clientY - rect.top + 16;
+      if (x + 330 > rect.width) x = ev.clientX - rect.left - 330;
+      if (y + 150 > rect.height) y = ev.clientY - rect.top - 150;
+      tt.style.left = x + "px";
+      tt.style.top = y + "px";
+    }
+
+    function hideTooltip() {
+      document.getElementById("tooltip").classList.remove("show");
+    }
+
+    // ---- Keyboard Navigation ----
+
+    document.addEventListener("keydown", function(ev) {
+      // Cmd/Ctrl+K for command palette (works everywhere)
+      if ((ev.metaKey || ev.ctrlKey) && ev.key === "k") {
+        ev.preventDefault();
+        const overlay = document.getElementById("cmd-overlay");
+        if (overlay.classList.contains("show")) hideCmdPalette();
+        else showCmdPalette();
+        return;
+      }
+
+      // Skip if typing in search or command palette
+      if (ev.target.tagName === "INPUT") {
+        if (ev.key === "Escape") {
+          ev.target.blur();
+          hideCmdPalette();
+        }
+        return;
+      }
+
+      if (ev.key === "/") {
+        ev.preventDefault();
+        document.getElementById("search").focus();
+      } else if (ev.key === "j" || ev.key === "k") {
+        if (!allNodes.length) return;
+        const idx = selectedNode ? allNodes.findIndex(n => n.id === selectedNode.id) : -1;
+        let next;
+        if (ev.key === "j") next = (idx + 1) % allNodes.length;
+        else next = (idx - 1 + allNodes.length) % allNodes.length;
+        selectNode(allNodes[next]);
+      } else if (ev.key === "r") {
+        switchView("radar");
+      } else if (ev.key === "c") {
+        switchView("coverage");
+      } else if (ev.key === "g") {
+        switchView("graph");
+      } else if (ev.key === "h") {
+        switchView("hierarchy");
+      } else if (ev.key === "d") {
+        switchView("drift");
+      } else if (ev.key === "t") {
+        switchView("timeline");
+      } else if (ev.key === "m") {
+        switchView("matrix");
+      } else if (ev.key === "Escape") {
+        hideTooltip();
+      }
+    });
+
+    // ---- Main Graph Render ----
+
+    function render(graph) {
+      graphData = graph;
+      const svg = d3.select("#svg");
+      const width = svg.node().clientWidth;
+      const height = svg.node().clientHeight;
+      svg.selectAll("*").remove();
+
+      // Compute connectivity for node sizing
+      const connectivity = {};
+      graph.edges.forEach(e => {
+        connectivity[e.src] = (connectivity[e.src] || 0) + 1;
+        connectivity[e.dst] = (connectivity[e.dst] || 0) + 1;
+      });
+      const maxConn = Math.max(...Object.values(connectivity), 1);
+
+      const nodes = graph.nodes.map(d => ({...d, _conn: connectivity[d.id] || 0}));
+      allNodes = nodes;
+      const links = graph.edges.map(e => ({ source: e.src, target: e.dst, type: e.type }));
+
+      const linkKey = l => `${typeof l.source === 'object' ? l.source.id : l.source}-${typeof l.target === 'object' ? l.target.id : l.target}`;
+      const seenLinks = new Set();
+      const uniqueLinks = links.filter(l => {
+        const k = linkKey(l);
+        if (seenLinks.has(k)) return false;
+        seenLinks.add(k); return true;
+      });
+
+      // SVG defs for glow filter and arrow markers
+      const defs = svg.append("defs");
+      const glowFilter = defs.append("filter").attr("id", "glow").attr("x", "-50%").attr("y", "-50%").attr("width", "200%").attr("height", "200%");
+      glowFilter.append("feGaussianBlur").attr("stdDeviation", "3").attr("result", "blur");
+      glowFilter.append("feMerge").selectAll("feMergeNode").data(["blur", "SourceGraphic"]).join("feMergeNode").attr("in", d => d);
+
+      // Arrow markers for directed edges
+      ["belongs_to","decided_by","depends_on","gated_by","provides","consumes","relates_to","supersedes"].forEach(t => {
+        defs.append("marker")
+          .attr("id", "arrow-" + t).attr("viewBox", "0 0 10 6").attr("refX", 10).attr("refY", 3)
+          .attr("markerWidth", 8).attr("markerHeight", 6).attr("orient", "auto")
+          .append("path").attr("d", "M0,0 L10,3 L0,6").attr("fill", edgeColors[t] || "var(--base02)");
+      });
+
+      const g = svg.append("g");
+      svg.call(d3.zoom().scaleExtent([0.3, 4]).on("zoom", (ev) => {
+        g.attr("transform", ev.transform);
+      }));
+
+      sim = d3.forceSimulation(nodes)
+        .force("link", d3.forceLink(uniqueLinks).id(d => d.id).distance(120))
+        .force("charge", d3.forceManyBody().strength(-250))
+        .force("center", d3.forceCenter(width / 2, height / 2))
+        .force("collide", d3.forceCollide(30))
+        .force("x", d3.forceX(width / 2).strength(0.03))
+        .force("y", d3.forceY(height / 2).strength(0.03));
+
+      // Curved edges using paths instead of lines
+      const link = g.append("g")
+        .selectAll("path").data(uniqueLinks).join("path")
+        .attr("fill", "none")
+        .attr("stroke", d => edgeColors[d.type] || "var(--base02)")
+        .attr("stroke-width", 1.5)
+        .attr("stroke-opacity", 0.6)
+        .attr("marker-end", d => `url(#arrow-${d.type})`);
+
+      const edgeLabel = g.append("g")
+        .selectAll("text").data(uniqueLinks).join("text")
+        .attr("class", "edge-label")
+        .text(d => d.type)
+        .attr("text-anchor", "middle");
+
+      link.on("mouseenter", function(ev, d) {
+        d3.select(this).attr("stroke-opacity", 1).attr("stroke-width", 2.5);
+        edgeLabel.filter(e => e === d).classed("visible", true);
+      }).on("mouseleave", function() {
+        link.attr("stroke-opacity", 0.6).attr("stroke-width", 1.5);
+        edgeLabel.classed("visible", false);
+      });
+
+      function nodeRadius(d) {
+        const base = d.type === "component" ? 14 : 8;
+        const scale = 1 + (d._conn / maxConn) * 0.6;
+        return Math.round(base * scale);
+      }
+
+      // Glow circles for high-connectivity nodes
+      const glowThreshold = maxConn * 0.5;
+      const nodeGlow = g.append("g").selectAll("circle").data(nodes.filter(d => d._conn >= glowThreshold)).join("circle")
+        .attr("r", d => nodeRadius(d) + 6)
+        .attr("fill", d => nodeColors[d.type] || "#5a5d62")
+        .attr("opacity", 0.15)
+        .attr("filter", "url(#glow)");
+
+      const node = g.append("g").selectAll("circle").data(nodes).join("circle")
+        .attr("r", nodeRadius)
+        .attr("fill", d => nodeColors[d.type] || "#5a5d62")
+        .attr("cursor", "pointer")
+        .call(d3.drag()
+          .on("start", (ev, d) => { if (!ev.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+          .on("drag", (ev, d) => { d.fx = ev.x; d.fy = ev.y; })
+          .on("end", (ev, d) => { if (!ev.active) sim.alphaTarget(0); d.fx = null; d.fy = null; })
+        );
+
+      node.append("title").text(d => `${d.id}: ${d.title || ""}`);
+
+      const label = g.append("g").selectAll("text").data(nodes).join("text")
+        .text(d => d.id)
+        .attr("font-size", 10)
+        .attr("fill", "#828079")
+        .attr("dx", d => nodeRadius(d) + 4).attr("dy", 3)
+        .attr("pointer-events", "none");
+
+      node.on("click", (ev, d) => selectNode(d));
+
+      node.on("mouseenter", function(ev, d) {
+        link.attr("stroke-opacity", l =>
+          (l.source.id === d.id || l.target.id === d.id) ? 1 : 0.15
+        ).attr("stroke-width", l =>
+          (l.source.id === d.id || l.target.id === d.id) ? 2.5 : 1
+        );
+        edgeLabel.classed("visible", l =>
+          l.source.id === d.id || l.target.id === d.id
+        );
+        // Dim unconnected nodes
+        const connected = new Set([d.id]);
+        uniqueLinks.forEach(l => {
+          if (l.source.id === d.id) connected.add(l.target.id);
+          if (l.target.id === d.id) connected.add(l.source.id);
+        });
+        node.attr("opacity", n => connected.has(n.id) ? 1 : 0.2);
+        label.attr("opacity", n => connected.has(n.id) ? 1 : 0.15);
+        showTooltip(ev, d);
+      }).on("mousemove", function(ev, d) {
+        moveTooltip(ev);
+      }).on("mouseleave", function() {
+        link.attr("stroke-opacity", 0.6).attr("stroke-width", 1.5);
+        edgeLabel.classed("visible", false);
+        node.attr("opacity", 1);
+        label.attr("opacity", 1);
+        hideTooltip();
+      });
+
+      // Curved path helper
+      function linkPath(d) {
+        const dx = d.target.x - d.source.x;
+        const dy = d.target.y - d.source.y;
+        const dr = Math.sqrt(dx * dx + dy * dy) * 1.5;
+        // Offset endpoint by target node radius
+        const targetNode = nodes.find(n => n.id === (typeof d.target === 'object' ? d.target.id : d.target));
+        const tr = targetNode ? nodeRadius(targetNode) + 4 : 10;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        const ox = d.target.x - (dx / dist) * tr;
+        const oy = d.target.y - (dy / dist) * tr;
+        return `M${d.source.x},${d.source.y} A${dr},${dr} 0 0,1 ${ox},${oy}`;
+      }
+
+      sim.on("tick", () => {
+        link.attr("d", linkPath);
+        node.attr("cx", d => d.x).attr("cy", d => d.y);
+        nodeGlow.attr("cx", d => d.x).attr("cy", d => d.y);
+        label.attr("x", d => d.x).attr("y", d => d.y);
+        edgeLabel
+          .attr("x", d => (d.source.x + d.target.x) / 2)
+          .attr("y", d => (d.source.y + d.target.y) / 2 - 6);
+      });
+
+      // Search
+      document.getElementById("search").oninput = function() {
+        const q = this.value.toLowerCase().trim();
+        if (!q) return;
+        const found = nodes.find(n =>
+          (n.id && n.id.toLowerCase().includes(q)) ||
+          (n.title && n.title.toLowerCase().includes(q)) ||
+          (n.body_summary && n.body_summary.toLowerCase().includes(q))
+        );
+        if (found) selectNode(found);
+      };
+
+      // Tab clicks
+      document.querySelectorAll(".tab").forEach(t => {
+        t.onclick = () => showTab(t.dataset.tab);
+      });
+
+      // Compute and show health badge
+      const cov = computeCoverage(graphData);
+      renderHealthBadge(cov);
+      buildLegend();
+
+      // Select first spec
+      const first = nodes.find(n => n.type === "spec") || nodes[0];
+      if (first) selectNode(first);
+    }
+
+    // ---- New Doc Modal ----
+
+    function showNewModal() {
+      const overlay = document.getElementById("modal-overlay");
+      const compSelect = document.getElementById("new-component");
+      // Populate components dropdown
+      const components = graphData ? graphData.nodes.filter(n => n.type === "component") : [];
+      compSelect.innerHTML = components.map(c =>
+        `<option value="${c.id.replace('COMP-', '')}">${c.title || c.id}</option>`
+      ).join("") || '<option value="general">general</option>';
+      document.getElementById("new-title").value = "";
+      document.getElementById("new-feedback").innerHTML = "";
+      overlay.classList.add("show");
+      setTimeout(() => document.getElementById("new-title").focus(), 100);
+    }
+
+    function hideNewModal() {
+      document.getElementById("modal-overlay").classList.remove("show");
+    }
+
+    async function createNewDoc() {
+      const type = document.getElementById("new-type").value;
+      const component = document.getElementById("new-component").value;
+      const title = document.getElementById("new-title").value.trim();
+      const feedback = document.getElementById("new-feedback");
+
+      if (!title) {
+        feedback.innerHTML = '<div class="modal-error">Title is required</div>';
+        return;
+      }
+
+      try {
+        const res = await fetch("/api/new", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type, component, title })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          feedback.innerHTML = `<div class="modal-error">${esc(data.error || 'Failed')}</div>`;
+          return;
+        }
+        feedback.innerHTML = `<div class="modal-success">Created ${data.id} — reloading graph...</div>`;
+        // Reload graph
+        setTimeout(async () => {
+          hideNewModal();
+          const graph = await loadGraph();
+          render(graph);
+          selectNodeById(data.id);
+        }, 500);
+      } catch (err) {
+        feedback.innerHTML = `<div class="modal-error">Server not running? Use <code>sigil serve</code> to enable creation.</div>`;
+      }
+    }
+
+    // ---- Command Palette ----
+
+    let cmdSelectedIdx = 0;
+    let cmdItems = [];
+
+    function showCmdPalette() {
+      const overlay = document.getElementById("cmd-overlay");
+      overlay.classList.add("show");
+      const input = document.getElementById("cmd-input");
+      input.value = "";
+      cmdSelectedIdx = 0;
+      updateCmdResults("");
+      setTimeout(() => input.focus(), 50);
+    }
+
+    function hideCmdPalette() {
+      document.getElementById("cmd-overlay").classList.remove("show");
+    }
+
+    function getCmdItems(query) {
+      const q = query.toLowerCase().trim();
+      const items = [];
+
+      // Views
+      const views = [
+        { label: "Graph View", action: () => switchView("graph"), type: "view", hint: "g" },
+        { label: "Impact Radar", action: () => switchView("radar"), type: "view", hint: "r" },
+        { label: "Hierarchy", action: () => switchView("hierarchy"), type: "view", hint: "h" },
+        { label: "Coverage Dashboard", action: () => switchView("coverage"), type: "view", hint: "c" },
+        { label: "Drift Detection", action: () => switchView("drift"), type: "view", hint: "d" },
+        { label: "Timeline", action: () => switchView("timeline"), type: "view", hint: "t" },
+        { label: "Dependency Matrix", action: () => switchView("matrix"), type: "view", hint: "m" },
+      ];
+
+      // Actions
+      const actions = [
+        { label: "New Spec", action: () => { hideCmdPalette(); showNewModal(); document.getElementById("new-type").value = "spec"; }, type: "action", hint: "create" },
+        { label: "New ADR", action: () => { hideCmdPalette(); showNewModal(); document.getElementById("new-type").value = "adr"; }, type: "action", hint: "create" },
+      ];
+
+      // Nodes
+      const nodes = (graphData ? graphData.nodes : []).map(n => ({
+        label: `${n.id} — ${n.title || ""}`,
+        action: () => { switchView("graph"); selectNodeById(n.id); },
+        type: n.type,
+        hint: n.path,
+        color: nodeColors[n.type]
+      }));
+
+      const all = [...views, ...actions, ...nodes];
+      if (!q) return all.slice(0, 12);
+      return all.filter(item =>
+        item.label.toLowerCase().includes(q) ||
+        (item.hint && item.hint.toLowerCase().includes(q)) ||
+        (item.type && item.type.toLowerCase().includes(q))
+      ).slice(0, 12);
+    }
+
+    function updateCmdResults(query) {
+      cmdItems = getCmdItems(query);
+      cmdSelectedIdx = Math.min(cmdSelectedIdx, cmdItems.length - 1);
+      if (cmdSelectedIdx < 0) cmdSelectedIdx = 0;
+
+      const results = document.getElementById("cmd-results");
+      results.innerHTML = cmdItems.map((item, i) => {
+        const color = item.color || (item.type === "view" ? "var(--base0D)" : item.type === "action" ? "var(--base0B)" : "var(--base04)");
+        const icon = item.type === "view" ? "V" : item.type === "action" ? "+" : item.type[0].toUpperCase();
+        return `<div class="cmd-item${i === cmdSelectedIdx ? ' selected' : ''}" onclick="executeCmdItem(${i})">
+          <div class="cmd-item-icon" style="background:${color}">${icon}</div>
+          <div class="cmd-item-text">${esc(item.label)}</div>
+          <div class="cmd-item-type">${item.type}</div>
+        </div>`;
+      }).join("");
+    }
+
+    function executeCmdItem(idx) {
+      if (cmdItems[idx]) {
+        hideCmdPalette();
+        cmdItems[idx].action();
+      }
+    }
+
+    document.getElementById("cmd-input").addEventListener("input", function() {
+      cmdSelectedIdx = 0;
+      updateCmdResults(this.value);
+    });
+
+    document.getElementById("cmd-input").addEventListener("keydown", function(ev) {
+      if (ev.key === "ArrowDown") {
+        ev.preventDefault();
+        cmdSelectedIdx = Math.min(cmdSelectedIdx + 1, cmdItems.length - 1);
+        updateCmdResults(this.value);
+      } else if (ev.key === "ArrowUp") {
+        ev.preventDefault();
+        cmdSelectedIdx = Math.max(cmdSelectedIdx - 1, 0);
+        updateCmdResults(this.value);
+      } else if (ev.key === "Enter") {
+        ev.preventDefault();
+        executeCmdItem(cmdSelectedIdx);
+      } else if (ev.key === "Escape") {
+        hideCmdPalette();
+      }
+    });
+
+    // Configure marked
+    marked.setOptions({ gfm: true, breaks: false });
+
+    loadGraph().then(render).catch(err => {
+      document.getElementById("content-area").textContent = String(err);
+    });
+
+    // ---- Live Reload ----
+    // Polls /api/version from sigil serve; hot-reloads graph when version changes.
+    (function initLiveReload() {
+      let knownVersion = null;
+      let reloadTimer = null;
+      const POLL_MS = 1500;
+
+      async function checkVersion() {
+        try {
+          const res = await fetch("/api/version", { cache: "no-store" });
+          if (!res.ok) return; // not running under sigil serve
+          const data = await res.json();
+          if (knownVersion === null) {
+            knownVersion = data.version;
+            showLiveIndicator(true);
+            return;
+          }
+          if (data.version !== knownVersion) {
+            knownVersion = data.version;
+            const graph = await loadGraph();
+            const prevSelected = selectedNode ? selectedNode.id : null;
+            render(graph);
+            // Restore selection if the node still exists
+            if (prevSelected) {
+              const restored = allNodes.find(n => n.id === prevSelected);
+              if (restored) { selectedNode = restored; renderGraph(restored); }
+            }
+            // Re-render active view
+            if (activeView !== "graph") switchView(activeView);
+            flashLiveIndicator();
+          }
+        } catch (_) {
+          // /api/version not available — static mode, stop polling
+          showLiveIndicator(false);
+          clearInterval(reloadTimer);
+        }
+      }
+
+      function showLiveIndicator(show) {
+        let el = document.getElementById("live-indicator");
+        if (!el && show) {
+          el = document.createElement("div");
+          el.id = "live-indicator";
+          el.style.cssText = "position:fixed;bottom:12px;right:12px;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:600;font-family:inherit;background:rgba(4,179,114,0.15);color:var(--base0B);z-index:300;transition:opacity 0.3s;pointer-events:none;";
+          el.textContent = "LIVE";
+          document.body.appendChild(el);
+        }
+        if (el) el.style.display = show ? "block" : "none";
+      }
+
+      function flashLiveIndicator() {
+        const el = document.getElementById("live-indicator");
+        if (!el) return;
+        el.style.background = "rgba(4,179,114,0.4)";
+        setTimeout(() => { el.style.background = "rgba(4,179,114,0.15)"; }, 400);
+      }
+
+      reloadTimer = setInterval(checkVersion, POLL_MS);
+      // First check immediately
+      checkVersion();
+    })();
+  </script>
+</body>
+</html>
