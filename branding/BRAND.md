@@ -9,6 +9,8 @@ The Sigil mark is a hexagonal frame containing a stylized tree-rune glyph — a 
 | Logo mark (icon only) | `logo-mark.png` | 1024x1024 |
 | Logo wordmark | `logo-wordmark.png` | 1024x1024 |
 | Social card (OG) | `social-card.png` | 1792x1024 |
+| OG image | `og-image-1200x630.png` | 1200x630 |
+| Twitter card | `twitter-card-1200x675.png` | 1200x675 |
 | Favicon .ico | `favicon.ico` | 16/32/64 |
 | Favicon 32px | `favicon-32x32.png` | 32x32 |
 | Favicon 16px | `favicon-16x16.png` | 16x16 |
