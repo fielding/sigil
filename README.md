@@ -76,6 +76,8 @@ sigil bootstrap  Scan repo for missing component stubs
 sigil hook       Install/uninstall pre-commit hook
 sigil pr         Analyze GitHub PR and post intent coverage comment
 sigil doctor     Diagnose installation and repo health
+sigil scan       Deep-scan codebase: detect components, APIs, decisions, infra
+sigil ci         Run full CI pipeline in one command (index + lint + check + badge + review)
 ```
 
 ## Repo Structure
@@ -97,12 +99,11 @@ templates/           Scaffolding for new docs
 Add to your GitHub Actions workflow:
 
 ```yaml
-- run: sigil index
-- run: sigil lint
-- run: sigil check
-- run: sigil drift || true
+- run: sigil ci
 - run: sigil pr ${{ github.event.pull_request.number }}
 ```
+
+`sigil ci` runs the full pipeline in one command: index, lint, check gates, generate badge, and review changes. Add `--strict` to fail on any warnings.
 
 PRs get an automatic intent analysis comment with coverage percentage, governed/ungoverned changes, gate results, and links back to the intent graph.
 

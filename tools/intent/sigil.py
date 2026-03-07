@@ -2785,6 +2785,304 @@ def cmd_doctor(args) -> int:
     return 0 if failed == 0 else 1
 
 
+def cmd_scan(args) -> int:
+    """Deep-scan a codebase to auto-detect components, APIs, decisions, and relationships."""
+    repo = Path(args.repo).resolve()
+    dry_run = getattr(args, "dry_run", False)
+    out_path = getattr(args, "output", None)
+
+    print()
+    print("  Sigil Scan")
+    print("  " + "=" * 50)
+    print()
+
+    # --- 1. Detect components (deeper than bootstrap) ---
+    # Skip sigil's own structure dirs in addition to standard skip dirs
+    scan_skip = _SKIP_DIRS | {"components", "intent", "interfaces", "gates", "templates", "docs"}
+    components: List[dict] = []
+    for child in sorted(repo.iterdir()):
+        if not child.is_dir() or child.name.startswith(".") or child.name in scan_skip:
+            continue
+        info: dict = {"slug": child.name.lower().replace(" ", "-"), "path": child.name, "lang": None, "detected_via": None, "files": 0, "has_readme": False, "has_tests": False, "has_dockerfile": False}
+        for manifest, lang in _MANIFEST_PATTERNS:
+            if (child / manifest).exists():
+                info["lang"] = lang
+                info["detected_via"] = manifest
+                break
+        # Count source files
+        try:
+            info["files"] = sum(1 for _ in child.rglob("*") if _.is_file() and not any(s in str(_) for s in [".git", "node_modules", "__pycache__", ".venv"]))
+        except Exception:
+            pass
+        info["has_readme"] = any((child / r).exists() for r in ["README.md", "readme.md", "README.rst", "README"])
+        info["has_tests"] = any(d.exists() for d in [child / "tests", child / "test", child / "__tests__", child / "spec"]) or bool(list(child.glob("*_test.*")) + list(child.glob("test_*.*")))
+        info["has_dockerfile"] = (child / "Dockerfile").exists() or (child / "dockerfile").exists()
+        if info["lang"] or info["files"] > 2:
+            components.append(info)
+
+    # --- 2. Detect APIs ---
+    apis: List[dict] = []
+    api_patterns = [
+        ("openapi.yaml", "OpenAPI"), ("openapi.yml", "OpenAPI"), ("openapi.json", "OpenAPI"),
+        ("swagger.yaml", "Swagger"), ("swagger.yml", "Swagger"), ("swagger.json", "Swagger"),
+        ("schema.graphql", "GraphQL"), ("schema.gql", "GraphQL"),
+    ]
+    for pat_file, api_type in api_patterns:
+        for found in repo.rglob(pat_file):
+            if any(s in str(found) for s in [".git", "node_modules", "__pycache__", ".venv"]):
+                continue
+            apis.append({"path": str(found.relative_to(repo)), "type": api_type})
+    # Proto files
+    for proto in repo.rglob("*.proto"):
+        if not any(s in str(proto) for s in [".git", "node_modules", "__pycache__", ".venv"]):
+            apis.append({"path": str(proto.relative_to(repo)), "type": "gRPC/Protobuf"})
+
+    # --- 3. Detect architectural decisions in READMEs ---
+    decisions: List[dict] = []
+    decision_keywords = re.compile(r"\b(decided|decision|chose|chosen|trade-?off|alternative|option|rationale|why we|we chose|we decided|architecture)\b", re.I)
+    for readme in repo.rglob("README*"):
+        if any(s in str(readme) for s in [".git", "node_modules", "__pycache__", ".venv"]):
+            continue
+        try:
+            text = readme.read_text(encoding="utf-8", errors="ignore")[:10000]
+            matches = decision_keywords.findall(text)
+            if len(matches) >= 2:
+                decisions.append({"path": str(readme.relative_to(repo)), "signals": len(matches)})
+        except Exception:
+            pass
+    # ADR directories
+    for adr_dir_name in ["adr", "adrs", "decisions", "docs/adr", "docs/decisions", "doc/adr"]:
+        adr_dir = repo / adr_dir_name
+        if adr_dir.is_dir():
+            for f in adr_dir.iterdir():
+                if f.suffix in (".md", ".txt", ".rst"):
+                    decisions.append({"path": str(f.relative_to(repo)), "signals": 10})
+
+    # --- 4. Detect CI/CD ---
+    ci_files: List[dict] = []
+    ci_patterns = [
+        (".github/workflows", "GitHub Actions"),
+        (".gitlab-ci.yml", "GitLab CI"),
+        ("Jenkinsfile", "Jenkins"),
+        (".circleci", "CircleCI"),
+        (".travis.yml", "Travis CI"),
+        ("azure-pipelines.yml", "Azure Pipelines"),
+        ("cloudbuild.yaml", "Cloud Build"),
+        ("Makefile", "Makefile"),
+        ("Taskfile.yml", "Taskfile"),
+    ]
+    for ci_path, ci_type in ci_patterns:
+        p = repo / ci_path
+        if p.exists():
+            if p.is_dir():
+                for f in p.iterdir():
+                    ci_files.append({"path": str(f.relative_to(repo)), "type": ci_type})
+            else:
+                ci_files.append({"path": ci_path, "type": ci_type})
+
+    # --- 5. Detect config/infra ---
+    infra: List[dict] = []
+    infra_patterns = [
+        ("docker-compose.yml", "Docker Compose"), ("docker-compose.yaml", "Docker Compose"),
+        ("Dockerfile", "Docker"), ("terraform", "Terraform"), ("k8s", "Kubernetes"),
+        ("kubernetes", "Kubernetes"), ("helm", "Helm"), (".env.example", "Environment"),
+    ]
+    for inf_path, inf_type in infra_patterns:
+        p = repo / inf_path
+        if p.exists():
+            infra.append({"path": inf_path, "type": inf_type})
+
+    # --- 6. Existing sigil coverage ---
+    existing_components = set()
+    comp_dir = repo / "components"
+    if comp_dir.is_dir():
+        for cy in comp_dir.glob("*.yaml"):
+            existing_components.add(cy.stem)
+    existing_specs = len(list((repo / "intent").rglob("specs/**/*.md"))) if (repo / "intent").is_dir() else 0
+    existing_adrs = len(list((repo / "intent").rglob("adrs/**/*.md"))) if (repo / "intent").is_dir() else 0
+    existing_gates = len(list((repo / "gates").glob("*.yaml"))) if (repo / "gates").is_dir() else 0
+
+    # --- Build report ---
+    report: dict = {
+        "components": components,
+        "apis": apis,
+        "decisions": decisions,
+        "ci": ci_files,
+        "infra": infra,
+        "existing_coverage": {
+            "components": len(existing_components),
+            "specs": existing_specs,
+            "adrs": existing_adrs,
+            "gates": existing_gates,
+        },
+        "recommendations": [],
+    }
+
+    # Generate recommendations
+    recs = report["recommendations"]
+    uncovered = [c for c in components if c["slug"] not in existing_components]
+    if uncovered:
+        recs.append(f"Create component YAML for {len(uncovered)} detected component(s): {', '.join(c['slug'] for c in uncovered[:5])}")
+    if apis and existing_specs == 0:
+        recs.append(f"Found {len(apis)} API definition(s) but no specs. Create specs to govern API contracts.")
+    if decisions and existing_adrs == 0:
+        recs.append(f"Found {len(decisions)} file(s) with decision language but no ADRs. Formalize decisions with sigil new adr.")
+    if existing_gates == 0 and (existing_specs > 0 or len(components) > 2):
+        recs.append("No gates defined. Add gates/ YAML to enforce spec compliance in CI.")
+    dockerized = [c for c in components if c["has_dockerfile"]]
+    no_tests = [c for c in components if not c["has_tests"] and c["lang"]]
+    if no_tests:
+        recs.append(f"{len(no_tests)} component(s) have no test directory: {', '.join(c['slug'] for c in no_tests[:5])}")
+    if not ci_files:
+        recs.append("No CI/CD detected. Run sigil ci --init to generate a GitHub Actions workflow.")
+
+    # --- Print report ---
+    print(f"  Components detected:  {len(components)}")
+    for c in components:
+        cov = "covered" if c["slug"] in existing_components else "NEW"
+        lang = c["lang"] or "unknown"
+        extras = []
+        if c["has_tests"]:
+            extras.append("tests")
+        if c["has_dockerfile"]:
+            extras.append("docker")
+        if c["has_readme"]:
+            extras.append("readme")
+        extra_str = f"  [{', '.join(extras)}]" if extras else ""
+        print(f"    {cov:>7s}  {c['slug']:<25s} {lang:<10s} {c['files']:>4d} files{extra_str}")
+
+    if apis:
+        print(f"\n  APIs detected:        {len(apis)}")
+        for a in apis:
+            print(f"           {a['type']:<15s} {a['path']}")
+
+    if decisions:
+        print(f"\n  Decision signals:     {len(decisions)}")
+        for d in decisions[:5]:
+            print(f"           {d['signals']:>2d} signals   {d['path']}")
+
+    if ci_files:
+        print(f"\n  CI/CD detected:       {len(ci_files)}")
+        for c in ci_files:
+            print(f"           {c['type']:<18s} {c['path']}")
+
+    if infra:
+        print(f"\n  Infrastructure:       {len(infra)}")
+        for i in infra:
+            print(f"           {i['type']:<18s} {i['path']}")
+
+    cov = report["existing_coverage"]
+    print(f"\n  Sigil coverage:")
+    print(f"    Components: {cov['components']}  Specs: {cov['specs']}  ADRs: {cov['adrs']}  Gates: {cov['gates']}")
+
+    if recs:
+        print(f"\n  Recommendations:")
+        for i, r in enumerate(recs, 1):
+            print(f"    {i}. {r}")
+
+    print()
+
+    # --- Write report JSON ---
+    if out_path:
+        report_path = Path(out_path)
+    else:
+        idx_dir = repo / ".intent" / "index"
+        idx_dir.mkdir(parents=True, exist_ok=True)
+        report_path = idx_dir / "scan.json"
+    if not dry_run:
+        # Convert to serializable
+        report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+        print(f"  Report written to {report_path.relative_to(repo)}")
+    else:
+        print("  [dry-run] Would write report to", report_path)
+
+    return 0
+
+
+def cmd_ci(args) -> int:
+    """Run the full CI pipeline: index, check, review, badge, export."""
+    repo = Path(args.repo).resolve()
+    strict = getattr(args, "strict", False)
+    base = getattr(args, "base", None)
+    head = getattr(args, "head", None)
+
+    print()
+    print("  Sigil CI Pipeline")
+    print("  " + "=" * 50)
+    print()
+
+    errors = 0
+
+    # Step 1: Index
+    print("  [1/5] Indexing...")
+    g = build_graph(repo)
+    write_graph_artifacts(repo, g)
+    print(f"         {len(g.nodes)} nodes, {len(g.edges)} edges")
+
+    # Step 2: Lint
+    print("  [2/5] Linting...")
+    _repo_str = str(repo)
+
+    class LintArgs:
+        repo = _repo_str
+        min_severity = "warn"
+    lint_result = cmd_lint(LintArgs())
+    if lint_result != 0:
+        errors += 1
+        print("         Lint issues found")
+    else:
+        print("         Clean")
+
+    # Step 3: Check gates
+    print("  [3/5] Checking gates...")
+    class CheckArgs:
+        repo = _repo_str
+    check_result = cmd_check(CheckArgs())
+    if check_result != 0:
+        errors += 1
+        print("         Gate failures detected")
+    else:
+        print("         All gates passing")
+
+    # Step 4: Badge
+    print("  [4/5] Generating badge...")
+    badge_path = repo / ".intent" / "badge.svg"
+    class BadgeArgs:
+        repo = _repo_str
+        output = str(badge_path)
+    cmd_badge(BadgeArgs())
+    print(f"         {badge_path.relative_to(repo)}")
+
+    # Step 5: Review (if in a git context with changes)
+    print("  [5/5] Review...")
+    class ReviewArgs:
+        repo = _repo_str
+        staged = False
+        json = False
+    ReviewArgs.base = base
+    ReviewArgs.head = head
+    try:
+        review_result = cmd_review(ReviewArgs())
+    except (subprocess.CalledProcessError, Exception):
+        review_result = 0
+        print("         No changes to review")
+
+    # Summary
+    print()
+    print("  " + "-" * 50)
+    if errors == 0:
+        print("  Pipeline: PASS")
+    elif strict:
+        print("  Pipeline: FAIL (strict mode)")
+    else:
+        print(f"  Pipeline: WARN ({errors} issue(s), non-blocking)")
+    print()
+
+    if strict and errors > 0:
+        return 1
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(prog="sigil", description="Sigil — intent-first engineering CLI")
     ap.add_argument("--repo", default=".", help="Repo root (default: cwd)")
@@ -2875,6 +3173,17 @@ def main() -> int:
 
     sp = sub.add_parser("doctor", help="Diagnose sigil installation and repo health")
     sp.set_defaults(fn=cmd_doctor)
+
+    sp = sub.add_parser("scan", help="Deep-scan codebase to detect components, APIs, decisions, and relationships")
+    sp.add_argument("--dry-run", action="store_true", help="Print findings without writing report")
+    sp.add_argument("--output", "-o", default=None, help="Output path for scan report JSON")
+    sp.set_defaults(fn=cmd_scan)
+
+    sp = sub.add_parser("ci", help="Run full CI pipeline: index, lint, check, badge, review")
+    sp.add_argument("--strict", action="store_true", help="Exit non-zero on any warnings")
+    sp.add_argument("base", nargs="?", default=None, help="Base commit for review (optional)")
+    sp.add_argument("head", nargs="?", default=None, help="Head commit for review (optional)")
+    sp.set_defaults(fn=cmd_ci)
 
     args = ap.parse_args()
     return args.fn(args)

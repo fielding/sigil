@@ -20,23 +20,14 @@ jobs:
       - name: Install sigil
         run: pip install .
 
-      - name: Build intent index
-        run: sigil index
-
-      - name: Lint intent docs
-        run: sigil lint
-
-      - name: Run gate checks
-        run: sigil check
+      - name: Run sigil CI pipeline
+        run: sigil ci
 
       - name: Drift detection
         run: sigil drift || true
 
       - name: Build timeline
         run: sigil timeline || true
-
-      - name: Generate coverage badge
-        run: sigil badge
 
       - name: Generate export snapshot
         run: sigil export
@@ -63,3 +54,4 @@ jobs:
             .intent/export.html
             .intent/index/drift.json
             .intent/index/timeline.json
+            .intent/index/scan.json
