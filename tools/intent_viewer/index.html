@@ -826,6 +826,44 @@
       `;
     }
 
+    async function renderCoverageDashboardAsync() {
+      const cov = computeCoverage(graphData);
+      renderCoverageDashboard(cov);
+      // Try to load coverage.json for per-component details
+      try {
+        const res = await fetch("../../.intent/index/coverage.json");
+        if (!res.ok) throw new Error();
+        const covData = await res.json();
+        if (covData.components && covData.components.length) {
+          const area = document.getElementById("content-area");
+          const levelColor = { green: "var(--base0B)", yellow: "var(--base0A)", red: "var(--base08)" };
+          const levelIcon = { green: "+", yellow: "~", red: "-" };
+          let compHtml = '<h3 style="color:var(--base06);font-size:14px;margin:16px 0 10px">Component Coverage</h3>';
+          compHtml += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px">';
+          covData.components.forEach(c => {
+            const col = levelColor[c.level] || "var(--base05)";
+            const icon = levelIcon[c.level] || "?";
+            compHtml += `<div class="cov-card" style="cursor:pointer;border-left:3px solid ${col}" onclick="switchView('graph');selectNodeById('${c.id}')">
+              <div class="cov-card-title" style="color:${col}">[${icon}] ${esc(c.id)}</div>
+              <div class="cov-card-sub">${c.has_spec ? 'spec' : 'no spec'} · ${c.adr_count} ADR(s) · ${c.gate_count} gate(s)</div>
+            </div>`;
+          });
+          compHtml += '</div>';
+          // Also show metrics from CLI
+          if (covData.metrics) {
+            const m = covData.metrics;
+            compHtml += '<h3 style="color:var(--base06);font-size:14px;margin:16px 0 10px">Metrics</h3><div class="cov-grid">';
+            compHtml += `<div class="cov-card"><div class="cov-card-title">Components with Spec</div><div class="cov-card-value" style="color:var(--base0B)">${m.components_with_spec.pct}%</div><div class="cov-card-sub">${m.components_with_spec.value}/${m.components_with_spec.total}</div></div>`;
+            compHtml += `<div class="cov-card"><div class="cov-card-title">Specs with Acceptance</div><div class="cov-card-value" style="color:var(--base0D)">${m.specs_with_acceptance.pct}%</div><div class="cov-card-sub">${m.specs_with_acceptance.value}/${m.specs_with_acceptance.total}</div></div>`;
+            compHtml += `<div class="cov-card"><div class="cov-card-title">ADRs Accepted</div><div class="cov-card-value" style="color:var(--base0E)">${m.adrs_accepted.pct}%</div><div class="cov-card-sub">${m.adrs_accepted.value}/${m.adrs_accepted.total}</div></div>`;
+            compHtml += `<div class="cov-card"><div class="cov-card-title">ADRs with Status</div><div class="cov-card-value" style="color:var(--base0C)">${m.adrs_with_status.pct}%</div><div class="cov-card-sub">${m.adrs_with_status.value}/${m.adrs_with_status.total}</div></div>`;
+            compHtml += '</div>';
+          }
+          area.innerHTML += compHtml;
+        }
+      } catch(e) { /* coverage.json not available, client-side view is sufficient */ }
+    }
+
     // ---- Drift Detection View ----
 
     async function renderDriftDashboard() {
@@ -1611,7 +1649,7 @@
         document.getElementById("node-header").innerHTML = '<h2>Intent Coverage Dashboard</h2><div><span class="pill pill-type">health report</span></div>';
         document.getElementById("breadcrumb").innerHTML = '';
         document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
-        renderCoverageDashboard(computeCoverage(graphData));
+        renderCoverageDashboardAsync();
       } else if (view === "drift") {
         renderDriftDashboard();
       } else if (view === "timeline") {

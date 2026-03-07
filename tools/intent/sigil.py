@@ -377,6 +377,10 @@ def write_graph_artifacts(repo_root: Path, g: Graph) -> None:
     }
     (out_dir / "graph.json").write_text(json.dumps(graph_json, indent=2), encoding="utf-8")
 
+    # Write coverage.json
+    cov = _compute_coverage(repo_root, g)
+    (out_dir / "coverage.json").write_text(json.dumps(cov, indent=2), encoding="utf-8")
+
     search_nodes_list = []
     for n in g.nodes.values():
         title_tokens = _tokenize(n.title)
@@ -1922,6 +1926,11 @@ def cmd_export(args) -> int:
     if review_path.exists():
         review_json = review_path.read_text(encoding="utf-8")
 
+    coverage_json = "{}"
+    coverage_path = repo / ".intent" / "index" / "coverage.json"
+    if coverage_path.exists():
+        coverage_json = coverage_path.read_text(encoding="utf-8")
+
     # Build self-contained HTML: inject graph data and file contents
     inject_script = f"""
     <script>
@@ -1931,6 +1940,7 @@ def cmd_export(args) -> int:
     window.__SIGIL_DRIFT__ = {drift_json};
     window.__SIGIL_TIMELINE__ = {timeline_json};
     window.__SIGIL_REVIEW__ = {review_json};
+    window.__SIGIL_COVERAGE__ = {coverage_json};
 
     // Override fetch to serve embedded data
     const _origFetch = window.fetch;
@@ -1947,6 +1957,9 @@ def cmd_export(args) -> int:
       }}
       if (urlStr.includes('review.json')) {{
         return Promise.resolve(new Response(JSON.stringify(window.__SIGIL_REVIEW__), {{status: 200}}));
+      }}
+      if (urlStr.includes('coverage.json')) {{
+        return Promise.resolve(new Response(JSON.stringify(window.__SIGIL_COVERAGE__), {{status: 200}}));
       }}
       // Check file contents
       for (const [path, content] of Object.entries(window.__SIGIL_FILES__)) {{
@@ -1977,53 +1990,218 @@ def cmd_export(args) -> int:
     return 0
 
 
-def cmd_badge(args) -> int:
-    """Generate an intent coverage badge SVG."""
-    repo = Path(args.repo).resolve()
-    g = build_graph(repo)
-
-    # Compute coverage using same logic as viewer
+def _compute_coverage(repo: Path, g: Graph) -> Dict:
+    """Compute intent coverage metrics. Returns structured coverage report."""
     components = [n for n in g.nodes.values() if n.type == "component"]
     specs = [n for n in g.nodes.values() if n.type == "spec"]
     adrs = [n for n in g.nodes.values() if n.type == "adr"]
+    gates = [n for n in g.nodes.values() if n.type == "gate"]
 
+    # Components with a governing spec (via belongs_to edges)
     comps_with_spec = set()
     for e in g.edges:
         if e.type == "belongs_to":
             comps_with_spec.add(e.dst)
+    comps_without_spec = [c for c in components if c.id not in comps_with_spec]
 
-    accepted_adrs = 0
+    # Specs with acceptance criteria
+    specs_with_ac = []
+    specs_without_ac = []
+    for n in specs:
+        try:
+            md = read_text(repo / n.path)
+        except Exception:
+            md = ""
+        _, body = parse_front_matter(md)
+        has_ac = bool(re.search(r"(?i)acceptance\s+criteria|## acceptance", body))
+        if has_ac:
+            specs_with_ac.append(n)
+        else:
+            specs_without_ac.append(n)
+
+    # ADR status breakdown
+    adr_statuses: Dict[str, list] = {"accepted": [], "draft": [], "proposed": [], "rejected": [], "unknown": []}
     for n in adrs:
-        md = read_text(repo / n.path)
+        try:
+            md = read_text(repo / n.path)
+        except Exception:
+            md = ""
         fm, _ = parse_front_matter(md)
-        if fm.get("status") == "accepted":
-            accepted_adrs += 1
+        status = fm.get("status", "unknown").lower()
+        bucket = status if status in adr_statuses else "unknown"
+        adr_statuses[bucket].append(n)
+    adrs_with_status = len(adrs) - len(adr_statuses["unknown"])
 
-    score = 0
-    weight = 0
+    # Dangling edges
+    node_ids = set(g.nodes.keys())
+    dangling = [e for e in g.edges if e.dst not in node_ids]
+
+    # Findings
+    findings = []
+    if comps_without_spec:
+        findings.append({"severity": "warn", "message": f"{len(comps_without_spec)} component(s) have no governing spec",
+                         "nodes": [c.id for c in comps_without_spec]})
+    if specs_without_ac:
+        findings.append({"severity": "info", "message": f"{len(specs_without_ac)} spec(s) missing acceptance criteria",
+                         "nodes": [s.id for s in specs_without_ac]})
+    if adr_statuses["draft"] or adr_statuses["proposed"]:
+        draft_nodes = adr_statuses["draft"] + adr_statuses["proposed"]
+        findings.append({"severity": "info", "message": f"{len(draft_nodes)} ADR(s) still in draft/proposed",
+                         "nodes": [n.id for n in draft_nodes]})
+    if dangling:
+        findings.append({"severity": "warn", "message": f"{len(dangling)} dangling reference(s) to missing nodes",
+                         "nodes": []})
+
+    # Per-component detail
+    # Build lookup: which specs belong to which component
+    comp_specs: Dict[str, List[str]] = {}
+    for e in g.edges:
+        if e.type == "belongs_to":
+            comp_specs.setdefault(e.dst, []).append(e.src)
+
+    # Build lookup: which ADRs are linked to specs (via decided_by)
+    spec_adrs: Dict[str, List[str]] = {}
+    for e in g.edges:
+        if e.type == "decided_by":
+            src_node = g.nodes.get(e.src)
+            dst_node = g.nodes.get(e.dst)
+            if src_node and dst_node:
+                # ADR --decided_by--> SPEC or SPEC --decided_by--> ADR
+                if src_node.type == "adr" and dst_node.type == "spec":
+                    spec_adrs.setdefault(e.dst, []).append(e.src)
+                elif src_node.type == "spec" and dst_node.type == "adr":
+                    spec_adrs.setdefault(e.src, []).append(e.dst)
+
+    comp_details = []
+    for c in components:
+        has_spec = c.id in comps_with_spec
+        my_specs = comp_specs.get(c.id, [])
+        adr_ids = set()
+        for sid in my_specs:
+            adr_ids.update(spec_adrs.get(sid, []))
+        comp_gates = [e.dst for e in g.edges if e.type == "gated_by" and e.src == c.id]
+        level = "green" if has_spec and adr_ids else ("yellow" if has_spec or adr_ids else "red")
+        comp_details.append({"id": c.id, "title": c.title, "has_spec": has_spec,
+                             "adr_count": len(adr_ids), "gate_count": len(comp_gates), "level": level})
+
+    # Weighted score (matches viewer logic)
+    score = 0.0
+    max_score = 0.0
+
+    # Component coverage (40%)
     if components:
         score += (len(comps_with_spec) / len(components)) * 40
-        weight += 40
+        max_score += 40
+
+    # ADR maturity (30%)
     if adrs:
-        score += (accepted_adrs / len(adrs)) * 30
-        weight += 30
+        score += (len(adr_statuses["accepted"]) / len(adrs)) * 30
+        max_score += 30
+
+    # Spec quality — acceptance criteria (20%)
     if specs:
-        score += 20  # Simplified: assume specs exist = 20 points
-        weight += 20
-    score += 10  # Base points
-    weight += 10
+        score += (len(specs_with_ac) / len(specs)) * 20
+        max_score += 20
 
-    pct = round((score / weight) * 100) if weight else 0
+    # No dangling refs (10%)
+    if g.edges:
+        clean = len(g.edges) - len(dangling)
+        score += (clean / len(g.edges)) * 10
+        max_score += 10
 
-    # Color
+    pct = round((score / max_score) * 100) if max_score else 0
+
+    return {
+        "score": pct,
+        "metrics": {
+            "components_with_spec": {"value": len(comps_with_spec), "total": len(components),
+                                     "pct": round(len(comps_with_spec) / len(components) * 100) if components else 0},
+            "specs_with_acceptance": {"value": len(specs_with_ac), "total": len(specs),
+                                     "pct": round(len(specs_with_ac) / len(specs) * 100) if specs else 0},
+            "adrs_with_status": {"value": adrs_with_status, "total": len(adrs),
+                                 "pct": round(adrs_with_status / len(adrs) * 100) if adrs else 0},
+            "adrs_accepted": {"value": len(adr_statuses["accepted"]), "total": len(adrs),
+                              "pct": round(len(adr_statuses["accepted"]) / len(adrs) * 100) if adrs else 0},
+        },
+        "stats": {"nodes": len(g.nodes), "edges": len(g.edges), "components": len(components),
+                  "specs": len(specs), "adrs": len(adrs), "gates": len(gates)},
+        "components": comp_details,
+        "findings": findings,
+    }
+
+
+def _coverage_color(pct: int) -> str:
     if pct >= 80:
-        color = "#04b372"
+        return "#04b372"
     elif pct >= 60:
-        color = "#458ae2"
+        return "#458ae2"
     elif pct >= 40:
-        color = "#f2a633"
+        return "#f2a633"
+    return "#e7349c"
+
+
+def _coverage_label(pct: int) -> str:
+    if pct >= 80:
+        return "excellent"
+    elif pct >= 60:
+        return "good"
+    elif pct >= 40:
+        return "fair"
+    return "needs work"
+
+
+def cmd_coverage(args) -> int:
+    """Output intent coverage report."""
+    repo = Path(args.repo).resolve()
+    g = build_graph(repo)
+    cov = _compute_coverage(repo, g)
+
+    if getattr(args, "json", False):
+        print(json.dumps(cov, indent=2))
     else:
-        color = "#e7349c"
+        pct = cov["score"]
+        label = _coverage_label(pct)
+        s = cov["stats"]
+        m = cov["metrics"]
+
+        print(f"\n  Intent Coverage: {pct}% ({label})")
+        print(f"  {'=' * 40}")
+        print(f"  Graph: {s['nodes']} nodes, {s['edges']} edges\n")
+        print(f"  Components with spec:    {m['components_with_spec']['value']}/{m['components_with_spec']['total']} ({m['components_with_spec']['pct']}%)")
+        print(f"  Specs with acceptance:   {m['specs_with_acceptance']['value']}/{m['specs_with_acceptance']['total']} ({m['specs_with_acceptance']['pct']}%)")
+        print(f"  ADRs with status:        {m['adrs_with_status']['value']}/{m['adrs_with_status']['total']} ({m['adrs_with_status']['pct']}%)")
+        print(f"  ADRs accepted:           {m['adrs_accepted']['value']}/{m['adrs_accepted']['total']} ({m['adrs_accepted']['pct']}%)")
+
+        if cov["components"]:
+            print(f"\n  Components:")
+            for c in cov["components"]:
+                icon = {"green": "+", "yellow": "~", "red": "-"}[c["level"]]
+                spec_mark = "spec" if c["has_spec"] else "no spec"
+                print(f"    [{icon}] {c['id']}: {spec_mark}, {c['adr_count']} ADR(s), {c['gate_count']} gate(s)")
+
+        if cov["findings"]:
+            print(f"\n  Findings:")
+            for f in cov["findings"]:
+                icon = "!" if f["severity"] == "warn" else "i"
+                print(f"    [{icon}] {f['message']}")
+
+        print()
+
+    # Write coverage.json
+    out_dir = repo / ".intent" / "index"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "coverage.json").write_text(json.dumps(cov, indent=2), encoding="utf-8")
+
+    return 0
+
+
+def cmd_badge(args) -> int:
+    """Generate an intent coverage badge SVG."""
+    repo = Path(args.repo).resolve()
+    g = build_graph(repo)
+    cov = _compute_coverage(repo, g)
+    pct = cov["score"]
+    color = _coverage_color(pct)
 
     label = "intent coverage"
     value = f"{pct}%"
@@ -3979,6 +4157,10 @@ def main() -> int:
     sp = sub.add_parser("export", help="Generate self-contained HTML snapshot of the viewer")
     sp.add_argument("--output", "-o", default=None, help="Output path (default: .intent/export.html)")
     sp.set_defaults(fn=cmd_export)
+
+    sp = sub.add_parser("coverage", help="Show intent coverage report with health score")
+    sp.add_argument("--json", action="store_true", default=False, help="Output results as JSON")
+    sp.set_defaults(fn=cmd_coverage)
 
     sp = sub.add_parser("badge", help="Generate intent coverage badge SVG")
     sp.add_argument("--output", "-o", default=None, help="Output path (default: .intent/badge.svg)")
