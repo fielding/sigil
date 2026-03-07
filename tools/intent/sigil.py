@@ -22,6 +22,12 @@ try:
 except Exception:
     yaml = None  # type: ignore
 
+try:
+    from importlib.metadata import version as _pkg_version
+    __version__ = _pkg_version("sigil-cli")
+except Exception:
+    __version__ = "0.1.0"
+
 
 # -----------------------------
 # Models
@@ -4109,6 +4115,7 @@ def cmd_ci(args) -> int:
 
 def main() -> int:
     ap = argparse.ArgumentParser(prog="sigil", description="Sigil — intent-first engineering CLI")
+    ap.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     ap.add_argument("--repo", default=".", help="Repo root (default: cwd)")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
