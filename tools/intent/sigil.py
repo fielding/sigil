@@ -1783,16 +1783,37 @@ def _run_gate_checks(repo: Path, g: Graph) -> list:
     return results
 
 
-def cmd_check(args) -> int:
-    """Run gate checks against the intent graph."""
-    repo = Path(args.repo).resolve()
+def _snapshot_mtimes(repo: Path) -> Dict[str, float]:
+    """Collect mtime of all intent-related files for change detection."""
+    watch_dirs = ["components", "intent", "interfaces", "gates", "templates"]
+    mtimes: Dict[str, float] = {}
+    for d in watch_dirs:
+        dp = repo / d
+        if dp.is_dir():
+            for f in dp.rglob("*"):
+                if f.is_file():
+                    try:
+                        mtimes[str(f)] = f.stat().st_mtime
+                    except OSError:
+                        pass
+    # Also watch .intent/config.yaml
+    cfg = repo / ".intent" / "config.yaml"
+    if cfg.is_file():
+        try:
+            mtimes[str(cfg)] = cfg.stat().st_mtime
+        except OSError:
+            pass
+    return mtimes
+
+
+def _run_check_once(repo: Path, use_json: bool) -> int:
+    """Run gate checks once and print results. Returns exit code."""
     g = build_graph(repo)
     gates_dir = repo / "gates"
     if not gates_dir.is_dir():
         print("No gates/ directory found.")
         return 0
 
-    use_json = getattr(args, "json", False)
     results = _run_gate_checks(repo, g)
 
     if use_json:
@@ -1836,6 +1857,43 @@ def cmd_check(args) -> int:
     (out_dir / "gates.json").write_text(json.dumps(results, indent=2), encoding="utf-8")
 
     return 1 if total_fail > 0 else 0
+
+
+def cmd_check(args) -> int:
+    """Run gate checks against the intent graph."""
+    repo = Path(args.repo).resolve()
+    use_json = getattr(args, "json", False)
+    watch = getattr(args, "watch", False)
+
+    if not watch:
+        return _run_check_once(repo, use_json)
+
+    # Watch mode: poll for changes and re-run
+    import time as _time
+
+    interval = getattr(args, "interval", 2.0)
+    print(f"  Watching intent files for changes (poll every {interval}s). Press Ctrl+C to stop.\n")
+
+    prev_mtimes = _snapshot_mtimes(repo)
+    last_exit = _run_check_once(repo, use_json)
+
+    try:
+        while True:
+            _time.sleep(interval)
+            cur_mtimes = _snapshot_mtimes(repo)
+            if cur_mtimes != prev_mtimes:
+                changed = set(cur_mtimes.keys()) ^ set(prev_mtimes.keys())
+                for k in set(cur_mtimes.keys()) & set(prev_mtimes.keys()):
+                    if cur_mtimes[k] != prev_mtimes[k]:
+                        changed.add(k)
+                ts = _time.strftime("%H:%M:%S")
+                print(f"\n  [{ts}] Change detected in {len(changed)} file(s). Re-running checks...\n")
+                prev_mtimes = cur_mtimes
+                last_exit = _run_check_once(repo, use_json)
+    except KeyboardInterrupt:
+        print("\n  Watch stopped.")
+
+    return last_exit
 
 
 def cmd_drift(args) -> int:
@@ -4234,6 +4292,8 @@ def main() -> int:
 
     sp = sub.add_parser("check", help="Run gate enforcement checks against the intent graph")
     sp.add_argument("--json", action="store_true", default=False, help="Output results as JSON")
+    sp.add_argument("--watch", action="store_true", default=False, help="Watch intent files and re-run checks on change")
+    sp.add_argument("--interval", type=float, default=2.0, help="Poll interval in seconds for --watch (default: 2)")
     sp.set_defaults(fn=cmd_check)
 
     sp = sub.add_parser("export", help="Generate self-contained HTML snapshot of the viewer")
