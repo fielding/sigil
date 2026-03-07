@@ -1044,27 +1044,22 @@ def cmd_diff(args) -> int:
 def cmd_new(args) -> int:
     repo = Path(args.repo).resolve()
     node_type = args.type
-    component = args.component
+    name = getattr(args, "name", None) or getattr(args, "component", None) or ""
     title = args.title
 
     templates_dir = repo / "templates"
     config_path = repo / ".intent" / "config.yaml"
 
-    # Read config for next ID
-    next_num = 1
-    if config_path.exists() and yaml:
-        cfg = load_yaml(config_path)
-        counters = cfg.get("id_counters", {})
-        prefix = node_type.upper()
-        next_num = counters.get(prefix, 0) + 1
-
     type_to_template = {
         "spec": "SPEC.md",
         "adr": "ADR.md",
+        "component": "COMPONENT.yaml",
+        "gate": "GATE.yaml",
+        "interface": "INTERFACE.md",
     }
     template_file = type_to_template.get(node_type)
     if not template_file:
-        print(f"Unknown type: {node_type}. Supported: spec, adr")
+        print(f"Unknown type: {node_type}. Supported: {', '.join(type_to_template)}")
         return 1
 
     template_path = templates_dir / template_file
@@ -1072,26 +1067,92 @@ def cmd_new(args) -> int:
         print(f"Template not found: {template_path}")
         return 1
 
-    prefix = node_type.upper()
-    node_id = f"{prefix}-{next_num:04d}"
-    slug = title.lower().replace(" ", "-").replace("/", "-")
-    filename = f"{node_id}-{slug}.md"
-
-    subdir_map = {"spec": "specs", "adr": "adrs"}
-    subdir = subdir_map.get(node_type, node_type + "s")
-    dest_dir = repo / "intent" / component / subdir
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    dest = dest_dir / filename
-
     content = read_text(template_path)
-    content = content.replace(f"{prefix}-0000", node_id)
-    content = content.replace("<Title>", title)
-    content = content.replace("<Decision>", title)
-    content = content.replace("<component>", component)
+
+    if node_type == "component":
+        # sigil new component <slug> [<display-name>]
+        slug = name
+        display_name = title or slug.replace("-", " ").title()
+        comp_id = f"COMP-{slug}"
+        dest_dir = repo / "components"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        dest = dest_dir / f"{slug}.yaml"
+        if dest.exists():
+            print(f"Component already exists: {dest.relative_to(repo)}")
+            return 1
+        content = content.replace("COMP-<name>", comp_id)
+        content = content.replace("<Component Name>", display_name)
+        content = content.replace("<service-path>", f"services/{slug}")
+        dest.write_text(content, encoding="utf-8")
+        print(f"Created {dest.relative_to(repo)}")
+        print(f"  ID: {comp_id}")
+        return 0
+
+    if node_type == "interface":
+        # sigil new interface <ID> <title>
+        iface_id = name.upper()
+        if not title:
+            print("Usage: sigil new interface <ID> <title>")
+            print("  Example: sigil new interface API-SEARCH-V1 'Search API'")
+            return 1
+        dest_dir = repo / "interfaces" / iface_id
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        dest = dest_dir / "README.md"
+        if dest.exists():
+            print(f"Interface already exists: {dest.relative_to(repo)}")
+            return 1
+        content = content.replace("<API-NAME-V1|EVT-NAME-V1|SCHEMA-NAME-V1>", iface_id)
+        content = content.replace("<Interface Name>", title)
+        dest.write_text(content, encoding="utf-8")
+        print(f"Created {dest.relative_to(repo)}")
+        print(f"  ID: {iface_id}")
+        return 0
+
+    # For gate, spec, adr — use auto-incrementing IDs
+    prefix = node_type.upper()
+    next_num = 1
+    if config_path.exists() and yaml:
+        cfg = load_yaml(config_path)
+        counters = cfg.get("id_counters", {})
+        next_num = counters.get(prefix, 0) + 1
+
+    node_id = f"{prefix}-{next_num:04d}"
+
+    if node_type == "gate":
+        # sigil new gate <title> [--applies-to NODE-ID]
+        gate_title = name if not title else f"{name} {title}"
+        slug = gate_title.lower().replace(" ", "-").replace("/", "-")
+        dest_dir = repo / "gates"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        dest = dest_dir / f"{node_id}-{slug}.yaml"
+        content = content.replace("GATE-0000", node_id)
+        content = content.replace("<What this gate prevents>", gate_title)
+        applies_to = getattr(args, "applies_to", None)
+        if applies_to:
+            nodes_yaml = "\n".join(f"  - node: {n.strip()}" for n in applies_to.split(","))
+            content = content.replace("  - node: <NODE-ID>", nodes_yaml)
+        dest.write_text(content, encoding="utf-8")
+    else:
+        # spec or adr — component is required
+        component = name
+        if not title:
+            print(f"Usage: sigil new {node_type} <component> <title>")
+            return 1
+        slug = title.lower().replace(" ", "-").replace("/", "-")
+        filename = f"{node_id}-{slug}.md"
+        subdir_map = {"spec": "specs", "adr": "adrs"}
+        subdir = subdir_map.get(node_type, node_type + "s")
+        dest_dir = repo / "intent" / component / subdir
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        dest = dest_dir / filename
+        content = content.replace(f"{prefix}-0000", node_id)
+        content = content.replace("<Title>", title)
+        content = content.replace("<Decision>", title)
+        content = content.replace("<component>", component)
 
     dest.write_text(content, encoding="utf-8")
 
-    # Persist the updated counter so the next `sigil new` gets a fresh ID
+    # Persist the updated counter
     if yaml and config_path.exists():
         cfg = load_yaml(config_path)
         counters = cfg.get("id_counters", {})
@@ -4131,9 +4192,10 @@ def main() -> int:
     sp.set_defaults(fn=cmd_diff)
 
     sp = sub.add_parser("new", help="Create a new intent document from template")
-    sp.add_argument("type", choices=["spec", "adr"], help="Document type")
-    sp.add_argument("component", help="Component slug")
-    sp.add_argument("title", help="Document title")
+    sp.add_argument("type", choices=["spec", "adr", "component", "gate", "interface"], help="Document type")
+    sp.add_argument("name", help="Component slug (spec/adr), component slug (component), interface ID (interface), or title (gate)")
+    sp.add_argument("title", nargs="?", default=None, help="Document title (required for spec, adr, interface, gate)")
+    sp.add_argument("--applies-to", dest="applies_to", help="Node ID(s) the gate applies to (comma-separated, for gate type)")
     sp.set_defaults(fn=cmd_new)
 
     sp = sub.add_parser("lint", help="Lint intent documents")
