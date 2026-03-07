@@ -377,12 +377,24 @@ def write_graph_artifacts(repo_root: Path, g: Graph) -> None:
     }
     (out_dir / "graph.json").write_text(json.dumps(graph_json, indent=2), encoding="utf-8")
 
-    search_json = {
-        "nodes": [
-            {"id": n.id, "type": n.type, "title": n.title, "path": n.path, "aliases": [n.title]}
-            for n in g.nodes.values()
-        ]
-    }
+    search_nodes_list = []
+    for n in g.nodes.values():
+        title_tokens = _tokenize(n.title)
+        id_tokens = _tokenize(n.id)
+        try:
+            full_text = read_text(repo_root / n.path)
+        except Exception:
+            full_text = ""
+        _, body = parse_front_matter(full_text)
+        body_tokens = _tokenize(body)
+        search_nodes_list.append({
+            "id": n.id, "type": n.type, "title": n.title, "path": n.path,
+            "aliases": [n.title],
+            "title_tokens": title_tokens,
+            "id_tokens": id_tokens,
+            "body_tokens": body_tokens[:200],  # cap for index size
+        })
+    search_json = {"nodes": search_nodes_list}
     (out_dir / "search.json").write_text(json.dumps(search_json, indent=2), encoding="utf-8")
 
     # Generate review.json for viewer Review mode
@@ -660,23 +672,113 @@ def _tokenize(text: str) -> List[str]:
             if t.lower() not in _STOP_WORDS and len(t) > 1]
 
 
-def _score_node(query_tokens: List[str], body_tokens: List[str], title_tokens: List[str]) -> float:
-    """TF-based scoring with title boost (3x)."""
+def _fuzzy_match(token: str, candidates: List[str], threshold: float = 0.75) -> float:
+    """Return best fuzzy match ratio for token against candidate list."""
+    from difflib import SequenceMatcher
+    best = 0.0
+    for c in candidates:
+        if token == c:
+            return 1.0
+        if abs(len(token) - len(c)) > max(len(token), len(c)) * 0.4:
+            continue
+        ratio = SequenceMatcher(None, token, c).ratio()
+        if ratio > best:
+            best = ratio
+    return best if best >= threshold else 0.0
+
+
+def _parse_sections(body: str) -> Dict[str, str]:
+    """Split markdown body into named sections by ## headings."""
+    sections: Dict[str, str] = {}
+    current_name = "_preamble"
+    current_lines: List[str] = []
+    for line in body.splitlines():
+        if line.startswith("## "):
+            if current_lines:
+                sections[current_name] = "\n".join(current_lines)
+            current_name = line[3:].strip().lower()
+            current_lines = []
+        else:
+            current_lines.append(line)
+    if current_lines:
+        sections[current_name] = "\n".join(current_lines)
+    return sections
+
+
+# Section weights for ranking
+_SECTION_WEIGHTS = {
+    "context": 2.0, "intent": 2.0, "decision": 1.5, "design": 1.5,
+    "goals": 1.5, "non-goals": 1.0, "consequences": 1.0, "alternatives": 1.0,
+    "acceptance criteria": 1.0, "links": 0.3, "_preamble": 0.5,
+}
+
+
+def _score_node(query_tokens: List[str], body_tokens: List[str], title_tokens: List[str],
+                nid: str = "", sections: Optional[Dict[str, str]] = None) -> float:
+    """Section-aware scoring with fuzzy matching, title/id boost, and AND semantics."""
     if not query_tokens:
         return 0.0
-    body_counter = collections.Counter(body_tokens)
-    title_set = set(title_tokens)
-    total_body = max(len(body_tokens), 1)
-    score = 0.0
+
+    # Check AND semantics: all query tokens must match somewhere (exact or fuzzy)
+    all_searchable = set(title_tokens + body_tokens + _tokenize(nid))
+    matched_tokens = []
     for qt in query_tokens:
-        tf = body_counter.get(qt, 0) / total_body
-        title_bonus = 3.0 if qt in title_set else 0.0
-        score += tf + title_bonus
+        if qt in all_searchable:
+            matched_tokens.append(qt)
+        elif _fuzzy_match(qt, list(all_searchable)) > 0:
+            matched_tokens.append(qt)
+
+    if len(matched_tokens) < len(query_tokens):
+        return 0.0  # AND: all tokens must match
+
+    score = 0.0
+    id_tokens = set(_tokenize(nid))
+
+    # ID match boost (5x)
+    for qt in query_tokens:
+        if qt in id_tokens:
+            score += 5.0
+        elif _fuzzy_match(qt, list(id_tokens)) > 0:
+            score += 3.0
+
+    # Title match boost (3x)
+    title_set = set(title_tokens)
+    for qt in query_tokens:
+        if qt in title_set:
+            score += 3.0
+        elif _fuzzy_match(qt, list(title_set)) > 0:
+            score += 1.5
+
+    # Section-aware body scoring
+    if sections:
+        for sec_name, sec_text in sections.items():
+            sec_tokens = _tokenize(sec_text)
+            if not sec_tokens:
+                continue
+            weight = _SECTION_WEIGHTS.get(sec_name, 0.8)
+            sec_counter = collections.Counter(sec_tokens)
+            total = max(len(sec_tokens), 1)
+            for qt in query_tokens:
+                tf = sec_counter.get(qt, 0) / total
+                if tf > 0:
+                    score += tf * weight
+                else:
+                    fuzzy = _fuzzy_match(qt, list(sec_counter.keys()))
+                    if fuzzy > 0:
+                        score += (fuzzy * 0.5) * weight / total
+    else:
+        # Fallback: flat body scoring
+        body_counter = collections.Counter(body_tokens)
+        total_body = max(len(body_tokens), 1)
+        for qt in query_tokens:
+            tf = body_counter.get(qt, 0) / total_body
+            score += tf
+
     return score
 
 
 def _find_excerpt(body: str, query_tokens: List[str], max_chars: int = 300) -> str:
-    """Return the lines most relevant to query_tokens."""
+    """Return the 2-3 lines most relevant to query_tokens with term highlighting."""
     lines = body.splitlines()
     if not lines:
         return ""
@@ -686,14 +788,29 @@ def _find_excerpt(body: str, query_tokens: List[str], max_chars: int = 300) -> s
     for i, line in enumerate(lines):
         tokens = set(re.findall(r"[A-Za-z0-9]+", line.lower()))
         s = len(tokens & query_set)
+        # Also count fuzzy matches
+        if s == 0:
+            for qt in query_set:
+                if _fuzzy_match(qt, list(tokens)) > 0:
+                    s += 0.5
         if s > best_score:
             best_score = s
             best_idx = i
-    if best_score == 0:
-        return " ".join(lines[:5])[:max_chars]
+    if best_score <= 0:
+        return " ".join(lines[:3])[:max_chars]
     start = max(0, best_idx - 1)
-    end = min(len(lines), best_idx + 4)
-    excerpt = "\n".join(lines[start:end]).strip()
+    end = min(len(lines), best_idx + 3)
+    excerpt_lines = lines[start:end]
+
+    # Highlight matching terms with bold markers
+    highlighted = []
+    for line in excerpt_lines:
+        for qt in query_tokens:
+            pattern = re.compile(re.escape(qt), re.IGNORECASE)
+            line = pattern.sub(lambda m: f"\033[1m{m.group()}\033[0m", line)
+        highlighted.append(line)
+
+    excerpt = "\n".join(highlighted).strip()
     if len(excerpt) > max_chars:
         excerpt = excerpt[:max_chars].rsplit(" ", 1)[0] + "..."
     return excerpt
@@ -714,7 +831,8 @@ def search_nodes(query: str, graph: Graph, repo_root: Path,
         _, body = parse_front_matter(full_text)
         body_tokens = _tokenize(body)
         title_tokens = _tokenize(node.title)
-        score = _score_node(query_tokens, body_tokens, title_tokens)
+        sections = _parse_sections(body)
+        score = _score_node(query_tokens, body_tokens, title_tokens, nid=nid, sections=sections)
         if score > 0:
             excerpt = _find_excerpt(body, query_tokens)
             results.append((nid, score, excerpt))
@@ -726,6 +844,7 @@ def cmd_ask(args) -> int:
     repo = Path(args.repo).resolve()
     question = args.question
     top_n = getattr(args, "top", 5)
+    output_json = getattr(args, "json", False)
 
     g = build_graph(repo)
     if not g.nodes:
@@ -734,17 +853,50 @@ def cmd_ask(args) -> int:
 
     results = search_nodes(question, g, repo, top_n=top_n)
     if not results:
-        print("No matching nodes found.")
+        if output_json:
+            print(json.dumps({"query": question, "results": []}))
+        else:
+            print("No matching nodes found.")
         return 0
 
-    print(f"Query: {question}\n")
+    if output_json:
+        json_results = []
+        for nid, score, excerpt in results:
+            node = g.nodes[nid]
+            # Strip ANSI codes from excerpt for JSON
+            clean_excerpt = re.sub(r'\033\[[0-9;]*m', '', excerpt)
+            json_results.append({
+                "id": nid,
+                "type": node.type,
+                "title": node.title,
+                "path": node.path,
+                "score": round(score, 3),
+                "excerpt": clean_excerpt,
+            })
+        print(json.dumps({"query": question, "results": json_results}, indent=2))
+        return 0
+
+    # Terminal output with type badges and scores
+    type_badges = {
+        "spec": "\033[34mSPEC\033[0m",
+        "adr": "\033[33mADR\033[0m",
+        "component": "\033[32mCOMP\033[0m",
+        "gate": "\033[35mGATE\033[0m",
+        "interface": "\033[36mIFACE\033[0m",
+        "risk": "\033[31mRISK\033[0m",
+        "rollout": "\033[33mROLL\033[0m",
+    }
+
+    print(f"\n  Query: {question}")
+    print(f"  {len(results)} result(s)\n")
     for nid, score, excerpt in results:
         node = g.nodes[nid]
-        print(f"[{nid}] {node.title}  ({node.type})")
-        print(f"  path: {node.path}")
+        badge = type_badges.get(node.type, node.type.upper())
+        print(f"  [{badge}] \033[1m{nid}\033[0m  {node.title}  (score: {score:.2f})")
+        print(f"    {node.path}")
         if excerpt:
             for line in excerpt.splitlines():
-                print(f"  | {line}")
+                print(f"    | {line}")
         print()
     return 0
 
@@ -3673,6 +3825,7 @@ def main() -> int:
     sp = sub.add_parser("ask", help="Search intent docs with a natural-language question")
     sp.add_argument("question", help="Question to search for")
     sp.add_argument("--top", type=int, default=5, help="Number of results to return (default: 5)")
+    sp.add_argument("--json", action="store_true", default=False, help="Output results as JSON")
     sp.set_defaults(fn=cmd_ask)
 
     sp = sub.add_parser("suggest", help="Show which intent docs govern a file")

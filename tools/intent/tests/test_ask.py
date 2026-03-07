@@ -198,3 +198,151 @@ def test_cmd_ask_empty_repo(tmp_path, capsys):
     assert rc == 0
     captured = capsys.readouterr()
     assert "No nodes" in captured.out
+
+
+# ---------------------------------------------------------------------------
+# Fuzzy matching
+# ---------------------------------------------------------------------------
+
+def test_fuzzy_match_exact():
+    assert cli._fuzzy_match("postgresql", ["postgresql", "schema"]) == 1.0
+
+
+def test_fuzzy_match_typo():
+    score = cli._fuzzy_match("postgrsql", ["postgresql", "schema"])
+    assert score > 0.0  # should still match despite typo
+
+
+def test_fuzzy_match_no_match():
+    score = cli._fuzzy_match("xyzzy", ["postgresql", "schema"])
+    assert score == 0.0
+
+
+def test_fuzzy_match_partial():
+    score = cli._fuzzy_match("postgres", ["postgresql", "schema"])
+    assert score > 0.0  # partial match
+
+
+# ---------------------------------------------------------------------------
+# Section-aware scoring
+# ---------------------------------------------------------------------------
+
+def test_section_aware_scoring(tmp_path):
+    g, repo = _make_graph_with_adr(tmp_path)
+    results = cli.search_nodes("PostgreSQL jsonb", g, repo)
+    assert results
+    # ADR mentions PostgreSQL in Context and Decision sections (high-value)
+    adr_result = [r for r in results if r[0] == "ADR-0001"]
+    assert adr_result
+
+
+def test_id_match_boost(tmp_path):
+    g, repo = _make_graph_with_adr(tmp_path)
+    results = cli.search_nodes("ADR-0001", g, repo)
+    assert results
+    assert results[0][0] == "ADR-0001"  # ID match should be top
+
+
+def test_parse_sections():
+    body = "## Context\nSome context.\n\n## Decision\nWe decided.\n\n## Links\nStuff."
+    sections = cli._parse_sections(body)
+    assert "context" in sections
+    assert "decision" in sections
+    assert "links" in sections
+    assert "Some context." in sections["context"]
+
+
+# ---------------------------------------------------------------------------
+# Multi-word AND semantics
+# ---------------------------------------------------------------------------
+
+def test_multi_word_and_both_present(tmp_path):
+    g, repo = _make_graph_with_adr(tmp_path)
+    # Both "postgresql" and "jsonb" appear in the ADR
+    results = cli.search_nodes("postgresql jsonb", g, repo)
+    assert results
+    assert any(r[0] == "ADR-0001" for r in results)
+
+
+def test_multi_word_and_one_missing(tmp_path):
+    g, repo = _make_graph_with_adr(tmp_path)
+    # "postgresql" exists but "xyzzy" does not
+    results = cli.search_nodes("postgresql xyzzy", g, repo)
+    assert not any(r[0] == "ADR-0001" for r in results)
+
+
+# ---------------------------------------------------------------------------
+# Snippet highlighting
+# ---------------------------------------------------------------------------
+
+def test_excerpt_contains_bold_markers(tmp_path):
+    g, repo = _make_graph_with_adr(tmp_path)
+    results = cli.search_nodes("PostgreSQL", g, repo)
+    assert results
+    _, _, excerpt = results[0]
+    # Bold markers: \033[1m...\033[0m
+    assert "\033[1m" in excerpt
+
+
+# ---------------------------------------------------------------------------
+# JSON output
+# ---------------------------------------------------------------------------
+
+def test_cmd_ask_json_output(tmp_path, capsys):
+    (tmp_path / "intent" / "db" / "adrs").mkdir(parents=True)
+    adr = tmp_path / "intent" / "db" / "adrs" / "ADR-0001-db.md"
+    adr.write_text(
+        "---\nid: ADR-0001\nstatus: accepted\n---\n\n# DB Choice\n\n"
+        "## Context\nChose PostgreSQL for JSONB.\n\n## Decision\nUse PostgreSQL.\n\n"
+        "## Consequences\nAll services use pg.\n\n## Links\n",
+        encoding="utf-8",
+    )
+    import json
+    args = make_args(repo=str(tmp_path), question="PostgreSQL", top=5, json=True)
+    rc = cli.cmd_ask(args)
+    assert rc == 0
+    captured = capsys.readouterr()
+    data = json.loads(captured.out)
+    assert "query" in data
+    assert "results" in data
+    assert len(data["results"]) > 0
+    result = data["results"][0]
+    assert "id" in result
+    assert "score" in result
+    assert "excerpt" in result
+    # No ANSI codes in JSON excerpt
+    assert "\033[" not in result["excerpt"]
+
+
+def test_cmd_ask_json_no_results(tmp_path, capsys):
+    import json
+    (tmp_path / "intent" / "db" / "adrs").mkdir(parents=True)
+    adr = tmp_path / "intent" / "db" / "adrs" / "ADR-0001-db.md"
+    adr.write_text(
+        "---\nid: ADR-0001\nstatus: accepted\n---\n\n# DB Choice\n\n## Context\nChose PostgreSQL.\n\n## Links\n",
+        encoding="utf-8",
+    )
+    args = make_args(repo=str(tmp_path), question="xyzzy frobnicator", top=5, json=True)
+    rc = cli.cmd_ask(args)
+    assert rc == 0
+    captured = capsys.readouterr()
+    data = json.loads(captured.out)
+    assert data["results"] == []
+
+
+# ---------------------------------------------------------------------------
+# search.json enrichment
+# ---------------------------------------------------------------------------
+
+def test_search_json_has_tokens(tmp_path):
+    import json
+    g, repo = _make_graph_with_adr(tmp_path)
+    cli.write_graph_artifacts(repo, g)
+    search_path = repo / ".intent" / "index" / "search.json"
+    assert search_path.exists()
+    data = json.loads(search_path.read_text())
+    assert "nodes" in data
+    for node in data["nodes"]:
+        assert "title_tokens" in node
+        assert "id_tokens" in node
+        assert "body_tokens" in node
