@@ -2337,6 +2337,313 @@ def cmd_hook(args) -> int:
     return 1
 
 
+def cmd_pr(args) -> int:
+    """Analyze a GitHub PR for intent coverage and post a comment."""
+    import fnmatch as fnm
+
+    repo = Path(args.repo).resolve()
+    pr_num = getattr(args, "number", None)
+    dry_run = getattr(args, "dry_run", False)
+
+    # Detect PR context via gh CLI
+    try:
+        if pr_num:
+            pr_json = run_cmd(["gh", "pr", "view", str(pr_num), "--json",
+                               "number,title,headRefName,baseRefName,url,additions,deletions,changedFiles"],
+                              cwd=repo)
+        else:
+            pr_json = run_cmd(["gh", "pr", "view", "--json",
+                               "number,title,headRefName,baseRefName,url,additions,deletions,changedFiles"],
+                              cwd=repo)
+    except Exception as ex:
+        print(f"  Error: could not detect PR. Are you on a PR branch?\n  {ex}")
+        print(f"  Usage: sigil pr [number]  (or run from a branch with an open PR)")
+        return 1
+
+    pr = json.loads(pr_json)
+    pr_number = pr["number"]
+    pr_title = pr["title"]
+    base_ref = pr["baseRefName"]
+    head_ref = pr["headRefName"]
+    pr_url = pr["url"]
+
+    print(f"\n  Sigil PR Analysis")
+    print(f"  {'=' * 50}")
+    print(f"  PR #{pr_number}: {pr_title}")
+    print(f"  {base_ref} <- {head_ref}")
+    print()
+
+    # Build graph from current working tree
+    g = build_graph(repo)
+
+    # Get diff files from the PR
+    try:
+        diff_files = run_cmd(["gh", "pr", "diff", str(pr_number), "--name-only"], cwd=repo)
+    except Exception:
+        diff_files = run_cmd(["git", "-C", str(repo), "diff", "--name-only",
+                              f"origin/{base_ref}...HEAD"], cwd=repo)
+
+    # Load component path patterns
+    comp_paths: Dict[str, List[str]] = {}
+    comp_dir = repo / "components"
+    if comp_dir.is_dir():
+        for p in comp_dir.glob("*.yaml"):
+            data = load_yaml(p) if yaml else {}
+            cid = data.get("id") or f"COMP-{p.stem}"
+            paths = data.get("paths", [])
+            if isinstance(paths, list):
+                comp_paths[cid] = paths
+
+    # Classify files
+    skip_prefixes = [".intent/index/", ".git/", "templates/", ".pytest_cache/"]
+    intent_prefixes = ["components/", "intent/", "interfaces/", "gates/"]
+
+    intent_changes = []
+    code_changes = []
+
+    for line in diff_files.strip().split("\n"):
+        fpath = line.strip()
+        if not fpath:
+            continue
+        if any(fpath.startswith(sp) for sp in skip_prefixes):
+            continue
+        if any(fpath.startswith(ip) for ip in intent_prefixes):
+            intent_changes.append(fpath)
+        else:
+            code_changes.append(fpath)
+
+    # Map code files to components
+    covered: Dict[str, List[str]] = {}
+    uncovered: List[str] = []
+
+    for fpath in code_changes:
+        matched = False
+        for cid, patterns in comp_paths.items():
+            for pat in patterns:
+                if fnm.fnmatch(fpath, pat):
+                    covered.setdefault(cid, []).append(fpath)
+                    matched = True
+                    break
+            if matched:
+                break
+        if not matched:
+            uncovered.append(fpath)
+
+    # Component governance info
+    comp_governance: Dict[str, dict] = {}
+    for cid in covered:
+        specs = []
+        adrs = []
+        gates_list = []
+        for e in g.edges:
+            if e.dst == cid and e.type == "belongs_to":
+                node = g.nodes.get(e.src)
+                if node:
+                    if node.type == "spec":
+                        fm_raw = read_text(repo / node.path)
+                        fm, _ = parse_front_matter(fm_raw)
+                        specs.append({"id": e.src, "title": node.title, "status": fm.get("status", "?")})
+                    elif node.type == "adr":
+                        fm_raw = read_text(repo / node.path)
+                        fm, _ = parse_front_matter(fm_raw)
+                        adrs.append({"id": e.src, "title": node.title, "status": fm.get("status", "?")})
+            if e.type == "gated_by" and (e.src == cid or e.dst == cid):
+                gid = e.dst if e.src == cid else e.src
+                gnode = g.nodes.get(gid)
+                if gnode:
+                    gates_list.append({"id": gid, "title": gnode.title})
+        seen = set()
+        specs = [s for s in specs if s["id"] not in seen and not seen.add(s["id"])]
+        seen.clear()
+        adrs = [a for a in adrs if a["id"] not in seen and not seen.add(a["id"])]
+        seen.clear()
+        gates_list = [gl for gl in gates_list if gl["id"] not in seen and not seen.add(gl["id"])]
+        comp_governance[cid] = {"specs": specs, "adrs": adrs, "gates": gates_list}
+
+    # Run gate checks (capture output)
+    gate_results = []
+    gates_dir = repo / "gates"
+    if gates_dir.is_dir():
+        for p in sorted(gates_dir.glob("*.yaml")):
+            data = load_yaml(p) if yaml else {}
+            gid = data.get("id", p.stem)
+            status = data.get("status", "inactive")
+            if status != "active":
+                continue
+            docs = data.get("docs", {})
+            summary = docs.get("summary", gid)
+
+            enforced_by = data.get("enforced_by", {})
+            kind = enforced_by.get("kind", "")
+            checks = enforced_by.get("checks", [])
+            applies_to = data.get("applies_to", [])
+            target_nodes = set()
+            for item in applies_to:
+                if isinstance(item, dict):
+                    n = item.get("node")
+                    if n:
+                        target_nodes.add(n)
+                elif isinstance(item, str):
+                    target_nodes.add(item)
+
+            governed_nodes = set()
+            for nid in target_nodes:
+                governed_nodes.add(nid)
+                for e in g.edges:
+                    if e.dst == nid and e.type == "belongs_to":
+                        governed_nodes.add(e.src)
+
+            findings = []
+            if kind == "lint-rule":
+                for check in checks:
+                    if check == "all_specs_have_acceptance_criteria":
+                        for nid in governed_nodes:
+                            node = g.nodes.get(nid)
+                            if node and node.type == "spec":
+                                md = read_text(repo / node.path)
+                                if "## Acceptance Criteria" not in md:
+                                    findings.append(f"{nid}: missing acceptance criteria")
+                    elif check == "all_specs_have_status":
+                        for nid in governed_nodes:
+                            node = g.nodes.get(nid)
+                            if node and node.type == "spec":
+                                md = read_text(repo / node.path)
+                                fm, _ = parse_front_matter(md)
+                                if not fm.get("status"):
+                                    findings.append(f"{nid}: missing status")
+                    elif check == "all_adrs_have_status":
+                        for nid in governed_nodes:
+                            node = g.nodes.get(nid)
+                            if node and node.type == "adr":
+                                md = read_text(repo / node.path)
+                                fm, _ = parse_front_matter(md)
+                                if not fm.get("status"):
+                                    findings.append(f"{nid}: missing status")
+                    elif check == "no_dangling_references":
+                        all_ids = set(g.nodes.keys())
+                        for e in g.edges:
+                            if e.src in governed_nodes and e.dst not in all_ids:
+                                findings.append(f"{e.src}: dangling ref -> {e.dst}")
+
+            gate_results.append({
+                "id": gid,
+                "summary": summary,
+                "passed": len(findings) == 0,
+                "findings": findings,
+            })
+
+    # Compute stats
+    total_code = len(code_changes)
+    covered_count = sum(len(v) for v in covered.values())
+    coverage_pct = round(covered_count / max(total_code, 1) * 100) if total_code > 0 else 100
+
+    # Build markdown comment
+    if coverage_pct >= 80:
+        cov_emoji = "🟢"
+    elif coverage_pct >= 50:
+        cov_emoji = "🟡"
+    else:
+        cov_emoji = "🔴"
+
+    all_gates_pass = all(gr["passed"] for gr in gate_results)
+    gate_emoji = "🟢" if all_gates_pass else "🔴"
+
+    md_lines = []
+    md_lines.append("## Sigil Intent Analysis")
+    md_lines.append("")
+    md_lines.append(f"| Metric | Value |")
+    md_lines.append(f"|--------|-------|")
+    md_lines.append(f"| Intent Coverage | {cov_emoji} **{coverage_pct}%** ({covered_count}/{total_code} files) |")
+    md_lines.append(f"| Intent Docs Changed | {len(intent_changes)} |")
+    md_lines.append(f"| Graph Nodes | {len(g.nodes)} |")
+    md_lines.append(f"| Graph Edges | {len(g.edges)} |")
+    md_lines.append(f"| Gates | {gate_emoji} {sum(1 for gr in gate_results if gr['passed'])}/{len(gate_results)} passing |")
+    md_lines.append("")
+
+    if intent_changes:
+        md_lines.append("<details><summary>Intent Documents Changed</summary>")
+        md_lines.append("")
+        for fp in intent_changes:
+            md_lines.append(f"- `{fp}`")
+        md_lines.append("")
+        md_lines.append("</details>")
+        md_lines.append("")
+
+    if covered:
+        md_lines.append("<details><summary>Governed Code Changes</summary>")
+        md_lines.append("")
+        for cid, files in sorted(covered.items()):
+            comp = g.nodes.get(cid)
+            comp_name = comp.title if comp else cid
+            gov = comp_governance.get(cid, {})
+            md_lines.append(f"**{comp_name}** (`{cid}`)")
+            for fp in files:
+                md_lines.append(f"- `{fp}`")
+            gov_parts = []
+            if gov.get("specs"):
+                gov_parts.append("Specs: " + ", ".join(f"`{s['id']}` [{s['status']}]" for s in gov["specs"]))
+            if gov.get("adrs"):
+                gov_parts.append("ADRs: " + ", ".join(f"`{a['id']}` [{a['status']}]" for a in gov["adrs"]))
+            if gov.get("gates"):
+                gov_parts.append("Gates: " + ", ".join(f"`{gl['id']}`" for gl in gov["gates"]))
+            if gov_parts:
+                md_lines.append("> " + " | ".join(gov_parts))
+            md_lines.append("")
+        md_lines.append("</details>")
+        md_lines.append("")
+
+    if uncovered:
+        md_lines.append("<details><summary>⚠️ Ungoverned Changes ({} files)</summary>".format(len(uncovered)))
+        md_lines.append("")
+        md_lines.append("These files are not mapped to any component. Run `sigil suggest <path>` for recommendations.")
+        md_lines.append("")
+        for fp in uncovered:
+            md_lines.append(f"- `{fp}`")
+        md_lines.append("")
+        md_lines.append("</details>")
+        md_lines.append("")
+
+    if gate_results:
+        md_lines.append("<details><summary>Gate Results</summary>")
+        md_lines.append("")
+        for gr in gate_results:
+            status_mark = "✅" if gr["passed"] else "❌"
+            md_lines.append(f"- {status_mark} **{gr['id']}**: {gr['summary']}")
+            for finding in gr["findings"]:
+                md_lines.append(f"  - {finding}")
+        md_lines.append("")
+        md_lines.append("</details>")
+        md_lines.append("")
+
+    md_lines.append("---")
+    md_lines.append("*Generated by [Sigil](https://fielding.github.io/sigil/) — intent-first engineering*")
+
+    comment_body = "\n".join(md_lines)
+
+    # Print to terminal
+    print(f"  Coverage: {cov_emoji} {coverage_pct}%  |  Gates: {gate_emoji} {sum(1 for gr in gate_results if gr['passed'])}/{len(gate_results)}")
+    print()
+
+    if dry_run:
+        print("  --- DRY RUN (comment not posted) ---")
+        print()
+        print(comment_body)
+        return 0
+
+    # Post comment to PR
+    try:
+        run_cmd(["gh", "pr", "comment", str(pr_number), "--body", comment_body], cwd=repo)
+        print(f"  Comment posted to PR #{pr_number}")
+        print(f"  {pr_url}")
+    except Exception as ex:
+        print(f"  Failed to post comment: {ex}")
+        print()
+        print(comment_body)
+        return 1
+
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(prog="sigil", description="Sigil — intent-first engineering CLI")
     ap.add_argument("--repo", default=".", help="Repo root (default: cwd)")
@@ -2419,6 +2726,11 @@ def main() -> int:
     sp = sub.add_parser("hook", help="Install/uninstall Sigil git pre-commit hook")
     sp.add_argument("action", choices=["install", "uninstall", "status"], help="Action to perform")
     sp.set_defaults(fn=cmd_hook)
+
+    sp = sub.add_parser("pr", help="Analyze a GitHub PR for intent coverage and post a comment")
+    sp.add_argument("number", nargs="?", type=int, default=None, help="PR number (default: current branch PR)")
+    sp.add_argument("--dry-run", action="store_true", help="Print comment without posting")
+    sp.set_defaults(fn=cmd_pr)
 
     args = ap.parse_args()
     return args.fn(args)

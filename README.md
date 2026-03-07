@@ -4,6 +4,8 @@
 
 Sigil makes the *why* behind your code as navigable as the code itself. Specs, ADRs, gates, and component definitions live in your repo, versioned with your code, connected in a knowledge graph, and enforced in CI.
 
+**[Live Demo](https://fielding.github.io/sigil/)** — explore the Sigil intent graph in your browser, no install needed.
+
 ## Why
 
 Every team has intent scattered across Notion, Confluence, Slack threads, PR descriptions, and people's heads. When you need to know *why* a decision was made, you're left grepping through months of messages.
@@ -70,6 +72,8 @@ sigil serve      Dev server with live reload
 sigil init       Zero-to-working setup
 sigil fmt        Normalize intent doc formatting
 sigil bootstrap  Scan repo for missing component stubs
+sigil hook       Install/uninstall pre-commit hook
+sigil pr         Analyze GitHub PR and post intent coverage comment
 ```
 
 ## Repo Structure
@@ -95,9 +99,18 @@ Add to your GitHub Actions workflow:
 - run: python tools/intent/sigil.py lint
 - run: python tools/intent/sigil.py check
 - run: python tools/intent/sigil.py drift || true
+- run: python tools/intent/sigil.py pr ${{ github.event.pull_request.number }}
 ```
 
-PRs get an automatic intent report comment with node/edge counts, graph diff, and coverage stats.
+PRs get an automatic intent analysis comment with coverage percentage, governed/ungoverned changes, gate results, and links back to the intent graph.
+
+### Local PR analysis
+
+```bash
+sigil pr           # analyzes current branch's PR
+sigil pr 42        # analyzes PR #42
+sigil pr --dry-run # preview without posting
+```
 
 ## Node Types
 
