@@ -508,6 +508,7 @@
       <button class="view-btn" data-view="drift" onclick="switchView('drift')">Drift</button>
       <button class="view-btn" data-view="timeline" onclick="switchView('timeline')">Timeline</button>
       <button class="view-btn" data-view="matrix" onclick="switchView('matrix')">Matrix</button>
+      <button class="view-btn" data-view="review" onclick="switchView('review')">Review</button>
       <button id="new-btn" onclick="showNewModal()">+ New</button>
     </div>
     <div id="health-badge"></div>
@@ -908,6 +909,167 @@
           <span class="cov-sev cov-sev-ok">PASS</span>
           <span class="cov-finding-text">All code files are mapped to components with governing specs</span>
         </div>`;
+      }
+
+      area.innerHTML = html;
+    }
+
+    // ---- Review Dashboard ----
+
+    async function renderReviewDashboard() {
+      const area = document.getElementById("content-area");
+      document.getElementById("node-header").innerHTML = '<h2>Intent Review</h2><div><span class="pill pill-type">code review governance</span></div>';
+      document.getElementById("breadcrumb").innerHTML = '';
+      document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+
+      let review;
+      try {
+        const res = await fetch("../../.intent/index/review.json");
+        if (!res.ok) throw new Error();
+        review = await res.json();
+      } catch {
+        area.innerHTML = `<div class="md-body">
+          <p>No review data available. Run <code>sigil index</code> or <code>sigil serve</code> to generate.</p>
+        </div>`;
+        return;
+      }
+
+      const s = review.summary || {};
+      const pct = s.coverage_pct !== undefined ? s.coverage_pct : 100;
+      const covColor = pct >= 80 ? "var(--base0B)" : pct >= 50 ? "var(--base0A)" : "var(--base08)";
+      const covLabel = pct >= 80 ? "GOOD" : pct >= 50 ? "FAIR" : "LOW";
+
+      // Gate summary
+      const gates = review.gates || [];
+      const gatesPassed = gates.filter(g => g.passed).length;
+      const gatesTotal = gates.length;
+      const gatesColor = gatesTotal === 0 ? "var(--base04)" : gatesPassed === gatesTotal ? "var(--base0B)" : "var(--base08)";
+
+      let html = `
+        <div class="cov-grid">
+          <div class="cov-card">
+            <div class="cov-card-title">Intent Coverage</div>
+            <div class="cov-card-value" style="color:${covColor};font-size:36px">${pct}%</div>
+            <div style="font-size:11px;color:var(--base04);margin-top:4px">${covLabel} &mdash; ${s.covered_files || 0}/${s.code_changes || 0} files governed</div>
+          </div>
+          <div class="cov-card">
+            <div class="cov-card-title">Changes</div>
+            <div class="cov-card-value" style="color:var(--base06)">${s.total_changes || 0}</div>
+            <div style="font-size:11px;color:var(--base04);margin-top:4px">${s.intent_changes || 0} intent, ${s.code_changes || 0} code</div>
+          </div>
+          <div class="cov-card">
+            <div class="cov-card-title">Gates</div>
+            <div class="cov-card-value" style="color:${gatesColor}">${gatesPassed}/${gatesTotal}</div>
+            <div style="font-size:11px;color:var(--base04);margin-top:4px">${gatesPassed === gatesTotal ? 'all passing' : (gatesTotal - gatesPassed) + ' failing'}</div>
+          </div>
+          <div class="cov-card">
+            <div class="cov-card-title">Ungoverned</div>
+            <div class="cov-card-value" style="color:${(s.uncovered_files || 0) > 0 ? 'var(--base09)' : 'var(--base0B)'}">${s.uncovered_files || 0}</div>
+            <div style="font-size:11px;color:var(--base04);margin-top:4px">files without component mapping</div>
+          </div>
+        </div>
+      `;
+
+      // Intent document changes
+      const intentChanges = review.intent_changes || [];
+      if (intentChanges.length > 0) {
+        html += '<h3 style="color:var(--base06);font-size:14px;margin:16px 0 10px">Intent Document Changes</h3>';
+        const statusBadge = (s) => {
+          const colors = { A: "var(--base0B)", M: "var(--base0D)", D: "var(--base08)", R: "var(--base0E)" };
+          const labels = { A: "added", M: "modified", D: "deleted", R: "renamed" };
+          return `<span style="display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:600;background:${colors[s] || 'var(--base03)'};color:var(--base00);margin-right:6px">${(labels[s] || s).toUpperCase()}</span>`;
+        };
+        intentChanges.forEach(ic => {
+          const nodeId = ic.path.split("/").pop().replace(/\.md$/, "").replace(/\.yaml$/, "");
+          html += `<div style="margin:4px 0;font-size:12px">
+            ${statusBadge(ic.status)}
+            <code style="background:var(--base02);padding:1px 4px;border-radius:2px;font-size:11px">${esc(ic.path)}</code>
+          </div>`;
+        });
+      }
+
+      // Governed code changes by component
+      const covered = review.covered || {};
+      const governance = review.governance || {};
+      const coveredComps = Object.keys(covered);
+      if (coveredComps.length > 0) {
+        html += '<h3 style="color:var(--base06);font-size:14px;margin:16px 0 10px">Governed Code Changes</h3>';
+        coveredComps.forEach(cid => {
+          const files = covered[cid];
+          const gov = governance[cid] || {};
+          html += `<div style="margin:8px 0;padding:10px;background:var(--base02);border-radius:6px">`;
+          html += `<div style="font-weight:600;font-size:13px;margin-bottom:6px">
+            <span class="cov-link" onclick="switchView('graph');selectNodeById('${cid}')">${esc(cid)}</span>
+            <span style="color:var(--base04);font-weight:400;margin-left:8px">${files.length} file(s)</span>
+          </div>`;
+
+          // Governance badges
+          const govParts = [];
+          if (gov.specs && gov.specs.length) {
+            govParts.push(gov.specs.map(s =>
+              `<span class="cov-link" onclick="switchView('graph');selectNodeById('${s.id}')" style="font-size:11px">${esc(s.id)}</span>`
+            ).join(' '));
+          }
+          if (gov.adrs && gov.adrs.length) {
+            govParts.push(gov.adrs.map(a =>
+              `<span class="cov-link" onclick="switchView('graph');selectNodeById('${a.id}')" style="font-size:11px">${esc(a.id)}</span>`
+            ).join(' '));
+          }
+          if (gov.gates && gov.gates.length) {
+            govParts.push(gov.gates.map(g =>
+              `<span class="cov-link" onclick="switchView('graph');selectNodeById('${g.id}')" style="font-size:11px">${esc(g.id)}</span>`
+            ).join(' '));
+          }
+          if (govParts.length) {
+            html += `<div style="margin-bottom:6px;font-size:11px;color:var(--base04)">Governed by: ${govParts.join(' &middot; ')}</div>`;
+          }
+
+          files.forEach(f => {
+            const st = f.status || "M";
+            const stColors = { A: "var(--base0B)", M: "var(--base0D)", D: "var(--base08)" };
+            html += `<div style="margin:2px 0;font-size:11px;color:var(--base04)">
+              <span style="color:${stColors[st] || 'var(--base04)'};font-weight:600;width:12px;display:inline-block">${st}</span>
+              <code style="background:var(--base01);padding:1px 4px;border-radius:2px">${esc(f.path)}</code>
+            </div>`;
+          });
+          html += `</div>`;
+        });
+      }
+
+      // Ungoverned files
+      const uncovered = review.uncovered || [];
+      if (uncovered.length > 0) {
+        html += `<h3 style="color:var(--base09);font-size:14px;margin:16px 0 10px">Ungoverned Files</h3>`;
+        html += `<div style="padding:10px;background:rgba(242,108,51,0.08);border:1px solid rgba(242,108,51,0.2);border-radius:6px">`;
+        uncovered.forEach(f => {
+          html += `<div style="margin:2px 0;font-size:11px;color:var(--base09)">
+            <code style="background:var(--base02);padding:1px 4px;border-radius:2px">${esc(f.path)}</code>
+          </div>`;
+        });
+        html += `</div>`;
+      }
+
+      // Gate results
+      if (gates.length > 0) {
+        html += '<h3 style="color:var(--base06);font-size:14px;margin:16px 0 10px">Gate Results</h3>';
+        gates.forEach(gr => {
+          const passColor = gr.passed ? "var(--base0B)" : "var(--base08)";
+          const passLabel = gr.passed ? "PASS" : "FAIL";
+          html += `<div class="cov-finding">
+            <span class="cov-sev" style="background:${gr.passed ? 'rgba(4,179,114,0.15)' : 'rgba(231,52,156,0.15)'};color:${passColor}">${passLabel}</span>
+            <span class="cov-finding-text">
+              <span class="cov-link" onclick="switchView('graph');selectNodeById('${gr.id}')">${esc(gr.id)}</span>: ${esc(gr.summary || '')}
+            </span>
+          </div>`;
+          if (gr.findings && gr.findings.length) {
+            html += '<div style="margin:4px 0 8px 40px;font-size:11px;color:var(--base04)">';
+            gr.findings.forEach(f => {
+              const msg = typeof f === "string" ? f : (f.severity + ": " + f.message);
+              html += `<div style="margin:2px 0">${esc(msg)}</div>`;
+            });
+            html += '</div>';
+          }
+        });
       }
 
       area.innerHTML = html;
@@ -1450,6 +1612,8 @@
       } else if (view === "matrix") {
         mtxEl.style.display = "block";
         renderMatrixView();
+      } else if (view === "review") {
+        renderReviewDashboard();
       }
     }
 
@@ -1734,6 +1898,8 @@
         switchView("timeline");
       } else if (ev.key === "m") {
         switchView("matrix");
+      } else if (ev.key === "w") {
+        switchView("review");
       } else if (ev.key === "Escape") {
         hideTooltip();
       }
@@ -2019,6 +2185,7 @@
         { label: "Drift Detection", action: () => switchView("drift"), type: "view", hint: "d" },
         { label: "Timeline", action: () => switchView("timeline"), type: "view", hint: "t" },
         { label: "Dependency Matrix", action: () => switchView("matrix"), type: "view", hint: "m" },
+        { label: "Review", action: () => switchView("review"), type: "view", hint: "w" },
       ];
 
       // Actions

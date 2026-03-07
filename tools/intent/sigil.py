@@ -464,6 +464,34 @@ def _write_review_json(repo_root: Path, g: Graph, out_path: Path) -> None:
     covered_count = sum(len(v) for v in covered.values())
     coverage_pct = round(covered_count / max(len(code_changes), 1) * 100) if code_changes else 100
 
+    # Build per-component governance info
+    governance = {}
+    for cid in covered:
+        specs = []
+        adrs = []
+        gates_list = []
+        for e in g.edges:
+            if e.dst == cid and e.type == "belongs_to":
+                node = g.nodes.get(e.src)
+                if node:
+                    if node.type == "spec":
+                        md = read_text(repo_root / node.path)
+                        fm, _ = parse_front_matter(md)
+                        specs.append({"id": e.src, "title": node.title, "status": fm.get("status", "?")})
+                    elif node.type == "adr":
+                        md = read_text(repo_root / node.path)
+                        fm, _ = parse_front_matter(md)
+                        adrs.append({"id": e.src, "title": node.title, "status": fm.get("status", "?")})
+            if e.type == "gated_by" and (e.src == cid or e.dst == cid):
+                gid = e.dst if e.src == cid else e.src
+                gnode = g.nodes.get(gid)
+                if gnode:
+                    gates_list.append({"id": gid, "title": gnode.title})
+        governance[cid] = {"specs": specs, "adrs": adrs, "gates": gates_list}
+
+    # Gate results
+    gate_results = _run_gate_checks(repo_root, g)
+
     report = {
         "generated_at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "summary": {
@@ -477,6 +505,8 @@ def _write_review_json(repo_root: Path, g: Graph, out_path: Path) -> None:
         "intent_changes": intent_changes,
         "covered": {cid: files for cid, files in covered.items()},
         "uncovered": uncovered,
+        "governance": governance,
+        "gates": gate_results,
     }
     out_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
 
@@ -1723,6 +1753,11 @@ def cmd_export(args) -> int:
     if timeline_path.exists():
         timeline_json = timeline_path.read_text(encoding="utf-8")
 
+    review_json = "{}"
+    review_path = repo / ".intent" / "index" / "review.json"
+    if review_path.exists():
+        review_json = review_path.read_text(encoding="utf-8")
+
     # Build self-contained HTML: inject graph data and file contents
     inject_script = f"""
     <script>
@@ -1731,6 +1766,7 @@ def cmd_export(args) -> int:
     window.__SIGIL_FILES__ = {json.dumps(file_contents)};
     window.__SIGIL_DRIFT__ = {drift_json};
     window.__SIGIL_TIMELINE__ = {timeline_json};
+    window.__SIGIL_REVIEW__ = {review_json};
 
     // Override fetch to serve embedded data
     const _origFetch = window.fetch;
@@ -1744,6 +1780,9 @@ def cmd_export(args) -> int:
       }}
       if (urlStr.includes('timeline.json')) {{
         return Promise.resolve(new Response(JSON.stringify(window.__SIGIL_TIMELINE__), {{status: 200}}));
+      }}
+      if (urlStr.includes('review.json')) {{
+        return Promise.resolve(new Response(JSON.stringify(window.__SIGIL_REVIEW__), {{status: 200}}));
       }}
       // Check file contents
       for (const [path, content] of Object.entries(window.__SIGIL_FILES__)) {{
