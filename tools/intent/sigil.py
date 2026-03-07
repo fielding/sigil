@@ -1133,9 +1133,9 @@ def cmd_init(args) -> int:
             p.mkdir(parents=True, exist_ok=True)
             created_dirs += 1
     if created_dirs:
-        print(f"  [1/5] Created {created_dirs} directories")
+        print(f"  [1/6] Created {created_dirs} directories")
     else:
-        print(f"  [1/5] Directory structure exists")
+        print(f"  [1/6] Directory structure exists")
 
     # Create .intent/config.yaml if missing
     config_path = repo / ".intent" / "config.yaml"
@@ -1156,27 +1156,88 @@ def cmd_init(args) -> int:
             "---\nid: ADR-0000\nstatus: draft\n---\n\n# <Decision>\n\n## Context\n\nWhat is the background?\n\n"
             "## Options Considered\n\n1. \n2. \n\n## Decision\n\n## Consequences\n\n## Links\n\n"
             "- Belongs to: [[COMP-<component>]]\n", encoding="utf-8")
-    print(f"  [2/5] Templates ready")
+    print(f"  [2/6] Templates ready")
 
-    # Bootstrap components from manifest files
+    # Deep scan + bootstrap: detect components, APIs, decisions
     _repo_str = str(repo)
+    comp_dir = repo / "components"
+    had_comps = set(p.stem for p in comp_dir.glob("*.yaml")) if comp_dir.is_dir() else set()
+
+    # Run bootstrap first (manifest-based)
     class BootArgs:
         repo = _repo_str
         dry_run = False
-    # Capture bootstrap output
-    comp_dir = repo / "components"
-    had_comps = bool(list(comp_dir.glob("*.yaml"))) if comp_dir.is_dir() else False
     cmd_bootstrap(BootArgs())
-    has_comps = bool(list(comp_dir.glob("*.yaml"))) if comp_dir.is_dir() else False
-    if has_comps:
-        print(f"  [3/5] Components bootstrapped")
+
+    # Then run deep scan to find additional components
+    scan_skip = {"components", "intent", "interfaces", "gates", "templates", "docs", ".intent"}
+    new_comps = 0
+    for child in sorted(repo.iterdir()):
+        if not child.is_dir() or child.name.startswith(".") or child.name in scan_skip:
+            continue
+        slug = child.name.lower().replace(" ", "-")
+        if slug in had_comps:
+            continue
+        comp_yaml = comp_dir / f"{slug}.yaml"
+        if comp_yaml.exists():
+            continue
+        # Detect if it's a real component (has code or a manifest)
+        has_manifest = any((child / m).exists() for m, _ in _MANIFEST_PATTERNS)
+        file_count = sum(1 for _ in child.rglob("*") if _.is_file() and ".git" not in str(_) and "node_modules" not in str(_) and "__pycache__" not in str(_))
+        if not has_manifest and file_count <= 2:
+            continue
+        # Detect language
+        lang = None
+        for manifest, mlang in _MANIFEST_PATTERNS:
+            if (child / manifest).exists():
+                lang = mlang
+                break
+        # Create component YAML
+        comp_yaml.write_text(
+            f"id: COMP-{slug}\nname: {child.name}\n"
+            f"description: Auto-detected component ({lang or 'unknown language'})\n"
+            f"paths:\n  - \"{child.name}/**\"\n",
+            encoding="utf-8",
+        )
+        # Create a starter spec for the component
+        intent_dir = repo / "intent" / slug / "specs"
+        intent_dir.mkdir(parents=True, exist_ok=True)
+        spec_path = intent_dir / f"SPEC-0001-{slug}-overview.md"
+        if not spec_path.exists():
+            spec_path.write_text(
+                f"---\nid: SPEC-0001\nstatus: draft\n---\n\n"
+                f"# {child.name} Overview\n\n"
+                f"## Intent\n\nDescribe what {child.name} does and why it exists.\n\n"
+                f"## Goals\n\n- \n\n## Non-goals\n\n- \n\n## Acceptance Criteria\n\n- [ ] \n\n"
+                f"## Links\n\n- Belongs to: [[COMP-{slug}]]\n",
+                encoding="utf-8",
+            )
+        new_comps += 1
+
+    all_comps = list(comp_dir.glob("*.yaml")) if comp_dir.is_dir() else []
+    if all_comps:
+        extra = f" ({new_comps} auto-detected)" if new_comps else ""
+        print(f"  [3/6] {len(all_comps)} component(s) bootstrapped{extra}")
     else:
-        print(f"  [3/5] No components detected (add YAML to components/)")
+        print(f"  [3/6] No components detected (add YAML to components/)")
+
+    # Generate .gitignore entry if missing
+    gitignore = repo / ".gitignore"
+    if gitignore.exists():
+        gi_text = gitignore.read_text(encoding="utf-8", errors="ignore")
+    else:
+        gi_text = ""
+    if ".intent/index/" not in gi_text:
+        with open(gitignore, "a", encoding="utf-8") as f:
+            f.write("\n# Sigil generated artifacts\n.intent/index/\n")
+        print(f"  [4/6] Added .intent/index/ to .gitignore")
+    else:
+        print(f"  [4/6] .gitignore configured")
 
     # Build index
     g = build_graph(repo)
     write_graph_artifacts(repo, g)
-    print(f"  [4/5] Graph indexed: {len(g.nodes)} nodes, {len(g.edges)} edges")
+    print(f"  [5/6] Graph indexed: {len(g.nodes)} nodes, {len(g.edges)} edges")
 
     # Ensure viewer exists — copy from package if needed
     viewer = _ensure_viewer(repo)
@@ -1203,7 +1264,7 @@ def cmd_init(args) -> int:
             port = httpd.server_address[1]
 
         url = f"http://127.0.0.1:{port}/tools/intent_viewer/index.html"
-        print(f"  [5/5] Viewer ready")
+        print(f"  [6/6] Viewer ready")
         print()
         print(f"  Viewer:   {url}")
         print(f"  Palette:  Cmd+K")
@@ -1220,7 +1281,7 @@ def cmd_init(args) -> int:
             print("\nStopped.")
             httpd.server_close()
     else:
-        print(f"  [5/5] Viewer not found. Run from a sigil-enabled repo.")
+        print(f"  [6/6] Viewer not found. Run from a sigil-enabled repo.")
 
     return 0
 
