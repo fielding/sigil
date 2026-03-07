@@ -1239,6 +1239,22 @@ def cmd_init(args) -> int:
     write_graph_artifacts(repo, g)
     print(f"  [5/6] Graph indexed: {len(g.nodes)} nodes, {len(g.edges)} edges")
 
+    # Run scan to generate scan.json report
+    class ScanArgs:
+        repo = _repo_str
+        dry_run = True  # suppress scan output during init
+        output = None
+    # Write scan.json silently
+    idx_dir = repo / ".intent" / "index"
+    idx_dir.mkdir(parents=True, exist_ok=True)
+    import io, contextlib
+    with contextlib.redirect_stdout(io.StringIO()):
+        class ScanSilent:
+            repo = _repo_str
+            dry_run = False
+            output = str(idx_dir / "scan.json")
+        cmd_scan(ScanSilent())
+
     # Ensure viewer exists — copy from package if needed
     viewer = _ensure_viewer(repo)
 
@@ -1269,6 +1285,7 @@ def cmd_init(args) -> int:
         print(f"  Viewer:   {url}")
         print(f"  Palette:  Cmd+K")
         print(f"  New doc:  sigil new spec <component> <title>")
+        print(f"  Map:      sigil map")
         print(f"  Suggest:  sigil suggest <filepath>")
         print(f"  Status:   sigil status")
         print()
@@ -2846,6 +2863,174 @@ def cmd_doctor(args) -> int:
     return 0 if failed == 0 else 1
 
 
+def cmd_map(args) -> int:
+    """Render a terminal-friendly dependency map of the intent graph."""
+    repo = Path(args.repo).resolve()
+    mode = getattr(args, "mode", "tree")
+    focus = getattr(args, "focus", None)
+
+    g = build_graph(repo)
+    if not g.nodes:
+        print("No nodes found. Run `sigil index` first.")
+        return 0
+
+    # Build adjacency
+    children: Dict[str, List[str]] = collections.defaultdict(list)  # parent -> children
+    parents: Dict[str, str] = {}
+    for e in g.edges:
+        if e.type == "belongs_to" and e.dst in g.nodes:
+            if e.src not in children[e.dst]:
+                children[e.dst].append(e.src)
+            parents[e.src] = e.dst
+
+    # Type symbols
+    sym = {"component": "\u25a0", "spec": "\u25c6", "adr": "\u25b2", "gate": "\u25cf", "interface": "\u25c8"}
+    type_labels = {"component": "COMP", "spec": "SPEC", "adr": "ADR", "gate": "GATE", "interface": "IFACE"}
+
+    if mode == "tree":
+        # Tree view: components as roots, specs/ADRs/gates as children
+        print()
+        print("  Sigil Intent Map")
+        print("  " + "\u2550" * 50)
+        print()
+
+        # Roots: components or nodes with no parent
+        roots = [n for n in g.nodes.values() if n.type == "component"]
+        if not roots:
+            roots = [n for n in g.nodes.values() if n.id not in parents]
+
+        # If focusing on a specific node, filter
+        if focus:
+            focus_upper = focus.upper()
+            roots = [n for n in roots if focus_upper in n.id.upper() or focus_upper in n.title.upper()]
+            if not roots:
+                # Maybe it's a child node — find its root
+                for n in g.nodes.values():
+                    if focus_upper in n.id.upper() or focus_upper in n.title.upper():
+                        root_id = parents.get(n.id)
+                        if root_id and root_id in g.nodes:
+                            roots = [g.nodes[root_id]]
+                        else:
+                            roots = [n]
+                        break
+
+        for ri, root in enumerate(sorted(roots, key=lambda n: n.id)):
+            s = sym.get(root.type, "\u25cb")
+            print(f"  {s} {root.id}  {root.title}")
+
+            # Get children grouped by type
+            kids = children.get(root.id, [])
+            kid_nodes = [g.nodes[k] for k in kids if k in g.nodes]
+            kid_nodes.sort(key=lambda n: (n.type, n.id))
+
+            # Also find gates that apply to children
+            gate_targets: Dict[str, List[str]] = collections.defaultdict(list)
+            for e in g.edges:
+                if e.type == "gated_by":
+                    gate_targets[e.dst].append(e.src)
+
+            for ki, kid in enumerate(kid_nodes):
+                is_last = ki == len(kid_nodes) - 1
+                connector = "\u2514\u2500\u2500" if is_last else "\u251c\u2500\u2500"
+                ks = sym.get(kid.type, "\u25cb")
+                # Get status from frontmatter
+                status_str = ""
+                try:
+                    md = read_text(repo / kid.path)
+                    fm, _ = parse_front_matter(md)
+                    st = fm.get("status", "")
+                    if st:
+                        status_str = f"  [{st}]"
+                except Exception:
+                    pass
+                print(f"  {connector} {ks} {kid.id}  {kid.title}{status_str}")
+
+                # Show gates on this node
+                for e in g.edges:
+                    if e.type == "gated_by" and e.src == kid.id and e.dst in g.nodes:
+                        gate_node = g.nodes[e.dst]
+                        prefix = "     " if is_last else "\u2502    "
+                        print(f"  {prefix}\u2514\u2500 {sym.get('gate', '\u25cf')} {gate_node.id}")
+
+            # Show edges to other components
+            outgoing = []
+            for e in g.edges:
+                if e.src == root.id and e.type not in ("belongs_to",) and e.dst in g.nodes:
+                    outgoing.append(e)
+            if outgoing:
+                for e in outgoing:
+                    dst = g.nodes[e.dst]
+                    print(f"      \u2192 {e.type} {dst.id}")
+
+            if ri < len(roots) - 1:
+                print()
+
+        # Legend
+        print()
+        print("  " + "\u2500" * 50)
+        legend_parts = [f"{sym.get(t, '\u25cb')} {type_labels.get(t, t)}" for t in ["component", "spec", "adr", "gate", "interface"] if any(n.type == t for n in g.nodes.values())]
+        print("  " + "  ".join(legend_parts))
+        print(f"  {len(g.nodes)} nodes, {len(g.edges)} edges")
+        print()
+
+    elif mode == "deps":
+        # Dependency view: show all cross-component edges
+        print()
+        print("  Sigil Dependency Map")
+        print("  " + "\u2550" * 50)
+        print()
+
+        # Collect cross-component edges
+        dep_types = {"depends_on", "consumes", "provides", "relates_to", "supersedes"}
+        deps = [e for e in g.edges if e.type in dep_types and e.src in g.nodes and e.dst in g.nodes]
+
+        if not deps:
+            print("  No cross-node dependencies found.")
+        else:
+            for e in sorted(deps, key=lambda e: (e.src, e.type)):
+                src = g.nodes[e.src]
+                dst = g.nodes[e.dst]
+                arrow = "\u2192" if e.type in ("depends_on", "consumes") else "\u2190" if e.type == "provides" else "\u2194"
+                print(f"  {src.id} {arrow} {dst.id}  ({e.type})")
+
+        print()
+
+    elif mode == "flat":
+        # Flat list grouped by type
+        print()
+        print("  Sigil Node Registry")
+        print("  " + "\u2550" * 50)
+        print()
+
+        by_type: Dict[str, List] = collections.defaultdict(list)
+        for n in g.nodes.values():
+            by_type[n.type].append(n)
+
+        for t in ["component", "spec", "adr", "gate", "interface"]:
+            nodes = by_type.get(t, [])
+            if not nodes:
+                continue
+            label = type_labels.get(t, t).upper()
+            print(f"  {sym.get(t, '\u25cb')} {label} ({len(nodes)})")
+            for n in sorted(nodes, key=lambda n: n.id):
+                status_str = ""
+                try:
+                    md = read_text(repo / n.path)
+                    fm, _ = parse_front_matter(md)
+                    st = fm.get("status", "")
+                    if st:
+                        status_str = f"  [{st}]"
+                except Exception:
+                    pass
+                print(f"    {n.id:<20s} {n.title}{status_str}")
+            print()
+
+        print(f"  {len(g.nodes)} nodes, {len(g.edges)} edges")
+        print()
+
+    return 0
+
+
 def cmd_scan(args) -> int:
     """Deep-scan a codebase to auto-detect components, APIs, decisions, and relationships."""
     repo = Path(args.repo).resolve()
@@ -3245,6 +3430,11 @@ def main() -> int:
     sp.add_argument("base", nargs="?", default=None, help="Base commit for review (optional)")
     sp.add_argument("head", nargs="?", default=None, help="Head commit for review (optional)")
     sp.set_defaults(fn=cmd_ci)
+
+    sp = sub.add_parser("map", help="Render terminal-friendly dependency map of the intent graph")
+    sp.add_argument("--mode", choices=["tree", "deps", "flat"], default="tree", help="Display mode (default: tree)")
+    sp.add_argument("--focus", default=None, help="Focus on a specific node or component")
+    sp.set_defaults(fn=cmd_map)
 
     args = ap.parse_args()
     return args.fn(args)

@@ -336,3 +336,83 @@ def test_ci_strict_mode(tmp_path):
     rc = cli.cmd_ci(args)
     # Should pass since no lint issues on empty repo
     assert rc == 0
+
+
+# ---------------------------------------------------------------------------
+# map
+# ---------------------------------------------------------------------------
+
+def _setup_graph_repo(tmp_path):
+    """Helper: create a repo with components, specs, and edges for map tests."""
+    (tmp_path / "components").mkdir()
+    (tmp_path / "components" / "api.yaml").write_text(
+        "id: COMP-api\nname: API Service\npaths:\n  - \"api/**\"\n"
+    )
+    (tmp_path / "intent" / "api" / "specs").mkdir(parents=True)
+    spec = tmp_path / "intent" / "api" / "specs" / "SPEC-0001-endpoints.md"
+    spec.write_text(
+        "---\nid: SPEC-0001\nstatus: accepted\n---\n\n# API Endpoints\n\n## Links\n\n- Belongs to: [[COMP-api]]\n"
+    )
+    (tmp_path / "intent" / "api" / "adrs").mkdir(parents=True)
+    adr = tmp_path / "intent" / "api" / "adrs" / "ADR-0001-rest.md"
+    adr.write_text(
+        "---\nid: ADR-0001\nstatus: accepted\n---\n\n# Use REST\n\n## Links\n\n- Belongs to: [[COMP-api]]\n"
+    )
+
+
+def test_map_tree_mode(tmp_path, capsys):
+    """Map tree mode should show component with children."""
+    _setup_graph_repo(tmp_path)
+    args = make_args(repo=str(tmp_path), mode="tree", focus=None)
+    rc = cli.cmd_map(args)
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "COMP-api" in out
+    assert "SPEC-0001" in out
+    assert "ADR-0001" in out
+
+
+def test_map_flat_mode(tmp_path, capsys):
+    """Map flat mode should group nodes by type."""
+    _setup_graph_repo(tmp_path)
+    args = make_args(repo=str(tmp_path), mode="flat", focus=None)
+    rc = cli.cmd_map(args)
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "COMP" in out
+    assert "SPEC" in out
+    assert "ADR" in out
+
+
+def test_map_deps_mode(tmp_path, capsys):
+    """Map deps mode should show cross-node dependencies."""
+    _setup_graph_repo(tmp_path)
+    # Add a dependency
+    (tmp_path / "intent" / "api" / "specs" / "SPEC-0002-auth.md").write_text(
+        "---\nid: SPEC-0002\nstatus: draft\n---\n\n# Auth\n\nDepends on [[SPEC-0001]].\n\n## Links\n\n- Belongs to: [[COMP-api]]\n"
+    )
+    args = make_args(repo=str(tmp_path), mode="deps", focus=None)
+    rc = cli.cmd_map(args)
+    assert rc == 0
+
+
+def test_map_focus(tmp_path, capsys):
+    """Map focus should filter to matching component."""
+    _setup_graph_repo(tmp_path)
+    # Add a second component
+    (tmp_path / "components" / "web.yaml").write_text("id: COMP-web\nname: Web App\n")
+    args = make_args(repo=str(tmp_path), mode="tree", focus="api")
+    rc = cli.cmd_map(args)
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "COMP-api" in out
+    assert "COMP-web" not in out
+
+
+def test_map_empty_graph(tmp_path, capsys):
+    """Map on empty repo should print message."""
+    args = make_args(repo=str(tmp_path), mode="tree", focus=None)
+    rc = cli.cmd_map(args)
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "No nodes" in out
