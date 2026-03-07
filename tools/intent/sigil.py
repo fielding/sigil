@@ -3031,6 +3031,181 @@ def cmd_map(args) -> int:
     return 0
 
 
+def cmd_why(args) -> int:
+    """Explain why a file exists by tracing its full intent chain with excerpts."""
+    import fnmatch as fnm
+
+    repo = Path(args.repo).resolve()
+    target = args.path
+    g = build_graph(repo)
+
+    # Resolve path
+    target_path = Path(target)
+    if target_path.is_absolute():
+        try:
+            target_path = target_path.relative_to(repo)
+        except ValueError:
+            pass
+    target_str = str(target_path).replace("\\", "/")
+
+    # Check file exists
+    full_path = repo / target_str
+    if not full_path.exists():
+        print(f"  File not found: {target_str}")
+        return 1
+
+    print()
+    print(f"  sigil why {target_str}")
+    print(f"  {'=' * 50}")
+
+    # 1. Find owning components
+    owning_components: List[str] = []
+    comp_dir = repo / "components"
+    if comp_dir.is_dir():
+        for p in comp_dir.glob("*.yaml"):
+            data = load_yaml(p) if yaml else {}
+            cid = data.get("id") or f"COMP-{p.stem}"
+            for pattern in data.get("paths", []):
+                if fnm.fnmatch(target_str, pattern):
+                    owning_components.append(cid)
+                    break
+
+    if not owning_components:
+        print(f"\n  This file is ungoverned — no component claims it.")
+        print(f"  To govern it, add a path pattern to a component YAML:")
+        print(f"    paths:")
+        print(f'      - "{target_str}"')
+        print()
+        return 0
+
+    for comp_id in owning_components:
+        comp = g.nodes.get(comp_id)
+        if not comp:
+            continue
+
+        print(f"\n  Owned by: {comp.title} ({comp_id})")
+        print(f"  {comp.path}")
+
+        # Collect all related nodes with their relationships (deduplicated)
+        seen_ids: set = set()
+        specs, adrs, gates, interfaces = [], [], [], []
+        for e in g.edges:
+            if e.dst == comp_id and e.type == "belongs_to":
+                node = g.nodes.get(e.src)
+                if node and node.id not in seen_ids:
+                    seen_ids.add(node.id)
+                    if node.type == "spec":
+                        specs.append(node)
+                    elif node.type == "adr":
+                        adrs.append(node)
+                    elif node.type == "gate":
+                        gates.append(node)
+            if e.type == "gated_by" and (e.src == comp_id or e.dst == comp_id):
+                gid = e.dst if e.src == comp_id else e.src
+                gnode = g.nodes.get(gid)
+                if gnode and gnode not in gates:
+                    gates.append(gnode)
+            if e.type in ("provides", "consumes") and (e.src == comp_id or e.dst == comp_id):
+                iid = e.dst if e.src == comp_id else e.src
+                inode = g.nodes.get(iid)
+                if inode and inode.type == "interface" and inode not in interfaces:
+                    interfaces.append(inode)
+
+        # Also find gates that apply to any of this component's specs
+        spec_ids = {s.id for s in specs}
+        for e in g.edges:
+            if e.type == "gated_by" and e.src in spec_ids:
+                gnode = g.nodes.get(e.dst)
+                if gnode and gnode not in gates:
+                    gates.append(gnode)
+
+        def _excerpt(node_path: str, max_lines: int = 4) -> str:
+            """Extract a meaningful excerpt from an intent doc."""
+            try:
+                md = read_text(repo / node_path)
+                _, body = parse_front_matter(md)
+                # Find Intent or Context section
+                lines = body.strip().splitlines()
+                capture = False
+                result = []
+                for line in lines:
+                    if line.strip().startswith("## Intent") or line.strip().startswith("## Context") or line.strip().startswith("## Decision"):
+                        capture = True
+                        continue
+                    elif line.strip().startswith("## ") and capture:
+                        break
+                    elif capture and line.strip():
+                        result.append(line.strip())
+                        if len(result) >= max_lines:
+                            break
+                if not result:
+                    # Fallback: first non-empty body lines after title
+                    for line in lines:
+                        if line.strip() and not line.startswith("#"):
+                            result.append(line.strip())
+                            if len(result) >= max_lines:
+                                break
+                return "\n".join(result)
+            except Exception:
+                return ""
+
+        # Print the intent chain as a narrative
+        if specs:
+            print(f"\n  What is being built:")
+            for spec in sorted(specs, key=lambda n: n.id):
+                md = read_text(repo / spec.path)
+                fm, _ = parse_front_matter(md)
+                status = fm.get("status", "?")
+                print(f"    [{status}] {spec.id}: {spec.title}")
+                excerpt = _excerpt(spec.path)
+                if excerpt:
+                    for line in excerpt.splitlines():
+                        print(f"      | {line}")
+
+        if adrs:
+            print(f"\n  Why it was built this way:")
+            for adr in sorted(adrs, key=lambda n: n.id):
+                md = read_text(repo / adr.path)
+                fm, _ = parse_front_matter(md)
+                status = fm.get("status", "?")
+                print(f"    [{status}] {adr.id}: {adr.title}")
+                excerpt = _excerpt(adr.path)
+                if excerpt:
+                    for line in excerpt.splitlines():
+                        print(f"      | {line}")
+
+        if gates:
+            print(f"\n  What enforces it:")
+            for gate in sorted(gates, key=lambda n: n.id):
+                print(f"    {gate.id}: {gate.title}")
+
+        if interfaces:
+            print(f"\n  Contracts:")
+            for iface in sorted(interfaces, key=lambda n: n.id):
+                print(f"    {iface.id}: {iface.title}")
+
+        # Show transitive dependencies — what else depends on these specs
+        dep_chain = []
+        for spec in specs:
+            for e in g.edges:
+                if e.type == "depends_on" and e.dst == spec.id and e.src in g.nodes:
+                    dep_chain.append((g.nodes[e.src], spec))
+                if e.type == "depends_on" and e.src == spec.id and e.dst in g.nodes:
+                    dep_chain.append((spec, g.nodes[e.dst]))
+
+        if dep_chain:
+            print(f"\n  Connected decisions:")
+            seen = set()
+            for src, dst in dep_chain:
+                key = f"{src.id}->{dst.id}"
+                if key not in seen:
+                    seen.add(key)
+                    print(f"    {src.id} depends on {dst.id} ({dst.title})")
+
+    print()
+    return 0
+
+
 def cmd_scan(args) -> int:
     """Deep-scan a codebase to auto-detect components, APIs, decisions, and relationships."""
     repo = Path(args.repo).resolve()
@@ -3435,6 +3610,10 @@ def main() -> int:
     sp.add_argument("--mode", choices=["tree", "deps", "flat"], default="tree", help="Display mode (default: tree)")
     sp.add_argument("--focus", default=None, help="Focus on a specific node or component")
     sp.set_defaults(fn=cmd_map)
+
+    sp = sub.add_parser("why", help="Explain why a file exists by tracing its full intent chain")
+    sp.add_argument("path", help="File path to trace")
+    sp.set_defaults(fn=cmd_why)
 
     args = ap.parse_args()
     return args.fn(args)

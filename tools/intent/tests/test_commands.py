@@ -416,3 +416,44 @@ def test_map_empty_graph(tmp_path, capsys):
     assert rc == 0
     out = capsys.readouterr().out
     assert "No nodes" in out
+
+
+# ---------------------------------------------------------------------------
+# why
+# ---------------------------------------------------------------------------
+
+def test_why_governed_file(tmp_path, capsys):
+    """Why should trace the intent chain for a governed file."""
+    _setup_graph_repo(tmp_path)
+    # Create the governed file
+    (tmp_path / "api").mkdir()
+    (tmp_path / "api" / "server.py").write_text("# api server")
+
+    args = make_args(repo=str(tmp_path), path="api/server.py")
+    rc = cli.cmd_why(args)
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "COMP-api" in out
+    assert "SPEC-0001" in out
+    assert "ADR-0001" in out
+    assert "What is being built" in out
+    assert "Why it was built this way" in out
+
+
+def test_why_ungoverned_file(tmp_path, capsys):
+    """Why should report when a file has no governing component."""
+    (tmp_path / "random.txt").write_text("hello")
+    args = make_args(repo=str(tmp_path), path="random.txt")
+    rc = cli.cmd_why(args)
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "ungoverned" in out
+
+
+def test_why_missing_file(tmp_path, capsys):
+    """Why should error on nonexistent file."""
+    args = make_args(repo=str(tmp_path), path="does-not-exist.py")
+    rc = cli.cmd_why(args)
+    assert rc == 1
+    out = capsys.readouterr().out
+    assert "not found" in out

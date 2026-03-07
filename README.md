@@ -79,6 +79,7 @@ sigil doctor     Diagnose installation and repo health
 sigil scan       Deep-scan codebase: detect components, APIs, decisions, infra
 sigil ci         Run full CI pipeline in one command (index + lint + check + badge + review)
 sigil map        Terminal-rendered dependency map (tree, deps, or flat mode)
+sigil why        Explain why a file exists — trace its full intent chain
 ```
 
 ## Repo Structure
