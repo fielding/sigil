@@ -2,14 +2,14 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Sigil — Intent Graph Demo (18 nodes)</title>
-  <link rel="icon" type="image/x-icon" href="../../branding/favicon.ico" />
-  <link rel="icon" type="image/png" sizes="32x32" href="../../branding/favicon-32x32.png" />
-  <link rel="icon" type="image/png" sizes="16x16" href="../../branding/favicon-16x16.png" />
-  <link rel="apple-touch-icon" sizes="180x180" href="../../branding/apple-touch-icon.png" />
-  <meta property="og:image" content="../../branding/social-card.png" />
+  <title>Sigil — Intent Graph Demo</title>
+  <link rel="icon" type="image/x-icon" href="branding/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="32x32" href="branding/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="branding/favicon-16x16.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="branding/apple-touch-icon.png" />
+  <meta property="og:image" content="branding/social-card.png" />
   <meta property="og:title" content="Sigil — Intent-first engineering" />
-  <meta property="og:description" content="Version control for architectural decisions. Specs, ADRs, gates, and components as a connected graph." />
+  <meta property="og:description" content="Live demo: explore Sigil's own intent graph. Every architectural decision, spec, gate, and constraint — queryable, diffable, enforced in CI. Run npx sigil-cli init to try it on your repo." />
   <meta name="twitter:card" content="summary_large_image" />
   <style>
     :root {
@@ -239,6 +239,13 @@
     .welcome .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
     .welcome .welcome-hint { font-size: 12px; color: var(--base03); border-top: 1px solid var(--base02); padding-top: 12px; }
     .welcome .welcome-hint kbd { background: var(--base02); color: var(--base05); padding: 2px 6px; border-radius: 3px; font-size: 11px; font-family: inherit; }
+    .welcome .welcome-cta { margin-top: 16px; padding: 14px 16px; background: rgba(187,255,0,0.06); border: 1px solid rgba(187,255,0,0.2); border-radius: 6px; }
+    .welcome .welcome-cta h3 { font-size: 12px; font-weight: 700; color: var(--base0F); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 8px; }
+    .welcome .welcome-cta .cta-code { font-family: inherit; font-size: 12px; color: var(--base0B); background: var(--base01); border: 1px solid var(--base02); border-radius: 4px; padding: 8px 12px; display: block; margin-bottom: 10px; user-select: all; cursor: text; }
+    .welcome .welcome-cta .cta-links { display: flex; gap: 12px; font-size: 12px; }
+    .welcome .welcome-cta .cta-links a { color: var(--base0D); text-decoration: none; }
+    .welcome .welcome-cta .cta-links a:hover { color: var(--base0C); text-decoration: underline; }
+    .welcome .demo-label { font-size: 11px; color: var(--base03); margin-bottom: 4px; letter-spacing: 0.5px; }
 
     /* Legend */
     #legend {
@@ -1447,6 +1454,7 @@
       </div>
       <div id="content-area">
         <div class="welcome" id="welcome-panel">
+          <div class="demo-label">LIVE DEMO — Sigil's own intent graph</div>
           <h2>You're looking at an intent graph</h2>
           <p>Every node on the left is a <strong>why</strong> behind your code — specs, decisions, constraints, and contracts. The edges show how they connect. Click any node to read the full reasoning.</p>
           <p>This is what Sigil tracks for your codebase. Instead of decisions rotting in Notion or Slack threads, they live here — queryable, diffable, and enforced in CI.</p>
@@ -1457,7 +1465,15 @@
             <div class="legend-item"><div class="legend-dot" style="background:var(--base08)"></div> Gate</div>
             <div class="legend-item"><div class="legend-dot" style="background:var(--base0C)"></div> Interface</div>
           </div>
-          <div class="welcome-hint">
+          <div class="welcome-cta">
+            <h3>Try it on your repo</h3>
+            <code class="cta-code">npx sigil-cli init</code>
+            <div class="cta-links">
+              <a href="https://github.com/fielding/sigil" target="_blank">GitHub →</a>
+              <a href="https://github.com/fielding/sigil#readme" target="_blank">README →</a>
+            </div>
+          </div>
+          <div class="welcome-hint" style="margin-top:12px;">
             <kbd>⌘K</kbd> command palette &nbsp; <kbd>r</kbd> blast radius &nbsp; <kbd>c</kbd> coverage &nbsp; <kbd>/</kbd> search
           </div>
         </div>
