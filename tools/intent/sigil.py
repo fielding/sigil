@@ -1090,6 +1090,7 @@ def cmd_new(args) -> int:
         "component": "COMPONENT.yaml",
         "gate": "GATE.yaml",
         "interface": "INTERFACE.md",
+        "rollout": "ROLLOUT.md",
     }
     template_file = type_to_template.get(node_type)
     if not template_file:
@@ -1175,7 +1176,7 @@ def cmd_new(args) -> int:
             return 1
         slug = title.lower().replace(" ", "-").replace("/", "-")
         filename = f"{node_id}-{slug}.md"
-        subdir_map = {"spec": "specs", "adr": "adrs"}
+        subdir_map = {"spec": "specs", "adr": "adrs", "rollout": "rollouts"}
         subdir = subdir_map.get(node_type, node_type + "s")
         dest_dir = repo / "intent" / component / subdir
         dest_dir.mkdir(parents=True, exist_ok=True)
@@ -1487,6 +1488,14 @@ def cmd_init(args) -> int:
             "---\nid: <API-NAME-V1>\ntype: api\nstatus: active\n---\n\n# <Interface Name>\n\n## Description\n\n"
             "(what this interface does and who uses it)\n\n## Contract\n\n(link to or embed the schema/spec file)\n\n"
             "## Links\n\n- Provided by: [[COMP-...]]\n- Consumed by: [[COMP-...]]\n- Gates: [[GATE-...]]\n",
+            encoding="utf-8")
+    rollout_tmpl = templates_dir / "ROLLOUT.md"
+    if not rollout_tmpl.exists():
+        rollout_tmpl.write_text(
+            "---\nid: ROLLOUT-0000\nstatus: planned\n---\n\n# <Title>\n\n## Overview\n\n"
+            "What is being rolled out and why?\n\n## Prerequisites\n\n- [ ] \n\n## Rollout Plan\n\n"
+            "### Phase 1\n\n- \n\n## Rollback\n\nIf something goes wrong:\n1. \n\n## Links\n\n"
+            "- For: [[SPEC-<id>]]\n- Belongs to: [[COMP-<component>]]\n",
             encoding="utf-8")
     print(f"  [2/6] Templates ready")
 
@@ -2629,7 +2638,7 @@ def cmd_serve(args) -> int:
                 node_id = f"{prefix}-{next_num:04d}"
                 slug = title.lower().replace(" ", "-").replace("/", "-")
                 filename = f"{node_id}-{slug}.md"
-                subdir_map = {"spec": "specs", "adr": "adrs"}
+                subdir_map = {"spec": "specs", "adr": "adrs", "rollout": "rollouts"}
                 subdir = subdir_map.get(node_type, node_type + "s")
                 dest_dir = repo / "intent" / component / subdir
                 try:
@@ -3768,8 +3777,8 @@ def cmd_map(args) -> int:
             parents[e.src] = e.dst
 
     # Type symbols
-    sym = {"component": "\u25a0", "spec": "\u25c6", "adr": "\u25b2", "gate": "\u25cf", "interface": "\u25c8"}
-    type_labels = {"component": "COMP", "spec": "SPEC", "adr": "ADR", "gate": "GATE", "interface": "IFACE"}
+    sym = {"component": "\u25a0", "spec": "\u25c6", "adr": "\u25b2", "gate": "\u25cf", "interface": "\u25c8", "rollout": "\u25cb"}
+    type_labels = {"component": "COMP", "spec": "SPEC", "adr": "ADR", "gate": "GATE", "interface": "IFACE", "rollout": "ROLL"}
 
     if mode == "tree":
         # Tree view: components as roots, specs/ADRs/gates as children
@@ -3908,7 +3917,7 @@ def cmd_map(args) -> int:
         # Legend
         print()
         print("  " + "\u2500" * 50)
-        legend_parts = [f"{sym.get(t, '\u25cb')} {type_labels.get(t, t)}" for t in ["component", "spec", "adr", "gate", "interface"] if any(n.type == t for n in g.nodes.values())]
+        legend_parts = [f"{sym.get(t, '\u25cb')} {type_labels.get(t, t)}" for t in ["component", "spec", "adr", "gate", "interface", "rollout"] if any(n.type == t for n in g.nodes.values())]
         print("  " + "  ".join(legend_parts))
         print(f"  {len(g.nodes)} nodes, {len(g.edges)} edges")
         print()
@@ -5033,9 +5042,9 @@ commands (grouped by workflow):
     sp.set_defaults(fn=cmd_diff)
 
     sp = sub.add_parser("new", help="Create a new intent document from template")
-    sp.add_argument("type", choices=["spec", "adr", "component", "gate", "interface"], help="Document type")
-    sp.add_argument("name", help="Component slug (spec/adr), component slug (component), interface ID (interface), or title (gate)")
-    sp.add_argument("title", nargs="?", default=None, help="Document title (required for spec, adr, interface, gate)")
+    sp.add_argument("type", choices=["spec", "adr", "component", "gate", "interface", "rollout"], help="Document type")
+    sp.add_argument("name", help="Component slug (spec/adr/rollout), component slug (component), interface ID (interface), or title (gate)")
+    sp.add_argument("title", nargs="?", default=None, help="Document title (required for spec, adr, rollout, interface, gate)")
     sp.add_argument("--applies-to", dest="applies_to", help="Node ID(s) the gate applies to (comma-separated, for gate type)")
     sp.set_defaults(fn=cmd_new)
 
