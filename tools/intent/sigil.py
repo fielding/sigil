@@ -1271,7 +1271,7 @@ def cmd_fmt(args) -> int:
     repo = Path(args.repo).resolve()
     intent_dir = repo / "intent"
     if not intent_dir.is_dir():
-        print("No intent/ directory found.")
+        print("No intent/ directory found. Run `sigil init` to set up your project.")
         return 0
 
     changed = 0
@@ -1811,7 +1811,10 @@ def _run_check_once(repo: Path, use_json: bool) -> int:
     g = build_graph(repo)
     gates_dir = repo / "gates"
     if not gates_dir.is_dir():
-        print("No gates/ directory found.")
+        if use_json:
+            print(json.dumps({"gates": [], "passed": 0, "failed": 0, "skipped": True, "reason": "no gates/ directory"}))
+        else:
+            print("\n  No gates/ directory found. Create gates with `sigil new gate`.")
         return 0
 
     results = _run_gate_checks(repo, g)
@@ -1823,7 +1826,7 @@ def _run_check_once(repo: Path, use_json: bool) -> int:
         return 1 if total_fail > 0 else 0
 
     if not results:
-        print("No active gates found.")
+        print("\n  No active gates found. Add gate YAML files to gates/ or check that existing gates are not disabled.")
         return 0
 
     # Print per-gate details
@@ -3458,7 +3461,7 @@ def cmd_map(args) -> int:
 
     g = build_graph(repo)
     if not g.nodes:
-        print("No nodes found. Run `sigil index` first.")
+        print("\n  No nodes found. Run `sigil index` to build the intent graph.")
         return 0
 
     # Build adjacency
@@ -4162,6 +4165,7 @@ def cmd_scan(args) -> int:
 
 def cmd_ci(args) -> int:
     """Run the full CI pipeline: index, check, review, badge, export."""
+    import io, contextlib
     repo = Path(args.repo).resolve()
     strict = getattr(args, "strict", False)
     base = getattr(args, "base", None)
@@ -4196,12 +4200,17 @@ def cmd_ci(args) -> int:
 
     # Step 3: Check gates
     print("  [3/5] Checking gates...")
+    gates_dir = repo / "gates"
+    has_gates = gates_dir.is_dir() and any(gates_dir.glob("*.yaml"))
     class CheckArgs:
         repo = _repo_str
-    check_result = cmd_check(CheckArgs())
+    with contextlib.redirect_stdout(io.StringIO()):
+        check_result = cmd_check(CheckArgs())
     if check_result != 0:
         errors += 1
         print("         Gate failures detected")
+    elif not has_gates:
+        print("         No gates configured (skipped)")
     else:
         print("         All gates passing")
 
