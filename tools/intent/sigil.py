@@ -582,8 +582,11 @@ def _ensure_viewer(repo: Path) -> Optional[Path]:
 # -----------------------------
 
 def run_cmd(cmd: List[str], cwd: Optional[Path] = None) -> str:
-    p = subprocess.run(cmd, cwd=str(cwd) if cwd else None,
-                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    try:
+        p = subprocess.run(cmd, cwd=str(cwd) if cwd else None,
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    except FileNotFoundError:
+        raise RuntimeError(f"Command not found: {cmd[0]}. Is it installed and on your PATH?")
     if p.returncode != 0:
         raise RuntimeError(f"Command failed: {cmd}\n{p.stderr}")
     return p.stdout
@@ -873,7 +876,8 @@ def cmd_ask(args) -> int:
 
     g = build_graph(repo)
     if not g.nodes:
-        print("No nodes found. Run `sigil index` to build the graph.")
+        print("No intent documents found (specs, ADRs, components, etc).")
+        print("Run `sigil init` to set up a new project, or `sigil index` to scan existing docs.")
         return 0
 
     results = search_nodes(question, g, repo, top_n=top_n)
@@ -1044,8 +1048,9 @@ def cmd_index(args) -> int:
     repo = Path(args.repo).resolve()
     g = build_graph(repo)
     write_graph_artifacts(repo, g)
-    print(f"Indexed {len(g.nodes)} nodes, {len(g.edges)} edges")
-    print("Wrote .intent/index/graph.json and search.json")
+    print(f"Indexed {len(g.nodes)} nodes, {len(g.edges)} edges → .intent/index/")
+    if not g.nodes:
+        print("No intent documents found. Create some with `sigil new spec <component> <title>`.")
     return 0
 
 
@@ -1094,6 +1099,7 @@ def cmd_new(args) -> int:
     template_path = templates_dir / template_file
     if not template_path.exists():
         print(f"Template not found: {template_path}")
+        print(f"Run `sigil init` to create the templates/ directory with default templates.")
         return 1
 
     content = read_text(template_path)
@@ -1381,7 +1387,10 @@ def cmd_bootstrap(args) -> int:
                 break
 
     if not discovered:
-        print("No source components detected (no package.json, pyproject.toml, go.mod, etc. found in top-level dirs).")
+        print("No source components detected.")
+        print("Bootstrap looks for these manifests in top-level directories:")
+        print("  package.json, pyproject.toml, Cargo.toml, go.mod, pom.xml, build.gradle")
+        print("If your project uses a different layout, create components manually with `sigil new component <name>`.")
         return 0
 
     created = 0
@@ -1595,9 +1604,11 @@ def cmd_init(args) -> int:
         try:
             httpd = HTTPServer(("127.0.0.1", port), Handler)
         except OSError:
+            original_port = port
             port = 0
             httpd = HTTPServer(("127.0.0.1", port), Handler)
             port = httpd.server_address[1]
+            print(f"  Port {original_port} in use, using port {port} instead.")
 
         url = f"http://127.0.0.1:{port}/tools/intent_viewer/index.html"
         print(f"  [6/6] Viewer ready")
@@ -1619,7 +1630,9 @@ def cmd_init(args) -> int:
             print("\nStopped.")
             httpd.server_close()
     else:
-        print(f"  [6/6] Viewer not found. Run from a sigil-enabled repo.")
+        print(f"  [6/6] Viewer not found.")
+        print(f"        Install with: pip install sigil-cli")
+        print(f"        Or run `sigil init` inside a project directory.")
 
     return 0
 
@@ -2722,7 +2735,9 @@ def cmd_suggest(args) -> int:
         else:
             print(f"  File: {target_str}")
             print(f"  No component owns this file.")
-            print(f"  Consider adding a path pattern to a component YAML.")
+            print(f"  Add a `paths:` pattern to a component YAML, e.g.:")
+            print(f"    paths:")
+            print(f"      - \"{Path(target_str).parts[0]}/**\" ")
         return 0
 
     # 2. Collect all intent docs connected to those components
@@ -3663,7 +3678,7 @@ def cmd_map(args) -> int:
         if as_json:
             print(json.dumps({"mode": mode, "nodes": [], "edges": []}, indent=2))
         else:
-            print("\n  No nodes found. Run `sigil index` to build the intent graph.")
+            print("\n  No intent documents found. Run `sigil init` to set up, or `sigil new` to create docs.")
         return 0
 
     if as_json:

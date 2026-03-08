@@ -436,7 +436,7 @@ def test_map_empty_graph(tmp_path, capsys):
     rc = cli.cmd_map(args)
     assert rc == 0
     out = capsys.readouterr().out
-    assert "No nodes" in out
+    assert "No intent documents found" in out
 
 
 # ---------------------------------------------------------------------------

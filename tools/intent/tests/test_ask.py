@@ -197,7 +197,7 @@ def test_cmd_ask_empty_repo(tmp_path, capsys):
     rc = cli.cmd_ask(args)
     assert rc == 0
     captured = capsys.readouterr()
-    assert "No nodes" in captured.out
+    assert "No intent documents found" in captured.out
 
 
 # ---------------------------------------------------------------------------
