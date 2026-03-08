@@ -1,0 +1,97 @@
+{
+  "name": "sigil-intent",
+  "displayName": "Sigil — Intent System",
+  "description": "Autocomplete, lint, and navigation for intent-first engineering repos",
+  "version": "0.1.0",
+  "publisher": "justfielding",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Linters", "Other"],
+  "activationEvents": [
+    "workspaceContains:.intent/config.yaml"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "sigil.newSpec",
+        "title": "Intent: New Spec"
+      },
+      {
+        "command": "sigil.newAdr",
+        "title": "Intent: New ADR"
+      },
+      {
+        "command": "sigil.newComponent",
+        "title": "Intent: New Component"
+      },
+      {
+        "command": "sigil.newGate",
+        "title": "Intent: New Gate"
+      },
+      {
+        "command": "sigil.newInterface",
+        "title": "Intent: New Interface"
+      },
+      {
+        "command": "sigil.impact",
+        "title": "Intent: Preview Graph Impact"
+      },
+      {
+        "command": "sigil.lint",
+        "title": "Intent: Lint"
+      },
+      {
+        "command": "sigil.fmt",
+        "title": "Intent: Format"
+      },
+      {
+        "command": "sigil.index",
+        "title": "Intent: Rebuild Index"
+      }
+    ],
+    "configuration": {
+      "title": "Sigil Intent System",
+      "properties": {
+        "sigil.executable": {
+          "type": "string",
+          "default": "sigil",
+          "description": "Path to the sigil CLI executable"
+        },
+        "sigil.lintOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Run sigil lint on save for intent documents"
+        },
+        "sigil.fmtOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Run sigil fmt on save for intent documents"
+        }
+      }
+    },
+    "languages": [
+      {
+        "id": "markdown",
+        "extensions": [".md"]
+      },
+      {
+        "id": "yaml",
+        "extensions": [".yaml", ".yml"]
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.3.0"
+  }
+}
