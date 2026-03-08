@@ -454,7 +454,7 @@ def _write_review_json(repo_root: Path, g: Graph, out_path: Path) -> None:
             diff_out = ""
 
     changes = []
-    skip_prefixes = [".intent/index/", ".git/", "templates/", ".pytest_cache/"]
+    skip_prefixes = [".intent/", ".git/", "templates/", ".pytest_cache/"]
     intent_prefixes = ["components/", "intent/", "interfaces/", "gates/"]
 
     for line in diff_out.strip().split("\n"):
@@ -3031,7 +3031,7 @@ def cmd_review(args) -> int:
         # Fallback: treat all files as changed (no git history)
         diff_out = ""
         for f in repo.rglob("*"):
-            if f.is_file() and not any(s in str(f) for s in [".git/", "__pycache__", "node_modules", ".intent/index"]):
+            if f.is_file() and not any(s in str(f) for s in [".git/", "__pycache__", "node_modules", ".intent/"]):
                 rel = str(f.relative_to(repo))
                 diff_out += f"A\t{rel}\n"
 
@@ -3051,7 +3051,7 @@ def cmd_review(args) -> int:
         return 0
 
     # Classify changes
-    skip_prefixes = [".intent/index/", ".git/", "templates/", ".pytest_cache/"]
+    skip_prefixes = [".intent/", ".git/", "templates/", ".pytest_cache/"]
     intent_prefixes = ["components/", "intent/", "interfaces/", "gates/"]
 
     intent_changes: List[Tuple[str, str]] = []
@@ -3388,7 +3388,7 @@ def cmd_pr(args) -> int:
                 comp_paths[cid] = paths
 
     # Classify files
-    skip_prefixes = [".intent/index/", ".git/", "templates/", ".pytest_cache/"]
+    skip_prefixes = [".intent/", ".git/", "templates/", ".pytest_cache/"]
     intent_prefixes = ["components/", "intent/", "interfaces/", "gates/"]
 
     intent_changes = []
