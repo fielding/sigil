@@ -1210,6 +1210,7 @@ def cmd_lint(args) -> int:
     repo = Path(args.repo).resolve()
     g = build_graph(repo)
     min_severity = getattr(args, "min_severity", "warn")
+    as_json = getattr(args, "json", False)
 
     severity_rank = {"error": 0, "warn": 1, "info": 2}
     min_rank = severity_rank.get(min_severity, 1)
@@ -1263,21 +1264,25 @@ def cmd_lint(args) -> int:
         if e.dst not in all_ids:
             _lint_emit(findings, "warn", e.src, f"dangling reference -> {e.dst}")
 
-    # Filter and print
-    warnings = 0
-    errors = 0
+    # Filter and collect
+    filtered: List[Dict] = []
     for sev, nid, msg in sorted(findings, key=lambda x: (severity_rank.get(x[0], 99), x[1])):
         rank = severity_rank.get(sev, 99)
         if rank > min_rank:
             continue
-        label = sev.upper()
-        print(f"{label} {nid}: {msg}")
-        if sev == "error":
-            errors += 1
-        else:
-            warnings += 1
+        filtered.append({"severity": sev, "node_id": nid, "message": msg})
 
-    print(f"\nLint: {warnings} warning(s), {errors} error(s)")
+    warnings = sum(1 for f in filtered if f["severity"] != "error")
+    errors = sum(1 for f in filtered if f["severity"] == "error")
+
+    if as_json:
+        print(json.dumps({"findings": filtered, "warnings": warnings, "errors": errors}, indent=2))
+    else:
+        for f in filtered:
+            print(f"{f['severity'].upper()} {f['node_id']}: {f['message']}")
+        print(f"\nLint: {warnings} warning(s), {errors} error(s)")
+        if warnings > 0 and errors == 0:
+            print("Run 'sigil fmt' to auto-fix some formatting issues.")
     return 1 if errors > 0 else 0
 
 
@@ -1603,6 +1608,7 @@ def cmd_init(args) -> int:
         print(f"  Map:      sigil map")
         print(f"  Suggest:  sigil suggest <filepath>")
         print(f"  Status:   sigil status")
+        print(f"  Hook:     sigil hook install  (enable intent review on commit)")
         print()
         print(f"  Press Ctrl+C to stop.")
         print()
@@ -3513,6 +3519,7 @@ def cmd_pr(args) -> int:
 def cmd_doctor(args) -> int:
     """Diagnose sigil installation and repo health."""
     repo = Path(args.repo).resolve()
+    as_json = getattr(args, "json", False)
     checks: List[Tuple[str, bool, str]] = []
 
     # 1. Python version
@@ -3614,21 +3621,26 @@ def cmd_doctor(args) -> int:
     has_hook = hook.exists() and "sigil" in hook.read_text(encoding="utf-8", errors="ignore") if hook.exists() else False
     checks.append(("Pre-commit hook", has_hook, "sigil review --staged" if has_hook else "not installed — run sigil hook install"))
 
-    # Print results
+    # Output results
+    passed = sum(1 for _, ok, _ in checks if ok)
+    failed = sum(1 for _, ok, _ in checks if not ok)
+
+    if as_json:
+        print(json.dumps({
+            "checks": [{"name": label, "passed": ok, "detail": detail} for label, ok, detail in checks],
+            "passed": passed,
+            "failed": failed,
+        }, indent=2))
+        return 0 if failed == 0 else 1
+
     print()
     print("  Sigil Doctor")
     print("  " + "=" * 50)
     print()
-    passed = 0
-    failed = 0
     for label, ok, detail in checks:
         icon = "\u2713" if ok else "\u2717"
         status = "ok" if ok else "FAIL"
         print(f"  {icon} {label:.<30s} {status:>4s}  {detail}")
-        if ok:
-            passed += 1
-        else:
-            failed += 1
     print()
     print(f"  {passed} passed, {failed} failed")
     if failed == 0:
@@ -4791,6 +4803,7 @@ commands (grouped by workflow):
     sp = sub.add_parser("lint", help="Lint intent documents")
     sp.add_argument("--min-severity", default="warn", choices=["error", "warn", "info"],
                     dest="min_severity", help="Minimum severity to report (default: warn)")
+    sp.add_argument("--json", action="store_true", default=False, help="Output as JSON")
     sp.set_defaults(fn=cmd_lint)
 
     sp = sub.add_parser("fmt", help="Normalize intent documents (IDs, Links section)")
@@ -4872,6 +4885,7 @@ commands (grouped by workflow):
     sp.set_defaults(fn=cmd_pr)
 
     sp = sub.add_parser("doctor", help="Diagnose sigil installation and repo health")
+    sp.add_argument("--json", action="store_true", default=False, help="Output as JSON")
     sp.set_defaults(fn=cmd_doctor)
 
     sp = sub.add_parser("scan", help="Deep-scan codebase to detect components, APIs, decisions, and relationships")

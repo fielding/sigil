@@ -525,3 +525,56 @@ def test_badge_medium_score_color(tmp_path):
     cli.cmd_badge(args)
     svg = out_svg.read_text()
     assert "<svg" in svg
+
+
+# ---------------------------------------------------------------------------
+# cmd_lint --json and cmd_doctor --json
+# ---------------------------------------------------------------------------
+
+def test_lint_json_output(tmp_path):
+    """lint --json should return structured findings."""
+    _setup_repo(tmp_path)
+    args = make_args(repo=str(tmp_path), min_severity="warn", json=True)
+    import io, contextlib
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        rc = cli.cmd_lint(args)
+    data = json.loads(buf.getvalue())
+    assert "findings" in data
+    assert "warnings" in data
+    assert "errors" in data
+    assert isinstance(data["findings"], list)
+    assert rc == 0
+
+
+def test_lint_json_with_errors(tmp_path):
+    """lint --json should include errors when front matter is bad."""
+    (tmp_path / "components").mkdir()
+    (tmp_path / "intent" / "bad" / "specs").mkdir(parents=True)
+    (tmp_path / "intent" / "bad" / "specs" / "SPEC-BAD-test.md").write_text(
+        "---\nstatus: accepted\n---\n\n# No ID\n"
+    )
+    args = make_args(repo=str(tmp_path), min_severity="error", json=True)
+    import io, contextlib
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        rc = cli.cmd_lint(args)
+    data = json.loads(buf.getvalue())
+    assert data["errors"] > 0
+    assert rc == 1
+
+
+def test_doctor_json_output(tmp_path):
+    """doctor --json should return structured check results."""
+    (tmp_path / ".intent").mkdir()
+    args = make_args(repo=str(tmp_path), json=True)
+    import io, contextlib
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        cli.cmd_doctor(args)
+    data = json.loads(buf.getvalue())
+    assert "checks" in data
+    assert "passed" in data
+    assert "failed" in data
+    assert isinstance(data["checks"], list)
+    assert all("name" in c and "passed" in c and "detail" in c for c in data["checks"])
