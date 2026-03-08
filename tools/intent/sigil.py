@@ -4494,6 +4494,8 @@ def cmd_list(args) -> int:
     repo = Path(args.repo).resolve()
     as_json = getattr(args, "json", False)
     filter_type = getattr(args, "type", None)
+    filter_status = getattr(args, "status", None)
+    filter_component = getattr(args, "component", None)
     sort_key = getattr(args, "sort", "id")
 
     g = build_graph(repo)
@@ -4540,6 +4542,33 @@ def cmd_list(args) -> int:
             except Exception:
                 pass
 
+    # Filter by status (e.g. --status proposed)
+    if filter_status:
+        fs = filter_status.lower()
+        nodes = [n for n in nodes if node_status.get(n.id, "").lower() == fs]
+
+    # Filter by parent component (e.g. --component auth-service)
+    if filter_component:
+        fc = filter_component.lower()
+        # Find matching component node
+        comp_ids = set()
+        for nid, node in g.nodes.items():
+            if node.type == "component" and (nid.lower() == fc or node.title.lower() == fc):
+                comp_ids.add(nid)
+        if not comp_ids:
+            # Try substring match
+            for nid, node in g.nodes.items():
+                if node.type == "component" and (fc in nid.lower() or fc in node.title.lower()):
+                    comp_ids.add(nid)
+        # Find nodes that belong_to any matched component
+        child_ids = set()
+        for e in g.edges:
+            if e.type == "belongs_to" and e.dst in comp_ids:
+                child_ids.add(e.src)
+        # Also include the component itself
+        child_ids |= comp_ids
+        nodes = [n for n in nodes if n.id in child_ids]
+
     if as_json:
         def _node_json(n) -> Dict:
             d: Dict = {"id": n.id, "type": n.type, "title": n.title, "path": n.path}
@@ -4560,7 +4589,17 @@ def cmd_list(args) -> int:
     }
 
     if not nodes:
-        print("\n  No intent nodes found. Run 'sigil init' to get started.\n")
+        if filter_status or filter_component:
+            parts = []
+            if filter_type:
+                parts.append(f"type={filter_type}")
+            if filter_status:
+                parts.append(f"status={filter_status}")
+            if filter_component:
+                parts.append(f"component={filter_component}")
+            print(f"\n  No nodes matching {', '.join(parts)}.\n")
+        else:
+            print("\n  No intent nodes found. Run 'sigil init' to get started.\n")
         return 0
 
     def _fmt_node(n, s_sym: str) -> str:
@@ -5098,6 +5137,8 @@ commands (grouped by workflow):
 
     sp = sub.add_parser("list", aliases=["ls"], help="List all nodes, optionally filtered by type")
     sp.add_argument("type", nargs="?", default=None, help="Filter by type: components, specs, adrs, gates, interfaces")
+    sp.add_argument("--status", default=None, help="Filter by status (e.g. proposed, accepted, draft, deprecated)")
+    sp.add_argument("--component", default=None, help="Filter by parent component (e.g. auth-service)")
     sp.add_argument("--sort", choices=["id", "type"], default="id", help="Sort order (default: id)")
     sp.add_argument("--json", action="store_true", default=False, help="Output as JSON")
     sp.set_defaults(fn=cmd_list)
