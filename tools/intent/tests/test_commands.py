@@ -308,6 +308,27 @@ def test_scan_dry_run_no_file(tmp_path):
     assert not (tmp_path / ".intent" / "index" / "scan.json").exists()
 
 
+def test_scan_json_output(tmp_path, capsys):
+    """Scan --json should print valid JSON to stdout."""
+    import json as json_mod
+    (tmp_path / ".intent" / "index").mkdir(parents=True)
+    # Create a detectable component
+    svc = tmp_path / "myservice"
+    svc.mkdir()
+    (svc / "package.json").write_text('{"name": "myservice"}')
+    (svc / "index.js").write_text("// app")
+    args = make_args(repo=str(tmp_path), dry_run=False, output=None, json=True)
+    rc = cli.cmd_scan(args)
+    assert rc == 0
+    out = capsys.readouterr().out
+    data = json_mod.loads(out)
+    assert "components" in data
+    assert "recommendations" in data
+    assert len(data["components"]) >= 1
+    # Should NOT contain terminal formatting
+    assert "Sigil Scan" not in out
+
+
 # ---------------------------------------------------------------------------
 # ci
 # ---------------------------------------------------------------------------

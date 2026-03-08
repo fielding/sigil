@@ -2108,29 +2108,12 @@ def cmd_drift(args) -> int:
 
     # Output drift report
     findings: list = []
-
-    print(f"\n  Drift Detection Report")
-    print(f"  {'='*40}")
-    print(f"  Files scanned: {len(tracked)}")
-    print(f"  Files mapped to components: {len(file_to_comp)}")
-    print(f"  Unowned files: {len(unowned)}")
-    print()
+    use_json = getattr(args, "json", False)
 
     if unowned:
-        print(f"  DRIFT: {len(unowned)} file(s) not mapped to any component")
-        for f in sorted(unowned)[:15]:
-            print(f"    - {f}")
-        if len(unowned) > 15:
-            print(f"    ... and {len(unowned) - 15} more")
         findings.append({"type": "unowned_files", "count": len(unowned), "files": sorted(unowned)})
-        print()
-
     if stale_specs:
-        print(f"  DRIFT: {len(stale_specs)} component(s) have code but no governing spec")
-        for msg in stale_specs:
-            print(f"    - {msg}")
         findings.append({"type": "no_spec", "items": stale_specs})
-        print()
 
     # Components with specs but zero code files
     empty_comps = []
@@ -2139,29 +2122,58 @@ def cmd_drift(args) -> int:
         if not comp_files and cid in comps_with_spec:
             empty_comps.append(cid)
     if empty_comps:
-        print(f"  INFO: {len(empty_comps)} component(s) have specs but no matching code files")
-        for cid in empty_comps:
-            print(f"    - {cid}")
         findings.append({"type": "spec_no_code", "items": empty_comps})
-        print()
 
-    # Summary
     total_drift = len(unowned) + len(stale_specs)
-    if total_drift == 0:
-        print("  No drift detected. Intent and code are aligned.")
-    else:
-        print(f"  Total drift signals: {total_drift}")
 
-    # Write drift report
-    out_dir = repo / ".intent" / "index"
-    out_dir.mkdir(parents=True, exist_ok=True)
+    # Build drift data
     drift_json = {
         "scanned": len(tracked),
         "mapped": len(file_to_comp),
         "unowned": len(unowned),
+        "drift_signals": total_drift,
         "findings": findings,
     }
+
+    # Write drift report
+    out_dir = repo / ".intent" / "index"
+    out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "drift.json").write_text(json.dumps(drift_json, indent=2), encoding="utf-8")
+
+    if use_json:
+        print(json.dumps(drift_json, indent=2))
+    else:
+        print(f"\n  Drift Detection Report")
+        print(f"  {'='*40}")
+        print(f"  Files scanned: {len(tracked)}")
+        print(f"  Files mapped to components: {len(file_to_comp)}")
+        print(f"  Unowned files: {len(unowned)}")
+        print()
+
+        if unowned:
+            print(f"  DRIFT: {len(unowned)} file(s) not mapped to any component")
+            for f in sorted(unowned)[:15]:
+                print(f"    - {f}")
+            if len(unowned) > 15:
+                print(f"    ... and {len(unowned) - 15} more")
+            print()
+
+        if stale_specs:
+            print(f"  DRIFT: {len(stale_specs)} component(s) have code but no governing spec")
+            for msg in stale_specs:
+                print(f"    - {msg}")
+            print()
+
+        if empty_comps:
+            print(f"  INFO: {len(empty_comps)} component(s) have specs but no matching code files")
+            for cid in empty_comps:
+                print(f"    - {cid}")
+            print()
+
+        if total_drift == 0:
+            print("  No drift detected. Intent and code are aligned.")
+        else:
+            print(f"  Total drift signals: {total_drift}")
 
     return 1 if total_drift > 0 else 0
 
@@ -2873,8 +2885,12 @@ def cmd_timeline(args) -> int:
         events.sort(key=lambda e: e["date"])
         timeline = {"events": events, "generated_at": now}
         out_path.write_text(json.dumps(timeline, indent=2), encoding="utf-8")
-        print(f"Timeline: {out_path}")
-        print(f"  {len(events)} events (from file timestamps, no git history)")
+        use_json = getattr(args, "json", False)
+        if use_json:
+            print(json.dumps(timeline, indent=2))
+        else:
+            print(f"Timeline: {out_path}")
+            print(f"  {len(events)} events (from file timestamps, no git history)")
         return 0
 
     # Parse git log
@@ -2940,8 +2956,12 @@ def cmd_timeline(args) -> int:
     now = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     timeline = {"events": events, "generated_at": now}
     out_path.write_text(json.dumps(timeline, indent=2), encoding="utf-8")
-    print(f"Timeline: {out_path}")
-    print(f"  {len(events)} events across {len(commits)} commits")
+    use_json = getattr(args, "json", False)
+    if use_json:
+        print(json.dumps(timeline, indent=2))
+    else:
+        print(f"Timeline: {out_path}")
+        print(f"  {len(events)} events across {len(commits)} commits")
     return 0
 
 
@@ -4524,10 +4544,12 @@ def cmd_scan(args) -> int:
     dry_run = getattr(args, "dry_run", False)
     out_path = getattr(args, "output", None)
 
-    print()
-    print("  Sigil Scan")
-    print("  " + "=" * 50)
-    print()
+    use_json = getattr(args, "json", False)
+    if not use_json:
+        print()
+        print("  Sigil Scan")
+        print("  " + "=" * 50)
+        print()
 
     # --- 1. Detect components (deeper than bootstrap) ---
     # Skip sigil's own structure dirs in addition to standard skip dirs
@@ -4669,52 +4691,6 @@ def cmd_scan(args) -> int:
     if not ci_files:
         recs.append("No CI/CD detected. Run sigil ci --init to generate a GitHub Actions workflow.")
 
-    # --- Print report ---
-    print(f"  Components detected:  {len(components)}")
-    for c in components:
-        cov = "covered" if c["slug"] in existing_components else "NEW"
-        lang = c["lang"] or "unknown"
-        extras = []
-        if c["has_tests"]:
-            extras.append("tests")
-        if c["has_dockerfile"]:
-            extras.append("docker")
-        if c["has_readme"]:
-            extras.append("readme")
-        extra_str = f"  [{', '.join(extras)}]" if extras else ""
-        print(f"    {cov:>7s}  {c['slug']:<25s} {lang:<10s} {c['files']:>4d} files{extra_str}")
-
-    if apis:
-        print(f"\n  APIs detected:        {len(apis)}")
-        for a in apis:
-            print(f"           {a['type']:<15s} {a['path']}")
-
-    if decisions:
-        print(f"\n  Decision signals:     {len(decisions)}")
-        for d in decisions[:5]:
-            print(f"           {d['signals']:>2d} signals   {d['path']}")
-
-    if ci_files:
-        print(f"\n  CI/CD detected:       {len(ci_files)}")
-        for c in ci_files:
-            print(f"           {c['type']:<18s} {c['path']}")
-
-    if infra:
-        print(f"\n  Infrastructure:       {len(infra)}")
-        for i in infra:
-            print(f"           {i['type']:<18s} {i['path']}")
-
-    cov = report["existing_coverage"]
-    print(f"\n  Sigil coverage:")
-    print(f"    Components: {cov['components']}  Specs: {cov['specs']}  ADRs: {cov['adrs']}  Gates: {cov['gates']}")
-
-    if recs:
-        print(f"\n  Recommendations:")
-        for i, r in enumerate(recs, 1):
-            print(f"    {i}. {r}")
-
-    print()
-
     # --- Write report JSON ---
     if out_path:
         report_path = Path(out_path)
@@ -4723,11 +4699,61 @@ def cmd_scan(args) -> int:
         idx_dir.mkdir(parents=True, exist_ok=True)
         report_path = idx_dir / "scan.json"
     if not dry_run:
-        # Convert to serializable
         report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
-        print(f"  Report written to {report_path.relative_to(repo)}")
+
+    if use_json:
+        print(json.dumps(report, indent=2))
     else:
-        print("  [dry-run] Would write report to", report_path)
+        # --- Print report ---
+        print(f"  Components detected:  {len(components)}")
+        for c in components:
+            cov_label = "covered" if c["slug"] in existing_components else "NEW"
+            lang = c["lang"] or "unknown"
+            extras = []
+            if c["has_tests"]:
+                extras.append("tests")
+            if c["has_dockerfile"]:
+                extras.append("docker")
+            if c["has_readme"]:
+                extras.append("readme")
+            extra_str = f"  [{', '.join(extras)}]" if extras else ""
+            print(f"    {cov_label:>7s}  {c['slug']:<25s} {lang:<10s} {c['files']:>4d} files{extra_str}")
+
+        if apis:
+            print(f"\n  APIs detected:        {len(apis)}")
+            for a in apis:
+                print(f"           {a['type']:<15s} {a['path']}")
+
+        if decisions:
+            print(f"\n  Decision signals:     {len(decisions)}")
+            for d in decisions[:5]:
+                print(f"           {d['signals']:>2d} signals   {d['path']}")
+
+        if ci_files:
+            print(f"\n  CI/CD detected:       {len(ci_files)}")
+            for c in ci_files:
+                print(f"           {c['type']:<18s} {c['path']}")
+
+        if infra:
+            print(f"\n  Infrastructure:       {len(infra)}")
+            for i in infra:
+                print(f"           {i['type']:<18s} {i['path']}")
+
+        cov = report["existing_coverage"]
+        print(f"\n  Sigil coverage:")
+        print(f"    Components: {cov['components']}  Specs: {cov['specs']}  ADRs: {cov['adrs']}  Gates: {cov['gates']}")
+
+        if recs:
+            print(f"\n  Recommendations:")
+            for i, r in enumerate(recs, 1):
+                print(f"    {i}. {r}")
+
+        print()
+
+        if not dry_run:
+            print(f"  Report written to {report_path.relative_to(repo)}")
+        else:
+            print("  [dry-run] Would write report to", report_path)
 
     return 0
 
@@ -4916,6 +4942,7 @@ commands (grouped by workflow):
     sp.set_defaults(fn=cmd_init)
 
     sp = sub.add_parser("drift", help="Detect drift between intent graph and codebase")
+    sp.add_argument("--json", action="store_true", help="Output JSON instead of terminal report")
     sp.set_defaults(fn=cmd_drift)
 
     sp = sub.add_parser("check", help="Run gate enforcement checks against the intent graph")
@@ -4977,6 +5004,7 @@ commands (grouped by workflow):
     sp = sub.add_parser("timeline", help="Build a timeline of intent evolution from git history")
     sp.add_argument("--max", type=int, default=50, help="Maximum number of commits to scan (default: 50)")
     sp.add_argument("--output", "-o", default=None, help="Output path (default: .intent/index/timeline.json)")
+    sp.add_argument("--json", action="store_true", help="Output JSON instead of terminal report")
     sp.set_defaults(fn=cmd_timeline)
 
     sp = sub.add_parser("hook", help="Install/uninstall Sigil git pre-commit hook")
@@ -4995,6 +5023,7 @@ commands (grouped by workflow):
     sp = sub.add_parser("scan", help="Deep-scan codebase to detect components, APIs, decisions, and relationships")
     sp.add_argument("--dry-run", action="store_true", help="Print findings without writing report")
     sp.add_argument("--output", "-o", default=None, help="Output path for scan report JSON")
+    sp.add_argument("--json", action="store_true", help="Output JSON instead of terminal report")
     sp.set_defaults(fn=cmd_scan)
 
     sp = sub.add_parser("ci", help="Run full CI pipeline: index, lint, check, badge, review")

@@ -207,6 +207,22 @@ def test_timeline_no_git(tmp_path, capsys):
     assert "Timeline:" in out
 
 
+def test_timeline_json_output(tmp_path, capsys):
+    """Timeline --json should print valid JSON to stdout."""
+    _setup_export_repo(tmp_path)
+    out_file = tmp_path / "timeline.json"
+    args = make_args(repo=str(tmp_path), output=str(out_file), json=True)
+    args.max = "50"
+    rc = cli.cmd_timeline(args)
+    assert rc == 0
+    out = capsys.readouterr().out
+    data = json.loads(out)
+    assert "events" in data
+    assert "generated_at" in data
+    # Should NOT contain terminal formatting
+    assert "Timeline:" not in out
+
+
 def test_timeline_default_output(tmp_path):
     """Timeline with no output should write to .intent/index/timeline.json."""
     _setup_export_repo(tmp_path)
