@@ -369,6 +369,9 @@ def test_init_creates_structure(tmp_path, capsys):
     # Check templates
     assert (tmp_path / "templates" / "SPEC.md").exists()
     assert (tmp_path / "templates" / "ADR.md").exists()
+    assert (tmp_path / "templates" / "COMPONENT.yaml").exists()
+    assert (tmp_path / "templates" / "GATE.yaml").exists()
+    assert (tmp_path / "templates" / "INTERFACE.md").exists()
 
 
 def test_init_with_existing_dirs(tmp_path, capsys):

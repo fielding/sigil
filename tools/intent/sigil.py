@@ -1468,6 +1468,26 @@ def cmd_init(args) -> int:
             "---\nid: ADR-0000\nstatus: draft\n---\n\n# <Decision>\n\n## Context\n\nWhat is the background?\n\n"
             "## Options Considered\n\n1. \n2. \n\n## Decision\n\n## Consequences\n\n## Links\n\n"
             "- Belongs to: [[COMP-<component>]]\n", encoding="utf-8")
+    comp_tmpl = templates_dir / "COMPONENT.yaml"
+    if not comp_tmpl.exists():
+        comp_tmpl.write_text(
+            "id: COMP-<name>\nname: <Component Name>\n\nowners:\n  - <team>\n\npaths:\n  - <service-path>/**\n\n"
+            "interfaces:\n  provides: []\n  consumes: []\n\ndependency_policy:\n  allowed_components: []\n\n"
+            "attributes:\n  tier: 1\n  data: []\n  runtime: []\n", encoding="utf-8")
+    gate_tmpl = templates_dir / "GATE.yaml"
+    if not gate_tmpl.exists():
+        gate_tmpl.write_text(
+            "id: GATE-0000\ntype: command\nstatus: active\n\napplies_to:\n  - node: <NODE-ID>\n\n"
+            "enforced_by:\n  kind: command\n  workdir: .\n  command: [\"bash\", \"-lc\", \"<check-script>\"]\n\n"
+            "policy:\n  mode: \"warn\"\n  on_fail: \"block\"\n\ndocs:\n  summary: \"<What this gate prevents>\"\n"
+            "  owner: \"<team>\"\n", encoding="utf-8")
+    iface_tmpl = templates_dir / "INTERFACE.md"
+    if not iface_tmpl.exists():
+        iface_tmpl.write_text(
+            "---\nid: <API-NAME-V1>\ntype: api\nstatus: active\n---\n\n# <Interface Name>\n\n## Description\n\n"
+            "(what this interface does and who uses it)\n\n## Contract\n\n(link to or embed the schema/spec file)\n\n"
+            "## Links\n\n- Provided by: [[COMP-...]]\n- Consumed by: [[COMP-...]]\n- Gates: [[GATE-...]]\n",
+            encoding="utf-8")
     print(f"  [2/6] Templates ready")
 
     # Deep scan + bootstrap: detect components, APIs, decisions
