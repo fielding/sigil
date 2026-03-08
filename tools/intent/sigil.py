@@ -354,6 +354,14 @@ def build_graph(repo_root: Path) -> Graph:
     # Gate edges from applies_to
     edges.extend(discover_gate_edges(repo_root))
 
+    # Deduplicate edges, keeping highest-confidence instance
+    seen: Dict[tuple, Edge] = {}
+    for e in edges:
+        key = (e.src, e.dst, e.type)
+        if key not in seen or e.confidence > seen[key].confidence:
+            seen[key] = e
+    edges = list(seen.values())
+
     return Graph(nodes=nodes, edges=edges)
 
 
@@ -1458,6 +1466,23 @@ def cmd_init(args) -> int:
         repo = _repo_str
         dry_run = False
     cmd_bootstrap(BootArgs())
+
+    # Create starter specs for bootstrapped components that don't have any intent docs
+    bootstrapped_comps = set(p.stem for p in comp_dir.glob("*.yaml")) if comp_dir.is_dir() else set()
+    for slug in sorted(bootstrapped_comps - had_comps):
+        intent_dir = repo / "intent" / slug / "specs"
+        if not intent_dir.exists() or not list(intent_dir.glob("*.md")):
+            intent_dir.mkdir(parents=True, exist_ok=True)
+            spec_path = intent_dir / f"SPEC-0001-{slug}-overview.md"
+            comp_name = slug.replace("-", " ").title()
+            spec_path.write_text(
+                f"---\nid: SPEC-0001\nstatus: draft\n---\n\n"
+                f"# {comp_name} Overview\n\n"
+                f"## Intent\n\nDescribe what {comp_name} does and why it exists.\n\n"
+                f"## Goals\n\n- \n\n## Non-goals\n\n- \n\n## Acceptance Criteria\n\n- [ ] \n\n"
+                f"## Links\n\n- Belongs to: [[COMP-{slug}]]\n",
+                encoding="utf-8",
+            )
 
     # Then run deep scan to find additional components
     scan_skip = {"components", "intent", "interfaces", "gates", "templates", "docs", ".intent"}

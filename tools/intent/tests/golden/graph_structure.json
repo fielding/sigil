@@ -1,0 +1,33 @@
+{
+  "component_ids": [
+    "COMP-admin-dashboard",
+    "COMP-auth-service",
+    "COMP-cart-service",
+    "COMP-catalog-service",
+    "COMP-notification-service",
+    "COMP-order-service",
+    "COMP-payment-gateway",
+    "COMP-search-service",
+    "COMP-web-app"
+  ],
+  "edge_count": 87,
+  "edge_types": [
+    "belongs_to",
+    "consumes",
+    "decided_by",
+    "depends_on",
+    "gated_by",
+    "provides",
+    "relates_to",
+    "supersedes"
+  ],
+  "node_count": 36,
+  "node_types": [
+    "adr",
+    "component",
+    "gate",
+    "interface",
+    "rollout",
+    "spec"
+  ]
+}
