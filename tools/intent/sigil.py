@@ -4245,10 +4245,56 @@ def cmd_ci(args) -> int:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(prog="sigil", description="Sigil — intent-first engineering CLI")
+    epilog = """\
+commands (grouped by workflow):
+
+  getting started:
+    init          Zero-to-working setup: scaffold, index, open viewer
+    bootstrap     Scan repo and create missing component stubs
+    new           Create a new intent document from template
+    doctor        Diagnose sigil installation and repo health
+
+  everyday use:
+    status        Show intent graph health status
+    check         Run gate enforcement checks
+    lint          Lint intent documents
+    fmt           Normalize intent documents (IDs, Links section)
+    serve         Start dev server with file watching
+
+  exploration:
+    ask           Search intent docs with a natural-language question
+    why           Explain why a file exists by tracing its intent chain
+    suggest       Show which intent docs govern a file
+    map           Render dependency map of the intent graph
+    impact        Show blast radius of a node
+
+  analysis:
+    coverage      Show intent coverage report with health score
+    drift         Detect drift between intent graph and codebase
+    review        Analyze git diff for intent coverage
+    scan          Deep-scan codebase for components, APIs, decisions
+    diff          Compute graph diff between two commits
+    timeline      Build timeline of intent evolution from git history
+
+  ci / integration:
+    ci            Run full CI pipeline: index, lint, check, badge, review
+    pr            Analyze a GitHub PR and post intent coverage comment
+    hook          Install/uninstall Sigil git pre-commit hook
+    badge         Generate intent coverage badge SVG
+    export        Generate self-contained HTML snapshot of the viewer
+    index         Build graph index from repo
+"""
+    ap = argparse.ArgumentParser(
+        prog="sigil",
+        description="Sigil — intent-first engineering CLI",
+        usage="sigil [-h] [--version] [--repo REPO] COMMAND ...",
+        epilog=epilog,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     ap.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     ap.add_argument("--repo", default=".", help="Repo root (default: cwd)")
-    sub = ap.add_subparsers(dest="cmd", required=True)
+    sub = ap.add_subparsers(dest="cmd", required=True, metavar="COMMAND",
+                            help=argparse.SUPPRESS)
 
     sp = sub.add_parser("status", help="Show intent graph health status")
     sp.add_argument("--json", action="store_true", default=False, help="Output results as JSON")
