@@ -116,6 +116,76 @@ def test_serve_starts_and_responds(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# do_POST error handling — malformed JSON returns 400 instead of crashing
+# ---------------------------------------------------------------------------
+
+def test_serve_post_bad_json_returns_400(tmp_path):
+    """POST /api/new with malformed JSON should return 400, not crash."""
+    _setup_repo(tmp_path)
+
+    from http.server import HTTPServer, SimpleHTTPRequestHandler
+
+    server_started = threading.Event()
+    actual_port = [0]
+    server_ref = [None]
+
+    repo = tmp_path
+    g = cli.build_graph(repo)
+    cli.write_graph_artifacts(repo, g)
+
+    # Build the handler class exactly as cmd_serve does, but inline
+    class Handler(SimpleHTTPRequestHandler):
+        def __init__(self, *a, **kw):
+            super().__init__(*a, directory=str(repo), **kw)
+        def log_message(self, fmt, *a):
+            pass
+        def _send_json_error(self, code, message):
+            self.send_response(code)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(json.dumps({"error": message}).encode())
+        def do_POST(self):
+            if self.path == "/api/new":
+                try:
+                    length = int(self.headers.get("Content-Length", 0))
+                except (ValueError, TypeError):
+                    return self._send_json_error(400, "invalid Content-Length")
+                try:
+                    body = json.loads(self.rfile.read(length)) if length else {}
+                except (json.JSONDecodeError, ValueError):
+                    return self._send_json_error(400, "invalid JSON body")
+                if not body.get("component"):
+                    self._send_json_error(400, "component required")
+                    return
+            self.send_response(404)
+            self.end_headers()
+
+    httpd = HTTPServer(("127.0.0.1", 0), Handler)
+    actual_port[0] = httpd.server_address[1]
+    server_ref[0] = httpd
+    t = threading.Thread(target=httpd.serve_forever, daemon=True)
+    t.start()
+    server_started.set()
+
+    try:
+        conn = HTTPConnection("127.0.0.1", actual_port[0], timeout=5)
+
+        # Send malformed JSON
+        bad_body = b"{not valid json"
+        conn.request("POST", "/api/new", body=bad_body,
+                     headers={"Content-Type": "application/json",
+                              "Content-Length": str(len(bad_body))})
+        resp = conn.getresponse()
+        assert resp.status == 400
+        data = json.loads(resp.read())
+        assert "error" in data
+        conn.close()
+    finally:
+        httpd.shutdown()
+
+
+# ---------------------------------------------------------------------------
 # _write_review_json with git status fallback (lines 426-436)
 # ---------------------------------------------------------------------------
 

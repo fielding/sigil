@@ -2525,10 +2525,22 @@ def cmd_serve(args) -> int:
                 self.wfile.write(json.dumps({"version": rebuild_version[0]}).encode())
                 return
             return super().do_GET()
+        def _send_json_error(self, code, message):
+            self.send_response(code)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(json.dumps({"error": message}).encode())
         def do_POST(self):
             if self.path == "/api/new":
-                length = int(self.headers.get("Content-Length", 0))
-                body = json.loads(self.rfile.read(length)) if length else {}
+                try:
+                    length = int(self.headers.get("Content-Length", 0))
+                except (ValueError, TypeError):
+                    return self._send_json_error(400, "invalid Content-Length")
+                try:
+                    body = json.loads(self.rfile.read(length)) if length else {}
+                except (json.JSONDecodeError, ValueError):
+                    return self._send_json_error(400, "invalid JSON body")
                 node_type = body.get("type", "spec")
                 component = body.get("component", "")
                 title = body.get("title", "Untitled")
@@ -2569,17 +2581,20 @@ def cmd_serve(args) -> int:
                 subdir_map = {"spec": "specs", "adr": "adrs"}
                 subdir = subdir_map.get(node_type, node_type + "s")
                 dest_dir = repo / "intent" / component / subdir
-                dest_dir.mkdir(parents=True, exist_ok=True)
-                dest = dest_dir / filename
-                content = read_text(template_path)
-                content = content.replace(f"{prefix}-0000", node_id)
-                content = content.replace("<Title>", title)
-                content = content.replace("<Decision>", title)
-                content = content.replace("<component>", component)
-                dest.write_text(content, encoding="utf-8")
-                # Rebuild graph
-                g2 = build_graph(repo)
-                write_graph_artifacts(repo, g2)
+                try:
+                    dest_dir.mkdir(parents=True, exist_ok=True)
+                    dest = dest_dir / filename
+                    content = read_text(template_path)
+                    content = content.replace(f"{prefix}-0000", node_id)
+                    content = content.replace("<Title>", title)
+                    content = content.replace("<Decision>", title)
+                    content = content.replace("<component>", component)
+                    dest.write_text(content, encoding="utf-8")
+                    # Rebuild graph
+                    g2 = build_graph(repo)
+                    write_graph_artifacts(repo, g2)
+                except Exception as ex:
+                    return self._send_json_error(500, f"failed to create document: {ex}")
                 print(f"  created: {node_id} ({dest.relative_to(repo)})")
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
@@ -3252,7 +3267,11 @@ def cmd_pr(args) -> int:
         print(f"  Usage: sigil pr [number]  (or run from a branch with an open PR)")
         return 1
 
-    pr = json.loads(pr_json)
+    try:
+        pr = json.loads(pr_json)
+    except (json.JSONDecodeError, ValueError):
+        print(f"  Error: could not parse PR data from GitHub CLI.")
+        return 1
     pr_number = pr["number"]
     pr_title = pr["title"]
     base_ref = pr["baseRefName"]
