@@ -4099,6 +4099,124 @@ def cmd_impact(args) -> int:
     return 0
 
 
+def cmd_show(args) -> int:
+    """Show detailed information about a single intent node."""
+    repo = Path(args.repo).resolve()
+    query = args.node
+    as_json = getattr(args, "json", False)
+
+    g = build_graph(repo)
+
+    node_id = _resolve_node_id(query, g)
+    if not node_id:
+        upper = query.upper()
+        candidates = [nid for nid in g.nodes if upper in nid.upper() or upper in g.nodes[nid].title.upper()]
+        if candidates:
+            print(f"  Ambiguous query '{query}'. Did you mean one of:")
+            for c in sorted(candidates)[:10]:
+                print(f"    {c}  {g.nodes[c].title}")
+        else:
+            print(f"  No node found matching '{query}'.")
+            print(f"  Available nodes: {', '.join(sorted(g.nodes.keys())[:20])}")
+        return 1
+
+    node = g.nodes[node_id]
+
+    # Read front matter for status and other metadata
+    meta: Dict[str, str] = {}
+    content_snippet = ""
+    full_path = repo / node.path if node.path else None
+    if full_path and full_path.exists():
+        text = read_text(full_path)
+        fm, body = parse_front_matter(text)
+        meta = fm
+        # Extract first meaningful paragraph as snippet
+        lines = [l for l in body.strip().splitlines() if l.strip() and not l.strip().startswith("#")]
+        content_snippet = "\n".join(lines[:5])
+
+    # Collect edges
+    outgoing: List[Edge] = []
+    incoming: List[Edge] = []
+    for e in g.edges:
+        if e.src == node_id:
+            outgoing.append(e)
+        elif e.dst == node_id:
+            incoming.append(e)
+
+    if as_json:
+        result = {
+            "id": node.id,
+            "type": node.type,
+            "title": node.title,
+            "path": node.path,
+            "status": meta.get("status", ""),
+            "metadata": {k: v for k, v in meta.items() if k not in ("id", "title", "status")},
+            "outgoing": [{"type": e.type, "target": e.dst, "title": g.nodes[e.dst].title} for e in outgoing if e.dst in g.nodes],
+            "incoming": [{"type": e.type, "source": e.src, "title": g.nodes[e.src].title} for e in incoming if e.src in g.nodes],
+        }
+        if content_snippet:
+            result["snippet"] = content_snippet
+        print(json.dumps(result, indent=2))
+        return 0
+
+    # Terminal output
+    sym = {
+        "component": "\u25a0", "spec": "\u25c6", "adr": "\u25b2",
+        "gate": "\u25cf", "interface": "\u25c8", "rollout": "\u25cb",
+    }
+    s = sym.get(node.type, "\u25cb")
+    status = meta.get("status", "")
+    status_str = f"  [{status}]" if status else ""
+
+    print()
+    print(f"  {s} {node.id}: {node.title}{status_str}")
+    print(f"  {'=' * 50}")
+    print(f"  Type: {node.type}")
+    print(f"  Path: {node.path}")
+    if status:
+        print(f"  Status: {status}")
+
+    # Show other metadata fields
+    skip_keys = {"id", "title", "status"}
+    shown_meta = {k: v for k, v in meta.items() if k not in skip_keys and v}
+    for k, v in sorted(shown_meta.items()):
+        if isinstance(v, list):
+            print(f"  {k}: {', '.join(str(i) for i in v)}")
+        else:
+            print(f"  {k}: {v}")
+
+    # Relationships
+    if outgoing or incoming:
+        print(f"\n  Relationships ({len(outgoing) + len(incoming)})")
+        print(f"  {'-' * 40}")
+
+        # Group by edge type
+        by_type: Dict[str, List[str]] = collections.defaultdict(list)
+        for e in outgoing:
+            if e.dst in g.nodes:
+                t = g.nodes[e.dst]
+                by_type[e.type].append(f"\u2192 {sym.get(t.type, '\u25cb')} {e.dst}  {t.title}")
+        for e in incoming:
+            if e.src in g.nodes:
+                t = g.nodes[e.src]
+                by_type[e.type].append(f"\u2190 {sym.get(t.type, '\u25cb')} {e.src}  {t.title}")
+
+        for etype in sorted(by_type.keys()):
+            print(f"    {etype}:")
+            for line in sorted(by_type[etype]):
+                print(f"      {line}")
+
+    # Content snippet
+    if content_snippet:
+        print(f"\n  Content")
+        print(f"  {'-' * 40}")
+        for line in content_snippet.splitlines():
+            print(f"    {line}")
+
+    print()
+    return 0
+
+
 def cmd_scan(args) -> int:
     """Deep-scan a codebase to auto-detect components, APIs, decisions, and relationships."""
     repo = Path(args.repo).resolve()
@@ -4422,6 +4540,7 @@ commands (grouped by workflow):
     watch         Watch intent files and re-index on change
 
   exploration:
+    show          Inspect a single node: metadata, relationships, content
     ask           Search intent docs with a natural-language question
     why           Explain why a file exists by tracing its intent chain
     suggest       Show which intent docs govern a file
@@ -4522,6 +4641,11 @@ commands (grouped by workflow):
     sp.add_argument("--interval", type=float, default=2.0, help="Poll interval in seconds (default: 2)")
     sp.add_argument("--json", action="store_true", default=False, help="Output JSON summaries")
     sp.set_defaults(fn=cmd_watch)
+
+    sp = sub.add_parser("show", help="Inspect a single node: metadata, relationships, content")
+    sp.add_argument("node", help="Node ID or search term (e.g. SPEC-0001, auth-service)")
+    sp.add_argument("--json", action="store_true", default=False, help="Output as JSON")
+    sp.set_defaults(fn=cmd_show)
 
     sp = sub.add_parser("ask", help="Search intent docs with a natural-language question")
     sp.add_argument("question", help="Question to search for")
