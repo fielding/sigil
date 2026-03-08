@@ -1659,9 +1659,9 @@ def cmd_init(args) -> int:
             print("\nStopped.")
             httpd.server_close()
     else:
-        print(f"  [6/6] Viewer not found.")
-        print(f"        Install with: pip install sigil-cli")
-        print(f"        Or run `sigil init` inside a project directory.")
+        print(f"  [6/6] Viewer not bundled (reinstall sigil-cli to fix).")
+        print(f"        Graph indexed — run `sigil status` to see coverage.")
+        print(f"        Or open https://fielding.github.io/sigil/ for the live demo.")
 
     return 0
 
