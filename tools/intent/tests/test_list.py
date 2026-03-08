@@ -116,6 +116,44 @@ def test_list_empty(tmp_path, capsys):
     assert "No intent nodes" in out
 
 
+def test_list_shows_status(tmp_path, capsys):
+    _scaffold(tmp_path)
+    args = make_args(repo=str(tmp_path))
+    rc = cli.cmd_list(args)
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "[accepted]" in out
+    # Components should not show status
+    for line in out.splitlines():
+        if "COMP-" in line:
+            assert "[" not in line
+
+
+def test_list_status_in_json(tmp_path, capsys):
+    _scaffold(tmp_path)
+    args = make_args(repo=str(tmp_path), json=True)
+    rc = cli.cmd_list(args)
+    assert rc == 0
+    data = json.loads(capsys.readouterr().out)
+    spec = next(n for n in data["nodes"] if n["id"] == "SPEC-0001")
+    assert spec["status"] == "accepted"
+    adr = next(n for n in data["nodes"] if n["id"] == "ADR-0001")
+    assert adr["status"] == "accepted"
+    # Components should not have status
+    comp = next(n for n in data["nodes"] if n["id"] == "COMP-auth")
+    assert "status" not in comp
+
+
+def test_list_filtered_shows_status(tmp_path, capsys):
+    _scaffold(tmp_path)
+    args = make_args(repo=str(tmp_path), type="specs")
+    rc = cli.cmd_list(args)
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "SPEC-0001" in out
+    assert "[accepted]" in out
+
+
 def test_list_sort_by_type(tmp_path, capsys):
     _scaffold(tmp_path)
     args = make_args(repo=str(tmp_path), sort="type")

@@ -4517,9 +4517,28 @@ def cmd_list(args) -> int:
     else:
         nodes.sort(key=lambda n: n.id)
 
+    # Read status from frontmatter for types that have it
+    status_types = {"spec", "adr", "rollout"}
+    node_status: Dict[str, str] = {}
+    for n in nodes:
+        if n.type in status_types and n.path:
+            try:
+                md = read_text(repo / n.path)
+                fm, _ = parse_front_matter(md)
+                st = fm.get("status", "")
+                if st:
+                    node_status[n.id] = st
+            except Exception:
+                pass
+
     if as_json:
+        def _node_json(n) -> Dict:
+            d: Dict = {"id": n.id, "type": n.type, "title": n.title, "path": n.path}
+            if n.id in node_status:
+                d["status"] = node_status[n.id]
+            return d
         result = {
-            "nodes": [{"id": n.id, "type": n.type, "title": n.title, "path": n.path} for n in nodes],
+            "nodes": [_node_json(n) for n in nodes],
             "count": len(nodes),
         }
         print(json.dumps(result, indent=2))
@@ -4534,6 +4553,11 @@ def cmd_list(args) -> int:
     if not nodes:
         print("\n  No intent nodes found. Run 'sigil init' to get started.\n")
         return 0
+
+    def _fmt_node(n, s_sym: str) -> str:
+        st = node_status.get(n.id, "")
+        suffix = f"  [{st}]" if st else ""
+        return f"    {s_sym} {n.id:<28s} {n.title}{suffix}"
 
     type_label = filter_type or "all"
     print(f"\n  {len(nodes)} node(s){f' ({type_label})' if filter_type else ''}:")
@@ -4551,12 +4575,12 @@ def cmd_list(args) -> int:
             print(f"  {t}s ({len(group)}):")
             for n in sorted(group, key=lambda n: n.id):
                 s = sym.get(t, "\u25cb")
-                print(f"    {s} {n.id:<28s} {n.title}")
+                print(_fmt_node(n, s))
             print()
     else:
         for n in nodes:
             s = sym.get(n.type, "\u25cb")
-            print(f"    {s} {n.id:<28s} {n.title}")
+            print(_fmt_node(n, s))
         print()
 
     return 0
