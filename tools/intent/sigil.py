@@ -2686,6 +2686,7 @@ def cmd_suggest(args) -> int:
 
     repo = Path(args.repo).resolve()
     target = args.path
+    as_json = getattr(args, "json", False)
     g = build_graph(repo)
 
     # Resolve path to be repo-relative
@@ -2710,22 +2711,21 @@ def cmd_suggest(args) -> int:
                     break
 
     if not owning_components:
-        print(f"  File: {target_str}")
-        print(f"  No component owns this file.")
-        print(f"  Consider adding a path pattern to a component YAML.")
+        if as_json:
+            print(json.dumps({"file": target_str, "components": []}, indent=2))
+        else:
+            print(f"  File: {target_str}")
+            print(f"  No component owns this file.")
+            print(f"  Consider adding a path pattern to a component YAML.")
         return 0
 
-    # 2. Find all intent docs connected to those components
-    print(f"\n  File: {target_str}")
-    print(f"  {'=' * 40}")
-
+    # 2. Collect all intent docs connected to those components
+    json_components = []
     for comp_id in owning_components:
         comp = g.nodes.get(comp_id)
         if not comp:
             continue
-        print(f"\n  Component: {comp.title} ({comp_id})")
 
-        # Find all nodes that belong to this component
         related_specs: List[str] = []
         related_adrs: List[str] = []
         related_gates: List[str] = []
@@ -2746,45 +2746,66 @@ def cmd_suggest(args) -> int:
             if e.dst == comp_id and e.type == "gated_by":
                 related_gates.append(e.src)
 
-        # Also check interfaces
         for e in g.edges:
             if (e.src == comp_id or e.dst == comp_id) and e.type in ("provides", "consumes"):
                 target_id = e.dst if e.src == comp_id else e.src
                 if target_id in g.nodes and g.nodes[target_id].type == "interface":
                     related_interfaces.append(target_id)
 
-        if related_specs:
+        def _node_info(nid: str) -> Dict:
+            node = g.nodes[nid]
+            info: Dict = {"id": nid, "title": node.title, "path": node.path}
+            try:
+                fm_raw = read_text(repo / node.path)
+                fm, _ = parse_front_matter(fm_raw)
+                info["status"] = fm.get("status", "")
+            except Exception:
+                pass
+            return info
+
+        comp_data = {
+            "id": comp_id,
+            "title": comp.title,
+            "specs": [_node_info(s) for s in sorted(set(related_specs))],
+            "adrs": [_node_info(a) for a in sorted(set(related_adrs))],
+            "gates": [{"id": gid, "title": g.nodes[gid].title} for gid in sorted(set(related_gates)) if gid in g.nodes],
+            "interfaces": [{"id": iid, "title": g.nodes[iid].title} for iid in sorted(set(related_interfaces)) if iid in g.nodes],
+        }
+        json_components.append(comp_data)
+
+    if as_json:
+        print(json.dumps({"file": target_str, "components": json_components}, indent=2))
+        return 0
+
+    # Terminal output
+    print(f"\n  File: {target_str}")
+    print(f"  {'=' * 40}")
+
+    for comp_data in json_components:
+        print(f"\n  Component: {comp_data['title']} ({comp_data['id']})")
+
+        if comp_data["specs"]:
             print(f"\n  Governing Specs:")
-            for sid in sorted(set(related_specs)):
-                node = g.nodes[sid]
-                fm_raw = read_text(repo / node.path)
-                fm, _ = parse_front_matter(fm_raw)
-                status = fm.get("status", "?")
-                print(f"    [{status}] {sid}: {node.title}")
-                print(f"           {node.path}")
+            for s in comp_data["specs"]:
+                status = s.get("status", "?")
+                print(f"    [{status}] {s['id']}: {s['title']}")
+                print(f"           {s['path']}")
 
-        if related_adrs:
+        if comp_data["adrs"]:
             print(f"\n  Relevant ADRs:")
-            for aid in sorted(set(related_adrs)):
-                node = g.nodes[aid]
-                fm_raw = read_text(repo / node.path)
-                fm, _ = parse_front_matter(fm_raw)
-                status = fm.get("status", "?")
-                print(f"    [{status}] {aid}: {node.title}")
+            for a in comp_data["adrs"]:
+                status = a.get("status", "?")
+                print(f"    [{status}] {a['id']}: {a['title']}")
 
-        if related_gates:
+        if comp_data["gates"]:
             print(f"\n  Enforced Gates:")
-            for gid in sorted(set(related_gates)):
-                node = g.nodes.get(gid)
-                if node:
-                    print(f"    {gid}: {node.title}")
+            for gt in comp_data["gates"]:
+                print(f"    {gt['id']}: {gt['title']}")
 
-        if related_interfaces:
+        if comp_data["interfaces"]:
             print(f"\n  Interfaces:")
-            for iid in sorted(set(related_interfaces)):
-                node = g.nodes.get(iid)
-                if node:
-                    print(f"    {iid}: {node.title}")
+            for ifc in comp_data["interfaces"]:
+                print(f"    {ifc['id']}: {ifc['title']}")
 
     print()
     return 0
@@ -3596,10 +3617,51 @@ def cmd_map(args) -> int:
     repo = Path(args.repo).resolve()
     mode = getattr(args, "mode", "tree")
     focus = getattr(args, "focus", None)
+    as_json = getattr(args, "json", False)
 
     g = build_graph(repo)
     if not g.nodes:
-        print("\n  No nodes found. Run `sigil index` to build the intent graph.")
+        if as_json:
+            print(json.dumps({"mode": mode, "nodes": [], "edges": []}, indent=2))
+        else:
+            print("\n  No nodes found. Run `sigil index` to build the intent graph.")
+        return 0
+
+    if as_json:
+        # JSON output: structured graph data
+        def _node_dict(n) -> Dict:
+            d: Dict = {"id": n.id, "type": n.type, "title": n.title, "path": n.path}
+            try:
+                md = read_text(repo / n.path)
+                fm, _ = parse_front_matter(md)
+                st = fm.get("status", "")
+                if st:
+                    d["status"] = st
+            except Exception:
+                pass
+            return d
+
+        nodes_out = []
+        for n in g.nodes.values():
+            if focus:
+                focus_upper = focus.upper()
+                if focus_upper not in n.id.upper() and focus_upper not in n.title.upper():
+                    # Include if a parent/child matches
+                    related = False
+                    for e in g.edges:
+                        if e.type == "belongs_to":
+                            if (e.src == n.id or e.dst == n.id):
+                                other = e.dst if e.src == n.id else e.src
+                                if other in g.nodes and (focus_upper in g.nodes[other].id.upper() or focus_upper in g.nodes[other].title.upper()):
+                                    related = True
+                                    break
+                    if not related:
+                        continue
+            nodes_out.append(_node_dict(n))
+
+        node_ids = {n["id"] for n in nodes_out}
+        edges_out = [{"src": e.src, "dst": e.dst, "type": e.type} for e in g.edges if e.src in node_ids and e.dst in node_ids]
+        print(json.dumps({"mode": mode, "focus": focus, "nodes": sorted(nodes_out, key=lambda n: n["id"]), "edges": edges_out, "summary": {"total_nodes": len(nodes_out), "total_edges": len(edges_out)}}, indent=2))
         return 0
 
     # Build adjacency
@@ -3821,6 +3883,7 @@ def cmd_why(args) -> int:
 
     repo = Path(args.repo).resolve()
     target = args.path
+    as_json = getattr(args, "json", False)
     g = build_graph(repo)
 
     # Resolve path to be repo-relative
@@ -3834,12 +3897,11 @@ def cmd_why(args) -> int:
     # Check file exists
     full_path = repo / target_str
     if not full_path.exists():
-        print(f"  File not found: {target_str}")
+        if as_json:
+            print(json.dumps({"file": target_str, "error": "file not found"}, indent=2))
+        else:
+            print(f"  File not found: {target_str}")
         return 1
-
-    print()
-    print(f"  sigil why {target_str}")
-    print(f"  {'=' * 50}")
 
     # 1. Find owning components
     owning_components: List[str] = []
@@ -3854,22 +3916,51 @@ def cmd_why(args) -> int:
                     break
 
     if not owning_components:
-        print(f"\n  This file is ungoverned — no component claims it.")
-        print(f"  To govern it, add a path pattern to a component YAML:")
-        print(f"    paths:")
-        print(f'      - "{target_str}"')
-        print()
+        if as_json:
+            print(json.dumps({"file": target_str, "governed": False, "components": []}, indent=2))
+        else:
+            print(f"\n  This file is ungoverned — no component claims it.")
+            print(f"  To govern it, add a path pattern to a component YAML:")
+            print(f"    paths:")
+            print(f'      - "{target_str}"')
+            print()
         return 0
 
+    def _excerpt(node_path: str, max_lines: int = 4) -> str:
+        """Extract a meaningful excerpt from an intent doc."""
+        try:
+            md = read_text(repo / node_path)
+            _, body = parse_front_matter(md)
+            lines = body.strip().splitlines()
+            capture = False
+            result = []
+            for line in lines:
+                if line.strip().startswith("## Intent") or line.strip().startswith("## Context") or line.strip().startswith("## Decision"):
+                    capture = True
+                    continue
+                elif line.strip().startswith("## ") and capture:
+                    break
+                elif capture and line.strip():
+                    result.append(line.strip())
+                    if len(result) >= max_lines:
+                        break
+            if not result:
+                for line in lines:
+                    if line.strip() and not line.startswith("#"):
+                        result.append(line.strip())
+                        if len(result) >= max_lines:
+                            break
+            return "\n".join(result)
+        except Exception:
+            return ""
+
+    # 2. Collect data for each owning component
+    result_components = []
     for comp_id in owning_components:
         comp = g.nodes.get(comp_id)
         if not comp:
             continue
 
-        print(f"\n  Owned by: {comp.title} ({comp_id})")
-        print(f"  {comp.path}")
-
-        # Collect all related nodes with their relationships (deduplicated)
         seen_ids: set = set()
         specs, adrs, gates, interfaces = [], [], [], []
         for e in g.edges:
@@ -3894,7 +3985,6 @@ def cmd_why(args) -> int:
                 if inode and inode.type == "interface" and inode not in interfaces:
                     interfaces.append(inode)
 
-        # Also find gates that apply to any of this component's specs
         spec_ids = {s.id for s in specs}
         for e in g.edges:
             if e.type == "gated_by" and e.src in spec_ids:
@@ -3902,88 +3992,90 @@ def cmd_why(args) -> int:
                 if gnode and gnode not in gates:
                     gates.append(gnode)
 
-        def _excerpt(node_path: str, max_lines: int = 4) -> str:
-            """Extract a meaningful excerpt from an intent doc."""
+        def _node_with_excerpt(node) -> Dict:
+            info: Dict = {"id": node.id, "title": node.title, "path": node.path}
             try:
-                md = read_text(repo / node_path)
-                _, body = parse_front_matter(md)
-                # Find Intent or Context section
-                lines = body.strip().splitlines()
-                capture = False
-                result = []
-                for line in lines:
-                    if line.strip().startswith("## Intent") or line.strip().startswith("## Context") or line.strip().startswith("## Decision"):
-                        capture = True
-                        continue
-                    elif line.strip().startswith("## ") and capture:
-                        break
-                    elif capture and line.strip():
-                        result.append(line.strip())
-                        if len(result) >= max_lines:
-                            break
-                if not result:
-                    # Fallback: first non-empty body lines after title
-                    for line in lines:
-                        if line.strip() and not line.startswith("#"):
-                            result.append(line.strip())
-                            if len(result) >= max_lines:
-                                break
-                return "\n".join(result)
+                md = read_text(repo / node.path)
+                fm, _ = parse_front_matter(md)
+                info["status"] = fm.get("status", "")
             except Exception:
-                return ""
+                pass
+            excerpt = _excerpt(node.path)
+            if excerpt:
+                info["excerpt"] = excerpt
+            return info
 
-        # Print the intent chain as a narrative
-        if specs:
-            print(f"\n  What is being built:")
-            for spec in sorted(specs, key=lambda n: n.id):
-                md = read_text(repo / spec.path)
-                fm, _ = parse_front_matter(md)
-                status = fm.get("status", "?")
-                print(f"    [{status}] {spec.id}: {spec.title}")
-                excerpt = _excerpt(spec.path)
-                if excerpt:
-                    for line in excerpt.splitlines():
-                        print(f"      | {line}")
-
-        if adrs:
-            print(f"\n  Why it was built this way:")
-            for adr in sorted(adrs, key=lambda n: n.id):
-                md = read_text(repo / adr.path)
-                fm, _ = parse_front_matter(md)
-                status = fm.get("status", "?")
-                print(f"    [{status}] {adr.id}: {adr.title}")
-                excerpt = _excerpt(adr.path)
-                if excerpt:
-                    for line in excerpt.splitlines():
-                        print(f"      | {line}")
-
-        if gates:
-            print(f"\n  What enforces it:")
-            for gate in sorted(gates, key=lambda n: n.id):
-                print(f"    {gate.id}: {gate.title}")
-
-        if interfaces:
-            print(f"\n  Contracts:")
-            for iface in sorted(interfaces, key=lambda n: n.id):
-                print(f"    {iface.id}: {iface.title}")
-
-        # Show transitive dependencies — what else depends on these specs
         dep_chain = []
         for spec in specs:
             for e in g.edges:
                 if e.type == "depends_on" and e.dst == spec.id and e.src in g.nodes:
-                    dep_chain.append((g.nodes[e.src], spec))
+                    dep_chain.append({"from": g.nodes[e.src].id, "to": spec.id, "to_title": spec.title})
                 if e.type == "depends_on" and e.src == spec.id and e.dst in g.nodes:
-                    dep_chain.append((spec, g.nodes[e.dst]))
+                    dep_chain.append({"from": spec.id, "to": g.nodes[e.dst].id, "to_title": g.nodes[e.dst].title})
 
-        if dep_chain:
+        comp_data = {
+            "id": comp_id,
+            "title": comp.title,
+            "path": comp.path,
+            "specs": [_node_with_excerpt(s) for s in sorted(specs, key=lambda n: n.id)],
+            "adrs": [_node_with_excerpt(a) for a in sorted(adrs, key=lambda n: n.id)],
+            "gates": [{"id": gt.id, "title": gt.title} for gt in sorted(gates, key=lambda n: n.id)],
+            "interfaces": [{"id": ifc.id, "title": ifc.title} for ifc in sorted(interfaces, key=lambda n: n.id)],
+            "dependencies": dep_chain,
+        }
+        result_components.append(comp_data)
+
+    if as_json:
+        print(json.dumps({"file": target_str, "governed": True, "components": result_components}, indent=2))
+        return 0
+
+    # Terminal output
+    print()
+    print(f"  sigil why {target_str}")
+    print(f"  {'=' * 50}")
+
+    for comp_data in result_components:
+        print(f"\n  Owned by: {comp_data['title']} ({comp_data['id']})")
+        print(f"  {comp_data['path']}")
+
+        if comp_data["specs"]:
+            print(f"\n  What is being built:")
+            for s in comp_data["specs"]:
+                status = s.get("status", "?")
+                print(f"    [{status}] {s['id']}: {s['title']}")
+                excerpt = s.get("excerpt", "")
+                if excerpt:
+                    for line in excerpt.splitlines():
+                        print(f"      | {line}")
+
+        if comp_data["adrs"]:
+            print(f"\n  Why it was built this way:")
+            for a in comp_data["adrs"]:
+                status = a.get("status", "?")
+                print(f"    [{status}] {a['id']}: {a['title']}")
+                excerpt = a.get("excerpt", "")
+                if excerpt:
+                    for line in excerpt.splitlines():
+                        print(f"      | {line}")
+
+        if comp_data["gates"]:
+            print(f"\n  What enforces it:")
+            for gt in comp_data["gates"]:
+                print(f"    {gt['id']}: {gt['title']}")
+
+        if comp_data["interfaces"]:
+            print(f"\n  Contracts:")
+            for ifc in comp_data["interfaces"]:
+                print(f"    {ifc['id']}: {ifc['title']}")
+
+        if comp_data["dependencies"]:
             print(f"\n  Connected decisions:")
             seen = set()
-            for src, dst in dep_chain:
-                key = f"{src.id}->{dst.id}"
+            for dep in comp_data["dependencies"]:
+                key = f"{dep['from']}->{dep['to']}"
                 if key not in seen:
                     seen.add(key)
-                    print(f"    {src.id} depends on {dst.id} ({dst.title})")
+                    print(f"    {dep['from']} depends on {dep['to']} ({dep['to_title']})")
 
     print()
     return 0
@@ -4728,6 +4820,7 @@ commands (grouped by workflow):
 
     sp = sub.add_parser("suggest", help="Show which intent docs govern a file")
     sp.add_argument("path", help="File path to analyze")
+    sp.add_argument("--json", action="store_true", default=False, help="Output as JSON")
     sp.set_defaults(fn=cmd_suggest)
 
     sp = sub.add_parser("review", help="Analyze git diff for intent coverage of changed files")
@@ -4768,10 +4861,12 @@ commands (grouped by workflow):
     sp = sub.add_parser("map", help="Render terminal-friendly dependency map of the intent graph")
     sp.add_argument("--mode", choices=["tree", "deps", "flat"], default="tree", help="Display mode (default: tree)")
     sp.add_argument("--focus", default=None, help="Focus on a specific node or component")
+    sp.add_argument("--json", action="store_true", default=False, help="Output as JSON")
     sp.set_defaults(fn=cmd_map)
 
     sp = sub.add_parser("why", help="Explain why a file exists by tracing its full intent chain")
     sp.add_argument("path", help="File path to trace")
+    sp.add_argument("--json", action="store_true", default=False, help="Output as JSON")
     sp.set_defaults(fn=cmd_why)
 
     sp = sub.add_parser("impact", help="Show blast radius — what depends on a node and what it affects")
