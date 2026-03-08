@@ -3578,12 +3578,39 @@ def cmd_doctor(args) -> int:
     comps = list(comp_dir.glob("*.yaml")) if comp_dir.is_dir() else []
     checks.append(("Components", len(comps) > 0, f"{len(comps)} component(s)" if comps else "none — run sigil bootstrap"))
 
-    # 11. Git repo
-    git_dir = repo / ".git"
-    checks.append(("Git repository", git_dir.is_dir(), "initialized" if git_dir.is_dir() else "not a git repo"))
+    # 10b. YAML validity — check all component and gate YAML files parse cleanly
+    if yaml is not None:
+        bad_yamls: List[str] = []
+        for yaml_dir in ["components", "gates"]:
+            d = repo / yaml_dir
+            if d.is_dir():
+                for yf in d.glob("*.yaml"):
+                    try:
+                        yaml.safe_load(yf.read_text(encoding="utf-8"))
+                    except Exception as exc:
+                        bad_yamls.append(f"{yf.name}: {exc}")
+        if bad_yamls:
+            checks.append(("YAML validity", False, f"{len(bad_yamls)} file(s) malformed — {bad_yamls[0]}"))
+        else:
+            total = len(comps) + len(list((repo / "gates").glob("*.yaml")) if (repo / "gates").is_dir() else [])
+            checks.append(("YAML validity", True, f"{total} file(s) valid"))
 
-    # 12. Pre-commit hook
-    hook = repo / ".git" / "hooks" / "pre-commit"
+    # 11. Git repo — use git rev-parse so --repo subdirectories work
+    try:
+        git_top = subprocess.run(
+            ["git", "-C", str(repo), "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True,
+        )
+        is_git = git_top.returncode == 0
+        git_root_path = Path(git_top.stdout.strip()) if is_git else None
+    except FileNotFoundError:
+        is_git = False
+        git_root_path = None
+    checks.append(("Git repository", is_git, "initialized" if is_git else "not a git repo"))
+
+    # 12. Pre-commit hook — look in the actual git root
+    hook_dir = git_root_path / ".git" / "hooks" if git_root_path else repo / ".git" / "hooks"
+    hook = hook_dir / "pre-commit"
     has_hook = hook.exists() and "sigil" in hook.read_text(encoding="utf-8", errors="ignore") if hook.exists() else False
     checks.append(("Pre-commit hook", has_hook, "sigil review --staged" if has_hook else "not installed — run sigil hook install"))
 
