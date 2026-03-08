@@ -196,3 +196,108 @@ def test_cmd_check_watch_prints_header(tmp_path, capsys):
         assert "Watching intent files" in output
     finally:
         cli._snapshot_mtimes = original_snapshot
+
+
+# ---------------------------------------------------------------------------
+# cmd_watch (standalone watch command)
+# ---------------------------------------------------------------------------
+
+def test_cmd_watch_initial_summary(tmp_path, capsys):
+    """Watch command prints initial summary then exits on KeyboardInterrupt."""
+    repo = _setup_repo(tmp_path)
+    args = make_args(repo=str(repo), interval=0.1)
+
+    original_sleep = time.sleep
+
+    def fake_sleep(s):
+        raise KeyboardInterrupt()
+
+    time.sleep = fake_sleep
+    try:
+        rc = cli.cmd_watch(args)
+    finally:
+        time.sleep = original_sleep
+
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "Sigil Watch" in out
+    assert "nodes" in out
+    assert "Watch stopped" in out
+
+
+def test_cmd_watch_detects_change(tmp_path, capsys):
+    """Watch detects file change, re-indexes, shows changed files."""
+    repo = _setup_repo(tmp_path)
+    args = make_args(repo=str(repo), interval=0.1)
+
+    original_sleep = time.sleep
+    call_count = [0]
+    spec = repo / "intent" / "mycomp" / "specs" / "SPEC-0001-foo.md"
+
+    def fake_sleep(s):
+        call_count[0] += 1
+        if call_count[0] == 1:
+            spec.write_text(spec.read_text() + "\nUpdated.\n", encoding="utf-8")
+        elif call_count[0] >= 2:
+            raise KeyboardInterrupt()
+
+    time.sleep = fake_sleep
+    try:
+        rc = cli.cmd_watch(args)
+    finally:
+        time.sleep = original_sleep
+
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "file(s) changed" in out
+    assert "~" in out  # modified file indicator
+
+
+def test_cmd_watch_json_output(tmp_path, capsys):
+    """Watch --json outputs JSON summary."""
+    repo = _setup_repo(tmp_path)
+    args = make_args(repo=str(repo), json=True, interval=0.1)
+
+    original_sleep = time.sleep
+
+    def fake_sleep(s):
+        raise KeyboardInterrupt()
+
+    time.sleep = fake_sleep
+    try:
+        rc = cli.cmd_watch(args)
+    finally:
+        time.sleep = original_sleep
+
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert '"nodes"' in out
+    assert '"edges"' in out
+
+
+def test_cmd_watch_shows_added_files(tmp_path, capsys):
+    """Watch shows added files with + prefix."""
+    repo = _setup_repo(tmp_path)
+    args = make_args(repo=str(repo), interval=0.1)
+
+    original_sleep = time.sleep
+    call_count = [0]
+
+    def fake_sleep(s):
+        call_count[0] += 1
+        if call_count[0] == 1:
+            (repo / "components" / "new.yaml").write_text(
+                "id: COMP-new\ntitle: New\n", encoding="utf-8"
+            )
+        elif call_count[0] >= 2:
+            raise KeyboardInterrupt()
+
+    time.sleep = fake_sleep
+    try:
+        rc = cli.cmd_watch(args)
+    finally:
+        time.sleep = original_sleep
+
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "+" in out

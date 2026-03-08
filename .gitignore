@@ -11,6 +11,7 @@ venv/
 
 # Node
 node_modules/
+npm/lib/
 
 # Paperclip agents (not part of product)
 agents/
@@ -18,6 +19,9 @@ agents/
 # OS
 .DS_Store
 Thumbs.db
+
+# Test caches
+tools/intent/tests/.realworld_cache/
 
 # Editor
 .vscode/
