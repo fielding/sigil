@@ -4436,6 +4436,88 @@ def cmd_show(args) -> int:
     return 0
 
 
+def cmd_list(args) -> int:
+    """List intent nodes, optionally filtered by type."""
+    repo = Path(args.repo).resolve()
+    as_json = getattr(args, "json", False)
+    filter_type = getattr(args, "type", None)
+    sort_key = getattr(args, "sort", "id")
+
+    g = build_graph(repo)
+
+    nodes = list(g.nodes.values())
+    if filter_type:
+        # Allow plural forms (components -> component)
+        t = filter_type.rstrip("s") if filter_type not in ("status",) else filter_type
+        # Map common aliases
+        aliases = {"spec": "spec", "adr": "adr", "gate": "gate",
+                   "component": "component", "interface": "interface",
+                   "rollout": "rollout"}
+        t = aliases.get(t, t)
+        nodes = [n for n in nodes if n.type == t]
+        if not nodes:
+            valid_types = sorted(set(n.type for n in g.nodes.values()))
+            if as_json:
+                print(json.dumps({"nodes": [], "count": 0}))
+            else:
+                print(f"\n  No nodes of type '{filter_type}'.")
+                if valid_types:
+                    print(f"  Available types: {', '.join(valid_types)}")
+                print()
+            return 0
+
+    # Sort
+    if sort_key == "type":
+        type_order = {"component": 0, "spec": 1, "adr": 2, "gate": 3, "interface": 4, "rollout": 5}
+        nodes.sort(key=lambda n: (type_order.get(n.type, 99), n.id))
+    else:
+        nodes.sort(key=lambda n: n.id)
+
+    if as_json:
+        result = {
+            "nodes": [{"id": n.id, "type": n.type, "title": n.title, "path": n.path} for n in nodes],
+            "count": len(nodes),
+        }
+        print(json.dumps(result, indent=2))
+        return 0
+
+    # Terminal output
+    sym = {
+        "component": "\u25a0", "spec": "\u25c6", "adr": "\u25b2",
+        "gate": "\u25cf", "interface": "\u25c8", "rollout": "\u25cb",
+    }
+
+    if not nodes:
+        print("\n  No intent nodes found. Run 'sigil init' to get started.\n")
+        return 0
+
+    type_label = filter_type or "all"
+    print(f"\n  {len(nodes)} node(s){f' ({type_label})' if filter_type else ''}:")
+    print()
+
+    # Group by type for ungrouped listing
+    if not filter_type:
+        by_type: Dict[str, List] = collections.defaultdict(list)
+        for n in nodes:
+            by_type[n.type].append(n)
+        for t in ["component", "spec", "adr", "gate", "interface", "rollout"]:
+            group = by_type.get(t, [])
+            if not group:
+                continue
+            print(f"  {t}s ({len(group)}):")
+            for n in sorted(group, key=lambda n: n.id):
+                s = sym.get(t, "\u25cb")
+                print(f"    {s} {n.id:<28s} {n.title}")
+            print()
+    else:
+        for n in nodes:
+            s = sym.get(n.type, "\u25cb")
+            print(f"    {s} {n.id:<28s} {n.title}")
+        print()
+
+    return 0
+
+
 def cmd_scan(args) -> int:
     """Deep-scan a codebase to auto-detect components, APIs, decisions, and relationships."""
     repo = Path(args.repo).resolve()
@@ -4759,6 +4841,7 @@ commands (grouped by workflow):
     watch         Watch intent files and re-index on change
 
   exploration:
+    list          List all nodes, optionally filtered by type
     show          Inspect a single node: metadata, relationships, content
     ask           Search intent docs with a natural-language question
     why           Explain why a file exists by tracing its intent chain
@@ -4861,6 +4944,12 @@ commands (grouped by workflow):
     sp.add_argument("--interval", type=float, default=2.0, help="Poll interval in seconds (default: 2)")
     sp.add_argument("--json", action="store_true", default=False, help="Output JSON summaries")
     sp.set_defaults(fn=cmd_watch)
+
+    sp = sub.add_parser("list", aliases=["ls"], help="List all nodes, optionally filtered by type")
+    sp.add_argument("type", nargs="?", default=None, help="Filter by type: components, specs, adrs, gates, interfaces")
+    sp.add_argument("--sort", choices=["id", "type"], default="id", help="Sort order (default: id)")
+    sp.add_argument("--json", action="store_true", default=False, help="Output as JSON")
+    sp.set_defaults(fn=cmd_list)
 
     sp = sub.add_parser("show", help="Inspect a single node: metadata, relationships, content")
     sp.add_argument("node", help="Node ID or search term (e.g. SPEC-0001, auth-service)")
