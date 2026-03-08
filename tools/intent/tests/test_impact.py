@@ -155,3 +155,22 @@ class TestCmdImpact:
             capture_output=True, text=True, timeout=30
         )
         assert result.returncode == 1
+
+    def test_impact_not_found_json(self, tmp_path):
+        """impact --json should return structured error for missing nodes."""
+        (tmp_path / "components").mkdir()
+        (tmp_path / "intent").mkdir()
+        (tmp_path / "interfaces").mkdir()
+        (tmp_path / "gates").mkdir()
+        (tmp_path / "components" / "a.yaml").write_text("id: COMP-A\nname: A\n")
+
+        import subprocess
+        result = subprocess.run(
+            [sys.executable, str(Path(__file__).parent.parent / "sigil.py"),
+             "--repo", str(tmp_path), "impact", "NONEXISTENT", "--json"],
+            capture_output=True, text=True, timeout=30
+        )
+        assert result.returncode == 1
+        data = json.loads(result.stderr.strip() or result.stdout.strip())
+        assert data["error"] == "not_found"
+        assert data["query"] == "NONEXISTENT"

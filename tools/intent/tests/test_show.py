@@ -117,3 +117,28 @@ def test_show_empty_repo(tmp_path, capsys):
     assert rc == 1
     out = capsys.readouterr().out
     assert "No node found" in out or "No exact match" in out
+
+
+def test_show_not_found_json(tmp_path, capsys):
+    """show --json should return structured error when node not found."""
+    _scaffold(tmp_path)
+    args = make_args(repo=str(tmp_path), node="nonexistent", json=True)
+    rc = cli.cmd_show(args)
+    assert rc == 1
+    out = capsys.readouterr().out
+    data = json.loads(out)
+    assert data["error"] == "not_found"
+    assert data["query"] == "nonexistent"
+    assert isinstance(data["suggestions"], list)
+
+
+def test_show_not_found_json_with_suggestions(tmp_path, capsys):
+    """show --json should include suggestions for partial matches."""
+    _scaffold(tmp_path)
+    args = make_args(repo=str(tmp_path), node="jwt-auth-stuff", json=True)
+    rc = cli.cmd_show(args)
+    assert rc == 1
+    out = capsys.readouterr().out
+    data = json.loads(out)
+    assert data["error"] == "not_found"
+    assert len(data["suggestions"]) > 0

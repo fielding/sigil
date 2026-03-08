@@ -4251,9 +4251,13 @@ def _rank_candidates(query: str, g: Graph) -> List[str]:
     return [nid for nid, _ in scored[:10]]
 
 
-def _print_not_found(query: str, g: Graph) -> None:
+def _print_not_found(query: str, g: Graph, as_json: bool = False) -> None:
     """Print helpful node-not-found message with ranked suggestions."""
     candidates = _rank_candidates(query, g)
+    if as_json:
+        suggestions = [{"id": c, "title": g.nodes[c].title} for c in candidates] if candidates else []
+        print(json.dumps({"error": "not_found", "query": query, "suggestions": suggestions}))
+        return
     if candidates:
         print(f"  No exact match for '{query}'. Did you mean:")
         for c in candidates:
@@ -4277,7 +4281,7 @@ def cmd_impact(args) -> int:
 
     node_id = _resolve_node_id(query, g)
     if not node_id:
-        _print_not_found(query, g)
+        _print_not_found(query, g, as_json=as_json)
         return 1
 
     node = g.nodes[node_id]
@@ -4356,7 +4360,7 @@ def cmd_show(args) -> int:
 
     node_id = _resolve_node_id(query, g)
     if not node_id:
-        _print_not_found(query, g)
+        _print_not_found(query, g, as_json=as_json)
         return 1
 
     node = g.nodes[node_id]
@@ -4763,63 +4767,103 @@ def cmd_ci(args) -> int:
     import io, contextlib
     repo = Path(args.repo).resolve()
     strict = getattr(args, "strict", False)
+    as_json = getattr(args, "json", False)
     base = getattr(args, "base", None)
     head = getattr(args, "head", None)
 
-    print()
-    print("  Sigil CI Pipeline")
-    print("  " + "=" * 50)
-    print()
+    if not as_json:
+        print()
+        print("  Sigil CI Pipeline")
+        print("  " + "=" * 50)
+        print()
 
     errors = 0
+    pipeline_results: Dict[str, Dict] = {}
 
     # Step 1: Index
-    print("  [1/5] Indexing...")
+    if not as_json:
+        print("  [1/5] Indexing...")
     g = build_graph(repo)
     write_graph_artifacts(repo, g)
-    print(f"         {len(g.nodes)} nodes, {len(g.edges)} edges")
+    pipeline_results["index"] = {"status": "pass", "nodes": len(g.nodes), "edges": len(g.edges)}
+    if not as_json:
+        print(f"         {len(g.nodes)} nodes, {len(g.edges)} edges")
 
     # Step 2: Lint
-    print("  [2/5] Linting...")
+    if not as_json:
+        print("  [2/5] Linting...")
     _repo_str = str(repo)
 
+    lint_buf = io.StringIO()
     class LintArgs:
         repo = _repo_str
         min_severity = "warn"
-    lint_result = cmd_lint(LintArgs())
+        json = True
+    with contextlib.redirect_stdout(lint_buf):
+        lint_result = cmd_lint(LintArgs())
+    try:
+        lint_data = json.loads(lint_buf.getvalue())
+    except (json.JSONDecodeError, ValueError):
+        lint_data = {}
     if lint_result != 0:
         errors += 1
-        print("         Lint issues found")
+        pipeline_results["lint"] = {"status": "fail", **lint_data}
+        if not as_json:
+            print("         Lint issues found")
     else:
-        print("         Clean")
+        pipeline_results["lint"] = {"status": "pass", **lint_data}
+        if not as_json:
+            print("         Clean")
 
     # Step 3: Check gates
-    print("  [3/5] Checking gates...")
+    if not as_json:
+        print("  [3/5] Checking gates...")
     gates_dir = repo / "gates"
     has_gates = gates_dir.is_dir() and any(gates_dir.glob("*.yaml"))
+
+    check_buf = io.StringIO()
     class CheckArgs:
         repo = _repo_str
-    with contextlib.redirect_stdout(io.StringIO()):
+        json = True
+    with contextlib.redirect_stdout(check_buf):
         check_result = cmd_check(CheckArgs())
+    try:
+        check_data = json.loads(check_buf.getvalue())
+    except (json.JSONDecodeError, ValueError):
+        check_data = {}
     if check_result != 0:
         errors += 1
-        print("         Gate failures detected")
+        pipeline_results["check"] = {"status": "fail", **check_data}
+        if not as_json:
+            print("         Gate failures detected")
     elif not has_gates:
-        print("         No gates configured (skipped)")
+        pipeline_results["check"] = {"status": "skip", "reason": "no gates configured"}
+        if not as_json:
+            print("         No gates configured (skipped)")
     else:
-        print("         All gates passing")
+        pipeline_results["check"] = {"status": "pass", **check_data}
+        if not as_json:
+            print("         All gates passing")
 
     # Step 4: Badge
-    print("  [4/5] Generating badge...")
+    if not as_json:
+        print("  [4/5] Generating badge...")
     badge_path = repo / ".intent" / "badge.svg"
     class BadgeArgs:
         repo = _repo_str
         output = str(badge_path)
-    cmd_badge(BadgeArgs())
-    print(f"         {badge_path.relative_to(repo)}")
+    if as_json:
+        with contextlib.redirect_stdout(io.StringIO()):
+            cmd_badge(BadgeArgs())
+    else:
+        cmd_badge(BadgeArgs())
+    pipeline_results["badge"] = {"status": "pass", "path": str(badge_path.relative_to(repo))}
+    if not as_json:
+        print(f"         {badge_path.relative_to(repo)}")
 
     # Step 5: Review (if in a git context with changes)
-    print("  [5/5] Review...")
+    if not as_json:
+        print("  [5/5] Review...")
     class ReviewArgs:
         repo = _repo_str
         staged = False
@@ -4827,21 +4871,48 @@ def cmd_ci(args) -> int:
     ReviewArgs.base = base
     ReviewArgs.head = head
     try:
-        review_result = cmd_review(ReviewArgs())
+        if as_json:
+            with contextlib.redirect_stdout(io.StringIO()):
+                review_result = cmd_review(ReviewArgs())
+        else:
+            review_result = cmd_review(ReviewArgs())
+        pipeline_results["review"] = {"status": "pass"}
     except (subprocess.CalledProcessError, Exception):
         review_result = 0
-        print("         No changes to review")
+        pipeline_results["review"] = {"status": "skip", "reason": "no changes to review"}
+        if not as_json:
+            print("         No changes to review")
+
+    # Coverage
+    cov = _compute_coverage(repo, g)
+    pipeline_results["coverage"] = {"score": cov.get("score", 0)}
 
     # Summary
-    print()
-    print("  " + "-" * 50)
     if errors == 0:
-        print("  Pipeline: PASS")
+        status = "pass"
     elif strict:
-        print("  Pipeline: FAIL (strict mode)")
+        status = "fail"
     else:
-        print(f"  Pipeline: WARN ({errors} issue(s), non-blocking)")
-    print()
+        status = "warn"
+
+    if as_json:
+        result = {
+            "status": status,
+            "errors": errors,
+            "strict": strict,
+            "steps": pipeline_results,
+        }
+        print(json.dumps(result, indent=2))
+    else:
+        print()
+        print("  " + "-" * 50)
+        if status == "pass":
+            print("  Pipeline: PASS")
+        elif status == "fail":
+            print("  Pipeline: FAIL (strict mode)")
+        else:
+            print(f"  Pipeline: WARN ({errors} issue(s), non-blocking)")
+        print()
 
     if strict and errors > 0:
         return 1
@@ -5028,6 +5099,7 @@ commands (grouped by workflow):
 
     sp = sub.add_parser("ci", help="Run full CI pipeline: index, lint, check, badge, review")
     sp.add_argument("--strict", action="store_true", help="Exit non-zero on any warnings")
+    sp.add_argument("--json", action="store_true", help="Output structured JSON results")
     sp.add_argument("base", nargs="?", default=None, help="Base commit for review (optional)")
     sp.add_argument("head", nargs="?", default=None, help="Head commit for review (optional)")
     sp.set_defaults(fn=cmd_ci)

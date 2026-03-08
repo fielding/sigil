@@ -275,6 +275,51 @@ def test_ci_strict_with_lint_issues(tmp_path, capsys):
     assert "FAIL" in out
 
 
+def test_ci_json_output(tmp_path, capsys):
+    """CI --json should output valid structured JSON with all pipeline steps."""
+    _setup_full_repo(tmp_path)
+    args = make_args(repo=str(tmp_path), strict=False, json=True, base=None, head=None)
+    rc = cli.cmd_ci(args)
+    assert rc == 0
+    out = capsys.readouterr().out
+    data = json.loads(out)
+    assert data["status"] == "pass"
+    assert data["errors"] == 0
+    assert "index" in data["steps"]
+    assert "lint" in data["steps"]
+    assert "check" in data["steps"]
+    assert "badge" in data["steps"]
+    assert "review" in data["steps"]
+    assert "coverage" in data["steps"]
+    assert data["steps"]["index"]["nodes"] > 0
+    assert data["steps"]["coverage"]["score"] >= 0
+
+
+def test_ci_json_strict_fail(tmp_path, capsys):
+    """CI --json --strict should return fail status on lint errors."""
+    for d in ["components", "intent", "interfaces", "gates", "templates", ".intent"]:
+        (tmp_path / d).mkdir(parents=True, exist_ok=True)
+    (tmp_path / ".intent" / "config.yaml").write_text("id_counters: {}\n")
+    (tmp_path / "templates" / "SPEC.md").write_text("---\nid: SPEC-0000\n---\n")
+    (tmp_path / "templates" / "ADR.md").write_text("---\nid: ADR-0000\n---\n")
+    (tmp_path / "intent" / "api" / "specs").mkdir(parents=True)
+    (tmp_path / "intent" / "api" / "specs" / "SPEC-0001-bad.md").write_text(
+        "---\nstatus: accepted\n---\n\n# Bad spec\n"
+    )
+    (tmp_path / ".git").mkdir()
+    viewer_dir = tmp_path / "tools" / "intent_viewer"
+    viewer_dir.mkdir(parents=True)
+    (viewer_dir / "index.html").write_text("<html><head><title>Sigil</title></head><body></body></html>")
+    args = make_args(repo=str(tmp_path), strict=True, json=True, base=None, head=None)
+    rc = cli.cmd_ci(args)
+    assert rc == 1
+    out = capsys.readouterr().out
+    data = json.loads(out)
+    assert data["status"] == "fail"
+    assert data["errors"] > 0
+    assert data["steps"]["lint"]["status"] == "fail"
+
+
 # ---------------------------------------------------------------------------
 # cmd_pr (dry run, mocked gh)
 # ---------------------------------------------------------------------------
