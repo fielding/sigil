@@ -674,6 +674,11 @@ _STOP_WORDS = {
     "i", "you", "he", "she", "they", "them", "their", "its", "us",
     "so", "but", "if", "then", "than", "also", "any", "all", "no",
     "why", "what", "how", "when", "where", "who", "which",
+    "about", "like", "just", "get", "got", "go", "going",
+    "use", "used", "using", "make", "tell", "show", "explain",
+    "need", "want", "way", "thing", "things", "look", "find",
+    "here", "there", "been", "being", "were", "more", "some",
+    "know", "see", "through", "into", "over", "between", "such",
 }
 
 
@@ -729,7 +734,7 @@ def _score_node(query_tokens: List[str], body_tokens: List[str], title_tokens: L
     if not query_tokens:
         return 0.0
 
-    # Check AND semantics: all query tokens must match somewhere (exact or fuzzy)
+    # Soft AND: require at least half the tokens to match; penalize missing tokens
     all_searchable = set(title_tokens + body_tokens + _tokenize(nid))
     matched_tokens = []
     for qt in query_tokens:
@@ -738,8 +743,9 @@ def _score_node(query_tokens: List[str], body_tokens: List[str], title_tokens: L
         elif _fuzzy_match(qt, list(all_searchable)) > 0:
             matched_tokens.append(qt)
 
-    if len(matched_tokens) < len(query_tokens):
-        return 0.0  # AND: all tokens must match
+    match_ratio = len(matched_tokens) / len(query_tokens)
+    if match_ratio < 0.5:
+        return 0.0  # require at least half the query tokens to match
 
     score = 0.0
     id_tokens = set(_tokenize(nid))
@@ -784,7 +790,8 @@ def _score_node(query_tokens: List[str], body_tokens: List[str], title_tokens: L
             tf = body_counter.get(qt, 0) / total_body
             score += tf
 
-    return score
+    # Penalize partial matches so full matches rank higher
+    return score * match_ratio
 
 
 def _find_excerpt(body: str, query_tokens: List[str], max_chars: int = 300) -> str:
@@ -4394,7 +4401,7 @@ commands (grouped by workflow):
     )
     ap.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     ap.add_argument("--repo", default=".", help="Repo root (default: cwd)")
-    sub = ap.add_subparsers(dest="cmd", required=True, metavar="COMMAND",
+    sub = ap.add_subparsers(dest="cmd", metavar="COMMAND",
                             help=argparse.SUPPRESS)
 
     sp = sub.add_parser("status", help="Show intent graph health status")
@@ -4525,6 +4532,9 @@ commands (grouped by workflow):
     sp.set_defaults(fn=cmd_impact)
 
     args = ap.parse_args()
+    if not args.cmd:
+        ap.print_help()
+        return 0
     return args.fn(args)
 
 

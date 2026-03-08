@@ -266,9 +266,14 @@ def test_multi_word_and_both_present(tmp_path):
 
 def test_multi_word_and_one_missing(tmp_path):
     g, repo = _make_graph_with_adr(tmp_path)
-    # "postgresql" exists but "xyzzy" does not
-    results = cli.search_nodes("postgresql xyzzy", g, repo)
-    assert not any(r[0] == "ADR-0001" for r in results)
+    # "postgresql" exists but "xyzzy" does not — partial match returns with lower score
+    full_match = cli.search_nodes("postgresql jsonb", g, repo)
+    partial_match = cli.search_nodes("postgresql xyzzy", g, repo)
+    assert any(r[0] == "ADR-0001" for r in partial_match)
+    # Partial match should score lower than full match
+    full_score = next(r[1] for r in full_match if r[0] == "ADR-0001")
+    partial_score = next(r[1] for r in partial_match if r[0] == "ADR-0001")
+    assert partial_score < full_score
 
 
 # ---------------------------------------------------------------------------
