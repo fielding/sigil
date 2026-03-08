@@ -74,7 +74,7 @@ def test_show_not_found(tmp_path, capsys):
     rc = cli.cmd_show(args)
     assert rc == 1
     out = capsys.readouterr().out
-    assert "No node found" in out
+    assert "No node found" in out or "No exact match" in out
 
 
 def test_show_ambiguous(tmp_path, capsys):
@@ -116,4 +116,4 @@ def test_show_empty_repo(tmp_path, capsys):
     rc = cli.cmd_show(args)
     assert rc == 1
     out = capsys.readouterr().out
-    assert "No node found" in out
+    assert "No node found" in out or "No exact match" in out

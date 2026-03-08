@@ -4035,6 +4035,52 @@ def _resolve_node_id(query: str, g: Graph) -> Optional[str]:
     return None
 
 
+def _rank_candidates(query: str, g: Graph) -> List[str]:
+    """Return candidate node IDs ranked by relevance to query."""
+    from difflib import SequenceMatcher
+    upper = query.upper()
+    scored: List[tuple] = []
+    for nid in g.nodes:
+        nid_upper = nid.upper()
+        title_upper = g.nodes[nid].title.upper()
+        score = 0.0
+        # Prefix match on ID is strongest
+        if nid_upper.startswith(upper):
+            score = 3.0 + SequenceMatcher(None, upper, nid_upper).ratio()
+        # Substring match on ID
+        elif upper in nid_upper:
+            score = 2.0 + SequenceMatcher(None, upper, nid_upper).ratio()
+        # Title contains query
+        elif upper in title_upper:
+            score = 1.0 + SequenceMatcher(None, upper, title_upper).ratio()
+        # Fuzzy match on ID or title
+        else:
+            id_ratio = SequenceMatcher(None, upper, nid_upper).ratio()
+            title_ratio = SequenceMatcher(None, upper, title_upper).ratio()
+            best = max(id_ratio, title_ratio)
+            if best >= 0.5:
+                score = best
+        if score > 0:
+            scored.append((nid, score))
+    scored.sort(key=lambda x: -x[1])
+    return [nid for nid, _ in scored[:10]]
+
+
+def _print_not_found(query: str, g: Graph) -> None:
+    """Print helpful node-not-found message with ranked suggestions."""
+    candidates = _rank_candidates(query, g)
+    if candidates:
+        print(f"  No exact match for '{query}'. Did you mean:")
+        for c in candidates:
+            print(f"    {c}  {g.nodes[c].title}")
+    else:
+        print(f"  No node found matching '{query}'.")
+        sample = sorted(g.nodes.keys())[:10]
+        if sample:
+            print(f"  Try: sigil show <node-id>")
+            print(f"  Example nodes: {', '.join(sample)}")
+
+
 def cmd_impact(args) -> int:
     """Show the blast radius of a node — what depends on it and what it affects."""
     repo = Path(args.repo).resolve()
@@ -4046,16 +4092,7 @@ def cmd_impact(args) -> int:
 
     node_id = _resolve_node_id(query, g)
     if not node_id:
-        # Show candidates
-        upper = query.upper()
-        candidates = [nid for nid in g.nodes if upper in nid.upper() or upper in g.nodes[nid].title.upper()]
-        if candidates:
-            print(f"  Ambiguous query '{query}'. Did you mean one of:")
-            for c in sorted(candidates)[:10]:
-                print(f"    {c}  {g.nodes[c].title}")
-        else:
-            print(f"  No node found matching '{query}'.")
-            print(f"  Available nodes: {', '.join(sorted(g.nodes.keys())[:20])}")
+        _print_not_found(query, g)
         return 1
 
     node = g.nodes[node_id]
@@ -4134,15 +4171,7 @@ def cmd_show(args) -> int:
 
     node_id = _resolve_node_id(query, g)
     if not node_id:
-        upper = query.upper()
-        candidates = [nid for nid in g.nodes if upper in nid.upper() or upper in g.nodes[nid].title.upper()]
-        if candidates:
-            print(f"  Ambiguous query '{query}'. Did you mean one of:")
-            for c in sorted(candidates)[:10]:
-                print(f"    {c}  {g.nodes[c].title}")
-        else:
-            print(f"  No node found matching '{query}'.")
-            print(f"  Available nodes: {', '.join(sorted(g.nodes.keys())[:20])}")
+        _print_not_found(query, g)
         return 1
 
     node = g.nodes[node_id]
