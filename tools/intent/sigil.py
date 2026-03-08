@@ -1899,6 +1899,93 @@ def cmd_check(args) -> int:
     return last_exit
 
 
+def cmd_watch(args) -> int:
+    """Watch intent files for changes and re-run analysis on each change."""
+    import time as _time
+
+    repo = Path(args.repo).resolve()
+    interval = getattr(args, "interval", 2.0)
+    use_json = getattr(args, "json", False)
+
+    # Initial run
+    print(f"\n  Sigil Watch")
+    print(f"  ===========")
+    print(f"  Monitoring intent files (poll every {interval}s). Press Ctrl+C to stop.\n")
+
+    g = build_graph(repo)
+    write_graph_artifacts(repo, g)
+    _watch_print_summary(repo, g, use_json)
+
+    prev_mtimes = _snapshot_mtimes(repo)
+
+    try:
+        while True:
+            _time.sleep(interval)
+            cur_mtimes = _snapshot_mtimes(repo)
+            if cur_mtimes == prev_mtimes:
+                continue
+
+            # Determine changed files
+            changed: List[str] = []
+            added: List[str] = []
+            removed: List[str] = []
+            prev_keys = set(prev_mtimes.keys())
+            cur_keys = set(cur_mtimes.keys())
+            for k in cur_keys - prev_keys:
+                added.append(k)
+            for k in prev_keys - cur_keys:
+                removed.append(k)
+            for k in cur_keys & prev_keys:
+                if cur_mtimes[k] != prev_mtimes[k]:
+                    changed.append(k)
+
+            prev_mtimes = cur_mtimes
+
+            ts = _time.strftime("%H:%M:%S")
+            total = len(changed) + len(added) + len(removed)
+            print(f"\n  [{ts}] {total} file(s) changed. Re-indexing...\n")
+
+            if not use_json:
+                for f in added:
+                    print(f"    + {Path(f).relative_to(repo)}")
+                for f in changed:
+                    print(f"    ~ {Path(f).relative_to(repo)}")
+                for f in removed:
+                    print(f"    - {Path(f).relative_to(repo)}")
+                if total:
+                    print()
+
+            g = build_graph(repo)
+            write_graph_artifacts(repo, g)
+            _watch_print_summary(repo, g, use_json)
+
+    except KeyboardInterrupt:
+        print("\n  Watch stopped.")
+
+    return 0
+
+
+def _watch_print_summary(repo: Path, g, use_json: bool) -> None:
+    """Print a compact status summary for watch mode."""
+    types: Dict[str, int] = {}
+    for n in g.nodes.values():
+        types[n.type] = types.get(n.type, 0) + 1
+
+    if use_json:
+        print(json.dumps({
+            "nodes": len(g.nodes),
+            "edges": len(g.edges),
+            "node_types": {t: c for t, c in types.items()},
+        }))
+        return
+
+    parts = []
+    for t in ["component", "spec", "adr", "gate", "interface"]:
+        if types.get(t, 0):
+            parts.append(f"{types[t]} {t}s")
+    print(f"  {len(g.nodes)} nodes ({', '.join(parts)}), {len(g.edges)} edges")
+
+
 def cmd_drift(args) -> int:
     """Detect drift between intent graph and actual codebase."""
     import fnmatch
@@ -2381,7 +2468,7 @@ def cmd_serve(args) -> int:
     from http.server import HTTPServer, SimpleHTTPRequestHandler
 
     repo = Path(args.repo).resolve()
-    port = int(args.port)
+    port = args.port
 
     # Initial build
     g = build_graph(repo)
@@ -2659,7 +2746,7 @@ def cmd_suggest(args) -> int:
 def cmd_timeline(args) -> int:
     """Build a timeline of intent evolution from git history."""
     repo = Path(args.repo).resolve()
-    max_commits = int(getattr(args, "max", 50))
+    max_commits = getattr(args, "max", 50)
     out_path = Path(args.output) if args.output else repo / ".intent" / "index" / "timeline.json"
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -3503,6 +3590,10 @@ def cmd_map(args) -> int:
                         else:
                             roots = [n]
                         break
+            if not roots:
+                print(f"  No node matching '{focus}' found.")
+                print()
+                return 0
 
         for ri, root in enumerate(sorted(roots, key=lambda n: n.id)):
             s = sym.get(root.type, "\u25cb")
@@ -3865,7 +3956,7 @@ def cmd_impact(args) -> int:
     repo = Path(args.repo).resolve()
     query = args.node
     as_json = getattr(args, "json", False)
-    max_depth = int(getattr(args, "depth", 3))
+    max_depth = getattr(args, "depth", 3)
 
     g = build_graph(repo)
 
@@ -4269,6 +4360,7 @@ commands (grouped by workflow):
     lint          Lint intent documents
     fmt           Normalize intent documents (IDs, Links section)
     serve         Start dev server with file watching
+    watch         Watch intent files and re-index on change
 
   exploration:
     ask           Search intent docs with a natural-language question
@@ -4339,7 +4431,7 @@ commands (grouped by workflow):
     sp.set_defaults(fn=cmd_bootstrap)
 
     sp = sub.add_parser("init", help="Zero-to-working setup: scaffold, index, and open viewer")
-    sp.add_argument("--port", default="8787", help="Port for local viewer server (default: 8787)")
+    sp.add_argument("--port", type=int, default=8787, help="Port for local viewer server (default: 8787)")
     sp.set_defaults(fn=cmd_init)
 
     sp = sub.add_parser("drift", help="Detect drift between intent graph and codebase")
@@ -4364,8 +4456,13 @@ commands (grouped by workflow):
     sp.set_defaults(fn=cmd_badge)
 
     sp = sub.add_parser("serve", help="Start dev server with file watching and auto-rebuild")
-    sp.add_argument("--port", default="8787", help="Port for dev server (default: 8787)")
+    sp.add_argument("--port", type=int, default=8787, help="Port for dev server (default: 8787)")
     sp.set_defaults(fn=cmd_serve)
+
+    sp = sub.add_parser("watch", help="Watch intent files and re-index on change")
+    sp.add_argument("--interval", type=float, default=2.0, help="Poll interval in seconds (default: 2)")
+    sp.add_argument("--json", action="store_true", default=False, help="Output JSON summaries")
+    sp.set_defaults(fn=cmd_watch)
 
     sp = sub.add_parser("ask", help="Search intent docs with a natural-language question")
     sp.add_argument("question", help="Question to search for")
@@ -4385,7 +4482,7 @@ commands (grouped by workflow):
     sp.set_defaults(fn=cmd_review)
 
     sp = sub.add_parser("timeline", help="Build a timeline of intent evolution from git history")
-    sp.add_argument("--max", default="50", help="Maximum number of commits to scan (default: 50)")
+    sp.add_argument("--max", type=int, default=50, help="Maximum number of commits to scan (default: 50)")
     sp.add_argument("--output", "-o", default=None, help="Output path (default: .intent/index/timeline.json)")
     sp.set_defaults(fn=cmd_timeline)
 
@@ -4423,7 +4520,7 @@ commands (grouped by workflow):
 
     sp = sub.add_parser("impact", help="Show blast radius — what depends on a node and what it affects")
     sp.add_argument("node", help="Node ID or search term (e.g. COMP-auth, SPEC-0001)")
-    sp.add_argument("--depth", default="3", help="Max traversal depth (default: 3)")
+    sp.add_argument("--depth", type=int, default=3, help="Max traversal depth (default: 3)")
     sp.add_argument("--json", action="store_true", default=False, help="Output results as JSON")
     sp.set_defaults(fn=cmd_impact)
 
