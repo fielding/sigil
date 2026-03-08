@@ -409,6 +409,27 @@ def test_map_focus(tmp_path, capsys):
     assert "COMP-web" not in out
 
 
+def test_map_tree_shows_interfaces(tmp_path, capsys):
+    """Map tree mode should show interfaces with provides/consumes relationships."""
+    _setup_graph_repo(tmp_path)
+    # Add an interface
+    (tmp_path / "interfaces" / "API-FOO-V1").mkdir(parents=True)
+    (tmp_path / "interfaces" / "API-FOO-V1" / "README.md").write_text(
+        "---\nid: API-FOO-V1\nstatus: active\n---\n\n# Foo API\n"
+    )
+    # Update spec to provide the interface
+    (tmp_path / "intent" / "api" / "specs" / "SPEC-0001-endpoints.md").write_text(
+        "---\nid: SPEC-0001\nstatus: accepted\n---\n\n# API Endpoints\n\n## Links\n\n- Belongs to: [[COMP-api]]\n- Provides: [[API-FOO-V1]]\n"
+    )
+    args = make_args(repo=str(tmp_path), mode="tree", focus=None)
+    rc = cli.cmd_map(args)
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "Interfaces" in out
+    assert "API-FOO-V1" in out
+    assert "SPEC-0001 (provides)" in out
+
+
 def test_map_empty_graph(tmp_path, capsys):
     """Map on empty repo should print message."""
     args = make_args(repo=str(tmp_path), mode="tree", focus=None)

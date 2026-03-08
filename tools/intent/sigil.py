@@ -3653,6 +3653,58 @@ def cmd_map(args) -> int:
             if ri < len(roots) - 1:
                 print()
 
+        # Interfaces section — show provides/consumes relationships
+        ifaces = [n for n in g.nodes.values() if n.type == "interface"]
+        if ifaces:
+            print()
+            print("  Interfaces")
+            print("  " + "\u2500" * 50)
+            # Build provides/consumes maps for interfaces
+            iface_providers: Dict[str, List[str]] = collections.defaultdict(list)
+            iface_consumers: Dict[str, List[str]] = collections.defaultdict(list)
+            for e in g.edges:
+                if e.type == "provides" and e.dst in g.nodes and g.nodes[e.dst].type == "interface":
+                    iface_providers[e.dst].append(e.src)
+                elif e.type == "consumes" and e.dst in g.nodes and g.nodes[e.dst].type == "interface":
+                    iface_consumers[e.dst].append(e.src)
+                elif e.type == "provides" and e.src in g.nodes and g.nodes[e.src].type == "interface":
+                    iface_providers[e.src].append(e.dst)
+                elif e.type == "consumes" and e.src in g.nodes and g.nodes[e.src].type == "interface":
+                    iface_consumers[e.src].append(e.dst)
+
+            for iface in sorted(ifaces, key=lambda n: n.id):
+                if focus:
+                    focus_upper = focus.upper()
+                    if focus_upper not in iface.id.upper() and focus_upper not in iface.title.upper():
+                        # Check if any provider/consumer matches focus
+                        related = iface_providers.get(iface.id, []) + iface_consumers.get(iface.id, [])
+                        if not any(focus_upper in rid.upper() for rid in related):
+                            continue
+                status_str = ""
+                try:
+                    md = read_text(repo / iface.path)
+                    fm, _ = parse_front_matter(md)
+                    st = fm.get("status", "")
+                    if st:
+                        status_str = f"  [{st}]"
+                except Exception:
+                    pass
+                print(f"  {sym.get('interface', '\u25c8')} {iface.id}  {iface.title}{status_str}")
+                providers = sorted(iface_providers.get(iface.id, []))
+                consumers = sorted(iface_consumers.get(iface.id, []))
+                lines = []
+                for pid in providers:
+                    pnode = g.nodes.get(pid)
+                    label = pnode.id if pnode else pid
+                    lines.append(f"\u2190 {label} (provides)")
+                for cid in consumers:
+                    cnode = g.nodes.get(cid)
+                    label = cnode.id if cnode else cid
+                    lines.append(f"\u2192 {label} (consumes)")
+                for li, line in enumerate(lines):
+                    connector = "\u2514\u2500\u2500" if li == len(lines) - 1 else "\u251c\u2500\u2500"
+                    print(f"  {connector} {line}")
+
         # Legend
         print()
         print("  " + "\u2500" * 50)
