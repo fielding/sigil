@@ -2297,8 +2297,8 @@ def cmd_export(args) -> int:
     export_html = viewer_html.replace("</head>", inject_script + "\n</head>")
     # Update title
     export_html = export_html.replace(
-        "<title>Sigil",
-        f"<title>Sigil Export ({len(g.nodes)} nodes) —"
+        "<title>Sigil — Intent Graph Viewer</title>",
+        f"<title>Sigil — Intent Graph Export ({len(g.nodes)} nodes)</title>"
     )
 
     out_path = Path(args.output) if args.output else repo / ".intent" / "export.html"

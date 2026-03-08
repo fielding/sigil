@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Sigil Export (18 nodes) — — Intent Graph Viewer</title>
+  <title>Sigil — Intent Graph Demo (18 nodes)</title>
   <link rel="icon" type="image/x-icon" href="../../branding/favicon.ico" />
   <link rel="icon" type="image/png" sizes="32x32" href="../../branding/favicon-32x32.png" />
   <link rel="icon" type="image/png" sizes="16x16" href="../../branding/favicon-16x16.png" />
@@ -228,6 +228,17 @@
 
     /* Loading state */
     .loading { color: var(--base03); font-style: italic; padding: 20px; }
+
+    /* Welcome panel */
+    .welcome { padding: 24px; line-height: 1.6; }
+    .welcome h2 { color: var(--base0F); font-size: 16px; font-weight: 700; margin-bottom: 12px; letter-spacing: 1px; }
+    .welcome p { color: var(--base04); font-size: 13px; margin-bottom: 16px; }
+    .welcome p strong { color: var(--base05); }
+    .welcome .welcome-legend { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+    .welcome .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--base04); }
+    .welcome .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .welcome .welcome-hint { font-size: 12px; color: var(--base03); border-top: 1px solid var(--base02); padding-top: 12px; }
+    .welcome .welcome-hint kbd { background: var(--base02); color: var(--base05); padding: 2px 6px; border-radius: 3px; font-size: 11px; font-family: inherit; }
 
     /* Legend */
     #legend {
@@ -1435,7 +1446,21 @@
         <div class="tab" data-tab="raw">Raw</div>
       </div>
       <div id="content-area">
-        <div class="loading">Click a node to view its content.</div>
+        <div class="welcome" id="welcome-panel">
+          <h2>You're looking at an intent graph</h2>
+          <p>Every node on the left is a <strong>why</strong> behind your code — specs, decisions, constraints, and contracts. The edges show how they connect. Click any node to read the full reasoning.</p>
+          <p>This is what Sigil tracks for your codebase. Instead of decisions rotting in Notion or Slack threads, they live here — queryable, diffable, and enforced in CI.</p>
+          <div class="welcome-legend">
+            <div class="legend-item"><div class="legend-dot" style="background:var(--base0D)"></div> Component</div>
+            <div class="legend-item"><div class="legend-dot" style="background:var(--base0B)"></div> Spec</div>
+            <div class="legend-item"><div class="legend-dot" style="background:var(--base0E)"></div> Decision (ADR)</div>
+            <div class="legend-item"><div class="legend-dot" style="background:var(--base08)"></div> Gate</div>
+            <div class="legend-item"><div class="legend-dot" style="background:var(--base0C)"></div> Interface</div>
+          </div>
+          <div class="welcome-hint">
+            <kbd>⌘K</kbd> command palette &nbsp; <kbd>r</kbd> blast radius &nbsp; <kbd>c</kbd> coverage &nbsp; <kbd>/</kbd> search
+          </div>
+        </div>
       </div>
     </div>
   </div>
