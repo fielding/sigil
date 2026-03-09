@@ -99,6 +99,26 @@
     #breadcrumb span:hover { color: var(--base0D); }
     #breadcrumb .sep { color: var(--base03); margin: 0 6px; cursor: default; }
 
+    /* Nav bar (back / forward / home) */
+    #nav-bar {
+      display: flex; align-items: center; gap: 6px;
+      padding: 6px 14px; border-bottom: 1px solid var(--base02);
+      background: var(--base00); flex-shrink: 0;
+    }
+    .nav-btn {
+      padding: 2px 8px; font-size: 12px; font-weight: 600;
+      background: transparent; border: 1px solid var(--base02);
+      color: var(--base04); border-radius: 4px; cursor: pointer;
+      font-family: inherit; transition: all 0.15s;
+    }
+    .nav-btn:hover:not([disabled]) { color: var(--base05); border-color: var(--base03); }
+    .nav-btn[disabled] { opacity: 0.3; cursor: default; }
+    #nav-home {
+      color: var(--base0F); border-color: var(--base0F);
+      background: rgba(187,255,0,0.06);
+    }
+    #nav-home:hover { background: rgba(187,255,0,0.14); }
+
     /* Node header */
     #node-header {
       padding: 14px; border-bottom: 1px solid var(--base02);
@@ -546,17 +566,21 @@
         <span class="keyhint-key">Cmd+K</span> palette
         <span class="keyhint-key">j</span><span class="keyhint-key">k</span> cycle
         <span class="keyhint-key">/</span> search
+        <span class="keyhint-key">Alt+&#8592;</span> back
+        <span class="keyhint-key">Alt+&#8594;</span> fwd
         <span class="keyhint-key">g</span> graph
         <span class="keyhint-key">r</span> radar
         <span class="keyhint-key">h</span> hier
         <span class="keyhint-key">c</span> cov
-        <span class="keyhint-key">d</span> drift
-        <span class="keyhint-key">t</span> time
-        <span class="keyhint-key">m</span> matrix
       </div>
     </div>
     <div id="right">
       <div id="search-bar"><input id="search" placeholder="Search nodes..." /></div>
+      <div id="nav-bar">
+        <button id="nav-back" class="nav-btn" onclick="navBack()" disabled title="Back (Alt+Left)">&#8592;</button>
+        <button id="nav-forward" class="nav-btn" onclick="navForward()" disabled title="Forward (Alt+Right)">&#8594;</button>
+        <button id="nav-home" class="nav-btn" onclick="selectRootNode()" title="Project Root">&#8962; Root</button>
+      </div>
       <div id="breadcrumb"></div>
       <div id="node-header"></div>
       <div id="tabs">
@@ -628,6 +652,20 @@
     let allNodes = [];
     let sim = null;
 
+    // Navigation state
+    let navHistory = [];
+    let navHistoryIdx = -1;
+    let visitedNodes = new Set();
+    let navigating = false;
+
+    // D3 refs for path highlighting + zoom
+    let svgRef = null;
+    let zoomRef = null;
+    let gRef = null;
+    let nodesRef = null;
+    let labelsRef = null;
+    let nodeGlowRef = null;
+
     const nodeColors = {
       component: "#828079",
       spec:      "#04b372",
@@ -635,7 +673,8 @@
       gate:      "#e7349c",
       adr:       "#9871fe",
       risk:      "#f26c33",
-      rollout:   "#1ad0d6"
+      rollout:   "#1ad0d6",
+      project:   "#bbff00"
     };
 
     const edgeColors = {
@@ -1827,47 +1866,176 @@
       ).join("");
     }
 
-    function buildBreadcrumb(node) {
+    function buildBreadcrumb() {
       const el = document.getElementById("breadcrumb");
-      if (!node) { el.innerHTML = ""; return; }
+      if (navHistoryIdx < 0 || navHistory.length === 0) { el.innerHTML = ""; return; }
 
-      // Walk up the hierarchy: ADR → Spec (via decided_by) → Component (via belongs_to)
-      const chain = [node];
-      const visited = new Set([node.id]);
+      // Show up to 6 items of click history up to current position
+      const historySlice = navHistory.slice(0, navHistoryIdx + 1);
+      const chain = historySlice.slice(-6);
+      const offset = historySlice.length - chain.length;
 
-      function findParent(id) {
-        // Try decided_by first (ADR → Spec), then belongs_to (Spec/ADR → Component)
-        for (const relType of ["decided_by", "belongs_to"]) {
-          const edge = graphData.edges.find(e => e.src === id && e.type === relType && !visited.has(e.dst));
-          if (edge) {
-            const parent = graphData.nodes.find(n => n.id === edge.dst);
-            if (parent) return parent;
-          }
-        }
-        return null;
-      }
-
-      let current = node;
-      while (current) {
-        const parent = findParent(current.id);
-        if (parent) {
-          visited.add(parent.id);
-          chain.unshift(parent);
-          current = parent;
-        } else {
-          break;
-        }
-      }
-
-      el.innerHTML = chain.map((n, i) => {
+      el.innerHTML = chain.map((id, i) => {
+        const absoluteIdx = offset + i;
+        const n = allNodes.find(n => n.id === id);
+        const label = n ? (n._isRoot ? '&#8962; Root' : n.title || n.id) : id;
+        const isActive = absoluteIdx === navHistoryIdx;
+        const style = isActive ? 'color:var(--base06)' : '';
         const sep = i > 0 ? '<span class="sep">&rsaquo;</span>' : '';
-        const label = n.type === "component" ? n.title || n.id : n.id;
-        return `${sep}<span onclick="selectNodeById('${n.id}')">${label}</span>`;
+        return `${sep}<span style="${style}" onclick="navToHistoryIndex(${absoluteIdx})">${label}</span>`;
       }).join("");
+    }
+
+    // ---- Navigation ----
+
+    function updateNavButtons() {
+      const back = document.getElementById("nav-back");
+      const fwd = document.getElementById("nav-forward");
+      if (back) back.disabled = navHistoryIdx <= 0;
+      if (fwd) fwd.disabled = navHistoryIdx >= navHistory.length - 1;
+    }
+
+    function navBack() {
+      if (navHistoryIdx <= 0) return;
+      navigating = true;
+      navHistoryIdx--;
+      const id = navHistory[navHistoryIdx];
+      const node = allNodes.find(n => n.id === id);
+      if (node) selectNode(node);
+      navigating = false;
+    }
+
+    function navForward() {
+      if (navHistoryIdx >= navHistory.length - 1) return;
+      navigating = true;
+      navHistoryIdx++;
+      const id = navHistory[navHistoryIdx];
+      const node = allNodes.find(n => n.id === id);
+      if (node) selectNode(node);
+      navigating = false;
+    }
+
+    function navToHistoryIndex(idx) {
+      if (idx < 0 || idx >= navHistory.length) return;
+      navigating = true;
+      navHistoryIdx = idx;
+      const id = navHistory[navHistoryIdx];
+      const node = allNodes.find(n => n.id === id);
+      if (node) selectNode(node);
+      navigating = false;
+    }
+
+    function selectRootNode() {
+      const root = allNodes.find(n => n._isRoot);
+      if (!root) return;
+      if (activeView !== "graph" && activeView !== "overview") switchView("graph");
+      selectNode(root);
+    }
+
+    function highlightPath() {
+      if (!nodesRef || !labelsRef) return;
+      if (visitedNodes.size === 0) {
+        nodesRef.attr("opacity", 1)
+          .attr("stroke", d => d && selectedNode && d.id === selectedNode.id ? "#f8f6f2" : "none")
+          .attr("stroke-width", d => d && selectedNode && d.id === selectedNode.id ? 2.5 : 0);
+        labelsRef.attr("opacity", 1);
+        return;
+      }
+      nodesRef
+        .attr("opacity", d => {
+          if (!d) return 1;
+          if (d.id === (selectedNode && selectedNode.id)) return 1;
+          if (visitedNodes.has(d.id)) return 1;
+          return 0.2;
+        })
+        .attr("stroke", d => {
+          if (!d) return "none";
+          if (d.id === (selectedNode && selectedNode.id)) return "#f8f6f2";
+          if (visitedNodes.has(d.id)) return nodeColors[d.type] || "#5a5d62";
+          return "none";
+        })
+        .attr("stroke-width", d => {
+          if (!d) return 0;
+          if (d.id === (selectedNode && selectedNode.id)) return 2.5;
+          if (visitedNodes.has(d.id)) return 1.5;
+          return 0;
+        });
+      labelsRef.attr("opacity", d => (!d || visitedNodes.has(d.id)) ? 1 : 0.2);
+    }
+
+    function zoomToNode(node) {
+      if (!svgRef || !gRef || !zoomRef) return;
+      const svgNode = svgRef.node();
+      if (!svgNode || svgNode.style.display === "none") return;
+      const simNode = allNodes.find(n => n.id === node.id);
+      if (!simNode || simNode.x === undefined) return;
+      const width = svgNode.clientWidth;
+      const height = svgNode.clientHeight;
+      const scale = 1.4;
+      const tx = width / 2 - scale * simNode.x;
+      const ty = height / 2 - scale * simNode.y;
+      svgRef.transition().duration(450).call(
+        zoomRef.transform,
+        d3.zoomIdentity.translate(tx, ty).scale(scale)
+      );
+    }
+
+    // ---- Root Panel ----
+
+    function renderRootPanel() {
+      const area = document.getElementById("content-area");
+      const components = graphData.nodes.filter(n => n.type === "component");
+      const specs = graphData.nodes.filter(n => n.type === "spec");
+      const adrs = graphData.nodes.filter(n => n.type === "adr");
+      const gates = graphData.nodes.filter(n => n.type === "gate");
+
+      const compItems = components.map(c => {
+        const compSpecs = graphData.edges
+          .filter(e => e.type === "belongs_to" && e.dst === c.id)
+          .map(e => graphData.nodes.find(n => n.id === e.src))
+          .filter(Boolean);
+        const specCount = compSpecs.length;
+        return `<div style="cursor:pointer;padding:10px 12px;border:1px solid var(--base02);border-radius:6px;margin-bottom:6px;background:var(--base00);transition:border-color 0.15s"
+          onclick="selectNodeById('${c.id}')"
+          onmouseenter="this.style.borderColor='var(--base0D)'" onmouseleave="this.style.borderColor='var(--base02)'">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <span style="color:var(--base0D);font-weight:600;font-size:13px">${esc(c.title || c.id)}</span>
+            ${specCount ? `<span style="color:var(--base03);font-size:11px">${specCount} spec${specCount !== 1 ? 's' : ''}</span>` : ''}
+          </div>
+          <div style="color:var(--base03);font-size:11px;margin-top:2px">${c.id}</div>
+        </div>`;
+      }).join("") || '<div style="color:var(--base03);font-size:13px">No components found.</div>';
+
+      area.innerHTML = `
+        <div style="color:var(--base04);font-size:13px;line-height:1.6;margin-bottom:16px;padding:10px 12px;background:var(--base00);border-radius:6px;border-left:3px solid var(--base0F)">
+          Your intent graph: <strong style="color:var(--base05)">${graphData.nodes.length} nodes</strong>,
+          <strong style="color:var(--base05)">${graphData.edges.length} relationships</strong>.
+          Click a component to explore its intents.
+        </div>
+        <div class="cov-grid" style="margin-bottom:16px">
+          <div class="cov-card"><div class="cov-card-title">Components</div><div class="cov-card-value" style="color:var(--base0D)">${components.length}</div></div>
+          <div class="cov-card"><div class="cov-card-title">Specs</div><div class="cov-card-value" style="color:var(--base0B)">${specs.length}</div></div>
+          <div class="cov-card"><div class="cov-card-title">ADRs</div><div class="cov-card-value" style="color:var(--base0E)">${adrs.length}</div></div>
+          <div class="cov-card"><div class="cov-card-title">Gates</div><div class="cov-card-value" style="color:var(--base08)">${gates.length}</div></div>
+        </div>
+        <h3 style="color:var(--base06);font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px">Components — start here</h3>
+        ${compItems}`;
     }
 
     function renderHeader(node) {
       const el = document.getElementById("node-header");
+      if (node._isRoot) {
+        const n = graphData ? graphData.nodes.length : 0;
+        const e = graphData ? graphData.edges.length : 0;
+        el.innerHTML = `
+          <h2 style="color:var(--base0F)">&#8962; Project Root</h2>
+          <div>
+            <span class="pill pill-type">project</span>
+            <span class="pill" style="background:var(--base02);color:var(--base05)">${n} nodes</span>
+            <span class="pill" style="background:var(--base02);color:var(--base05)">${e} edges</span>
+          </div>`;
+        return;
+      }
       const fm = node.frontmatter || node._frontmatter || {};
       const status = fm.status;
       const statusPill = status
@@ -1905,6 +2073,11 @@
 
     async function renderContent(node) {
       const area = document.getElementById("content-area");
+
+      if (node._isRoot) {
+        renderRootPanel();
+        return;
+      }
 
       if (node.type === "component") {
         area.innerHTML = '<div class="loading">Loading component...</div>';
@@ -1944,6 +2117,10 @@
 
     function renderGraph(node) {
       const area = document.getElementById("content-area");
+      if (node._isRoot) {
+        renderRootPanel();
+        return;
+      }
       const outgoing = graphData.edges.filter(e => e.src === node.id);
       const incoming = graphData.edges.filter(e => e.dst === node.id);
       const dedup = (edges) => {
@@ -2000,13 +2177,21 @@
     }
 
     function selectNode(node) {
+      // Push to nav history (unless navigating back/forward)
+      if (!navigating) {
+        navHistory = navHistory.slice(0, navHistoryIdx + 1);
+        navHistory.push(node.id);
+        navHistoryIdx = navHistory.length - 1;
+      }
+      visitedNodes.add(node.id);
+      updateNavButtons();
+
       selectedNode = node;
       renderHeader(node);
-      buildBreadcrumb(node);
+      buildBreadcrumb();
       showTab(activeTab);
-      d3.selectAll("#svg circle")
-        .attr("stroke", d => d && d.id === node.id ? "#f8f6f2" : "none")
-        .attr("stroke-width", d => d && d.id === node.id ? 2.5 : 0);
+      highlightPath();
+      zoomToNode(node);
       if (activeView === "radar") renderRadarView(node);
     }
 
@@ -2057,6 +2242,10 @@
 
     document.addEventListener("keydown", function(ev) {
       // Cmd/Ctrl+K for command palette (works everywhere)
+      // Alt+Left / Alt+Right for back / forward
+      if (ev.altKey && ev.key === "ArrowLeft") { ev.preventDefault(); navBack(); return; }
+      if (ev.altKey && ev.key === "ArrowRight") { ev.preventDefault(); navForward(); return; }
+
       if ((ev.metaKey || ev.ctrlKey) && ev.key === "k") {
         ev.preventDefault();
         const overlay = document.getElementById("cmd-overlay");
@@ -2111,7 +2300,8 @@
 
     function render(graph) {
       graphData = graph;
-      const svg = d3.select("#svg");
+      svgRef = d3.select("#svg");
+      const svg = svgRef;
       const width = svg.node().clientWidth;
       const height = svg.node().clientHeight;
       svg.selectAll("*").remove();
@@ -2122,11 +2312,26 @@
         connectivity[e.src] = (connectivity[e.src] || 0) + 1;
         connectivity[e.dst] = (connectivity[e.dst] || 0) + 1;
       });
+
+      // Inject synthetic project root node
+      const components = graph.nodes.filter(n => n.type === "component");
+      const rootNodeObj = {
+        id: '__ROOT__', type: 'project', title: 'Project Root', _isRoot: true,
+        path: null, body_summary: null,
+        _conn: components.length
+      };
+      // Components get extra connectivity from root edges
+      components.forEach(c => { connectivity[c.id] = (connectivity[c.id] || 0) + 1; });
+      connectivity['__ROOT__'] = components.length;
+
       const maxConn = Math.max(...Object.values(connectivity), 1);
 
-      const nodes = graph.nodes.map(d => ({...d, _conn: connectivity[d.id] || 0}));
+      const nodes = [rootNodeObj, ...graph.nodes.map(d => ({...d, _conn: connectivity[d.id] || 0}))];
+      rootNodeObj._conn = components.length;
       allNodes = nodes;
-      const links = graph.edges.map(e => ({ source: e.src, target: e.dst, type: e.type }));
+
+      const rootLinks = components.map(c => ({ source: '__ROOT__', target: c.id, type: 'project_root' }));
+      const links = [...rootLinks, ...graph.edges.map(e => ({ source: e.src, target: e.dst, type: e.type }))];
 
       const linkKey = l => `${typeof l.source === 'object' ? l.source.id : l.source}-${typeof l.target === 'object' ? l.target.id : l.target}`;
       const seenLinks = new Set();
@@ -2142,7 +2347,7 @@
       glowFilter.append("feGaussianBlur").attr("stdDeviation", "3").attr("result", "blur");
       glowFilter.append("feMerge").selectAll("feMergeNode").data(["blur", "SourceGraphic"]).join("feMergeNode").attr("in", d => d);
 
-      // Arrow markers for directed edges
+      // Arrow markers for directed edges (not project_root)
       ["belongs_to","decided_by","depends_on","gated_by","provides","consumes","relates_to","supersedes"].forEach(t => {
         defs.append("marker")
           .attr("id", "arrow-" + t).attr("viewBox", "0 0 10 6").attr("refX", 10).attr("refY", 3)
@@ -2150,13 +2355,15 @@
           .append("path").attr("d", "M0,0 L10,3 L0,6").attr("fill", edgeColors[t] || "var(--base02)");
       });
 
-      const g = svg.append("g");
-      svg.call(d3.zoom().scaleExtent([0.3, 4]).on("zoom", (ev) => {
+      gRef = svg.append("g");
+      const g = gRef;
+      zoomRef = d3.zoom().scaleExtent([0.3, 4]).on("zoom", (ev) => {
         g.attr("transform", ev.transform);
-      }));
+      });
+      svg.call(zoomRef);
 
       sim = d3.forceSimulation(nodes)
-        .force("link", d3.forceLink(uniqueLinks).id(d => d.id).distance(120))
+        .force("link", d3.forceLink(uniqueLinks).id(d => d.id).distance(d => d.type === 'project_root' ? 160 : 120))
         .force("charge", d3.forceManyBody().strength(-250))
         .force("center", d3.forceCenter(width / 2, height / 2))
         .force("collide", d3.forceCollide(30))
@@ -2167,13 +2374,14 @@
       const link = g.append("g")
         .selectAll("path").data(uniqueLinks).join("path")
         .attr("fill", "none")
-        .attr("stroke", d => edgeColors[d.type] || "var(--base02)")
-        .attr("stroke-width", 1.5)
-        .attr("stroke-opacity", 0.6)
-        .attr("marker-end", d => `url(#arrow-${d.type})`);
+        .attr("stroke", d => d.type === 'project_root' ? "rgba(187,255,0,0.2)" : (edgeColors[d.type] || "var(--base02)"))
+        .attr("stroke-width", d => d.type === 'project_root' ? 1 : 1.5)
+        .attr("stroke-opacity", d => d.type === 'project_root' ? 0.4 : 0.6)
+        .attr("stroke-dasharray", d => d.type === 'project_root' ? "4,4" : null)
+        .attr("marker-end", d => d.type === 'project_root' ? null : `url(#arrow-${d.type})`);
 
       const edgeLabel = g.append("g")
-        .selectAll("text").data(uniqueLinks).join("text")
+        .selectAll("text").data(uniqueLinks.filter(l => l.type !== 'project_root')).join("text")
         .attr("class", "edge-label")
         .text(d => d.type)
         .attr("text-anchor", "middle");
@@ -2182,23 +2390,27 @@
         d3.select(this).attr("stroke-opacity", 1).attr("stroke-width", 2.5);
         edgeLabel.filter(e => e === d).classed("visible", true);
       }).on("mouseleave", function() {
-        link.attr("stroke-opacity", 0.6).attr("stroke-width", 1.5);
+        link.attr("stroke-opacity", d => d.type === 'project_root' ? 0.4 : 0.6)
+            .attr("stroke-width", d => d.type === 'project_root' ? 1 : 1.5);
         edgeLabel.classed("visible", false);
       });
 
       function nodeRadius(d) {
+        if (d._isRoot) return 18;
         const base = d.type === "component" ? 14 : 8;
         const scale = 1 + (d._conn / maxConn) * 0.6;
         return Math.round(base * scale);
       }
 
-      // Glow circles for high-connectivity nodes
+      // Glow circles for high-connectivity nodes and root
       const glowThreshold = maxConn * 0.5;
-      const nodeGlow = g.append("g").selectAll("circle").data(nodes.filter(d => d._conn >= glowThreshold)).join("circle")
-        .attr("r", d => nodeRadius(d) + 6)
+      const glowNodes = nodes.filter(d => d._conn >= glowThreshold || d._isRoot);
+      const nodeGlow = g.append("g").selectAll("circle").data(glowNodes).join("circle")
+        .attr("r", d => nodeRadius(d) + (d._isRoot ? 10 : 6))
         .attr("fill", d => nodeColors[d.type] || "#5a5d62")
-        .attr("opacity", 0.15)
+        .attr("opacity", d => d._isRoot ? 0.25 : 0.15)
         .attr("filter", "url(#glow)");
+      nodeGlowRef = nodeGlow;
 
       const node = g.append("g").selectAll("circle").data(nodes).join("circle")
         .attr("r", nodeRadius)
@@ -2209,21 +2421,24 @@
           .on("drag", (ev, d) => { d.fx = ev.x; d.fy = ev.y; })
           .on("end", (ev, d) => { if (!ev.active) sim.alphaTarget(0); d.fx = null; d.fy = null; })
         );
+      nodesRef = node;
 
-      node.append("title").text(d => `${d.id}: ${d.title || ""}`);
+      node.append("title").text(d => d._isRoot ? "Project Root — click to see all intents" : `${d.id}: ${d.title || ""}`);
 
       const label = g.append("g").selectAll("text").data(nodes).join("text")
-        .text(d => d.id)
-        .attr("font-size", 10)
-        .attr("fill", "#828079")
+        .text(d => d._isRoot ? "ROOT" : d.id)
+        .attr("font-size", d => d._isRoot ? 11 : 10)
+        .attr("fill", d => d._isRoot ? "#bbff00" : "#828079")
+        .attr("font-weight", d => d._isRoot ? "700" : "normal")
         .attr("dx", d => nodeRadius(d) + 4).attr("dy", 3)
         .attr("pointer-events", "none");
+      labelsRef = label;
 
       node.on("click", (ev, d) => selectNode(d));
 
       node.on("mouseenter", function(ev, d) {
         link.attr("stroke-opacity", l =>
-          (l.source.id === d.id || l.target.id === d.id) ? 1 : 0.15
+          (l.source.id === d.id || l.target.id === d.id) ? 1 : 0.1
         ).attr("stroke-width", l =>
           (l.source.id === d.id || l.target.id === d.id) ? 2.5 : 1
         );
@@ -2242,10 +2457,10 @@
       }).on("mousemove", function(ev, d) {
         moveTooltip(ev);
       }).on("mouseleave", function() {
-        link.attr("stroke-opacity", 0.6).attr("stroke-width", 1.5);
+        link.attr("stroke-opacity", d => d.type === 'project_root' ? 0.4 : 0.6)
+            .attr("stroke-width", d => d.type === 'project_root' ? 1 : 1.5);
         edgeLabel.classed("visible", false);
-        node.attr("opacity", 1);
-        label.attr("opacity", 1);
+        highlightPath(); // restore path highlight on mouseleave
         hideTooltip();
       });
 
