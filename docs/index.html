@@ -1729,18 +1729,18 @@
   "generated_at": "2026-03-09T12:00:00Z",
   "pr": {
     "number": 47,
-    "title": "feat: JWT refresh token support + checkout performance",
+    "title": "feat: JWT refresh token support + checkout + payment flow",
     "author": "alice",
     "base": "main",
     "head": "feat/jwt-refresh"
   },
   "summary": {
-    "total_changes": 10,
+    "total_changes": 11,
     "intent_changes": 2,
-    "code_changes": 8,
-    "covered_files": 7,
+    "code_changes": 9,
+    "covered_files": 8,
     "uncovered_files": 1,
-    "coverage_pct": 87
+    "coverage_pct": 89
   },
   "intent_changes": [
     {
@@ -1765,6 +1765,9 @@
     ],
     "COMP-web-app": [
       { "status": "M", "path": "app/layout.tsx" }
+    ],
+    "COMP-payment-gateway": [
+      { "status": "M", "path": "services/payments/checkout.py" }
     ]
   },
   "uncovered": [
@@ -1791,6 +1794,11 @@
       "specs": [{ "id": "SPEC-0006", "status": "accepted" }],
       "adrs": [],
       "gates": []
+    },
+    "COMP-payment-gateway": {
+      "specs": [{ "id": "SPEC-0009", "status": "accepted" }],
+      "adrs": [],
+      "gates": [{ "id": "GATE-0005" }]
     }
   },
   "gates": [
@@ -1835,9 +1843,14 @@
       "summary": "Payment gateway must never handle raw card numbers \u2014 only tokenized payment methods. Prevents accidental PCI scope expansion.",
       "kind": "pattern",
       "policy": "block",
-      "passed": true,
+      "passed": false,
       "scope": 3,
-      "findings": []
+      "findings": [
+        {
+          "severity": "error",
+          "message": "services/payments/checkout.py:47: raw card number accessed via request.data['card_number'] \u2014 use tokenized_card_id only (PCI scope violation)"
+        }
+      ]
     }
   ]
 };
