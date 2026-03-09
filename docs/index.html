@@ -1726,24 +1726,73 @@
   "generated_at": "2026-03-08T18:23:02Z"
 };
     window.__SIGIL_REVIEW__ = {
-  "generated_at": "2026-03-09T03:06:51Z",
-  "summary": {
-    "total_changes": 1,
-    "intent_changes": 0,
-    "code_changes": 1,
-    "covered_files": 0,
-    "uncovered_files": 1,
-    "coverage_pct": 0
+  "generated_at": "2026-03-09T12:00:00Z",
+  "pr": {
+    "number": 47,
+    "title": "feat: JWT refresh token support + checkout performance",
+    "author": "alice",
+    "base": "main",
+    "head": "feat/jwt-refresh"
   },
-  "intent_changes": [],
-  "covered": {},
-  "uncovered": [
+  "summary": {
+    "total_changes": 10,
+    "intent_changes": 2,
+    "code_changes": 8,
+    "covered_files": 7,
+    "uncovered_files": 1,
+    "coverage_pct": 87
+  },
+  "intent_changes": [
     {
       "status": "M",
-      "path": "docs/index.html"
+      "path": "intent/auth-service/specs/SPEC-0002-jwt-authentication.md"
+    },
+    {
+      "status": "M",
+      "path": "intent/auth-service/adrs/ADR-0002-jwt-tokens-over-sessions.md"
     }
   ],
-  "governance": {},
+  "covered": {
+    "COMP-auth-service": [
+      { "status": "M", "path": "services/auth/auth.py" },
+      { "status": "M", "path": "services/auth/jwt.py" },
+      { "status": "A", "path": "services/auth/middleware.py" }
+    ],
+    "COMP-order-service": [
+      { "status": "M", "path": "services/orders/orders.py" },
+      { "status": "M", "path": "services/orders/checkout.py" },
+      { "status": "M", "path": "services/orders/routes.py" }
+    ],
+    "COMP-web-app": [
+      { "status": "M", "path": "app/layout.tsx" }
+    ]
+  },
+  "uncovered": [
+    {
+      "status": "A",
+      "path": "services/auth/utils.py"
+    }
+  ],
+  "governance": {
+    "COMP-auth-service": {
+      "specs": [{ "id": "SPEC-0002", "status": "accepted" }],
+      "adrs": [{ "id": "ADR-0002", "status": "accepted" }],
+      "gates": [{ "id": "GATE-0002" }]
+    },
+    "COMP-order-service": {
+      "specs": [
+        { "id": "SPEC-0004", "status": "accepted" },
+        { "id": "SPEC-0008", "status": "proposed" }
+      ],
+      "adrs": [{ "id": "ADR-0004", "status": "accepted" }],
+      "gates": [{ "id": "GATE-0003" }]
+    },
+    "COMP-web-app": {
+      "specs": [{ "id": "SPEC-0006", "status": "accepted" }],
+      "adrs": [],
+      "gates": []
+    }
+  },
   "gates": [
     {
       "id": "GATE-0001",
@@ -2535,7 +2584,17 @@
       const gatesTotal = gates.length;
       const gatesColor = gatesTotal === 0 ? "var(--base04)" : gatesPassed === gatesTotal ? "var(--base0B)" : "var(--base08)";
 
-      let html = `
+      // PR context banner (if present)
+      const pr = review.pr;
+      const prBanner = pr ? `
+        <div style="margin-bottom:16px;padding:10px 14px;background:var(--base01);border:1px solid var(--base02);border-radius:8px;font-size:13px">
+          <span style="color:var(--base0E);font-weight:700;margin-right:8px">PR #${pr.number}</span>
+          <span style="color:var(--base06)">${esc(pr.title)}</span>
+          ${pr.author ? `<span style="color:var(--base03);font-size:11px;margin-left:8px">by ${esc(pr.author)}</span>` : ''}
+          ${pr.base && pr.head ? `<span style="color:var(--base03);font-size:11px;margin-left:8px">${esc(pr.head)} → ${esc(pr.base)}</span>` : ''}
+        </div>` : '';
+
+      let html = prBanner + `
         <div class="cov-grid">
           <div class="cov-card">
             <div class="cov-card-title">Intent Coverage</div>
