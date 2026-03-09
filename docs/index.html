@@ -2642,7 +2642,55 @@
           ${pr.base && pr.head ? `<span style="color:var(--base03);font-size:11px;margin-left:8px">${esc(pr.head)} → ${esc(pr.base)}</span>` : ''}
         </div>` : '';
 
-      let html = prBanner + `
+      // Build GitHub-style PR comment preview
+      const covIcon = pct >= 80 ? '✅' : pct >= 50 ? '⚠️' : '❌';
+      const gateIcon = gatesPassed === gatesTotal ? '✅' : '❌';
+      const govIcon = (s.uncovered_files || 0) > 0 ? '⚠️' : '✅';
+      const intentChangesSummary = (review.intent_changes || []).map(ic => {
+        const name = ic.path.split('/').pop().replace(/\.md$/, '').replace(/\.yaml$/, '');
+        const label = ic.status === 'A' ? 'added' : ic.status === 'D' ? 'deleted' : 'modified';
+        return `<div style="margin:2px 0;font-size:12px;color:#7d8590"><span style="color:${ic.status==='A'?'#3fb950':ic.status==='D'?'#f85149':'#79c0ff'};font-weight:600;margin-right:6px">${label}</span><code style="background:#21262d;padding:1px 5px;border-radius:3px;font-size:11px;color:#c9d1d9">${esc(name)}</code></div>`;
+      }).join('');
+      const gateRows = (review.gates || []).map(g =>
+        `<div style="margin:2px 0;font-size:12px"><span style="color:${g.passed?'#3fb950':'#f85149'};margin-right:6px">${g.passed?'✅':'❌'}</span><code style="color:#8b949e;font-size:11px">${esc(g.id)}</code><span style="color:#7d8590;margin-left:6px">${esc(g.summary||'')}</span></div>`
+      ).join('');
+      const uncovRows = (review.uncovered || []).map(f =>
+        `<div style="margin:2px 0;font-size:12px;color:#d29922"><code style="background:#21262d;padding:1px 5px;border-radius:3px;font-size:11px">${esc(f.path)}</code></div>`
+      ).join('');
+
+      const ghComment = `
+        <div style="margin-bottom:20px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--base03);margin-bottom:8px">What Sigil posts automatically on your PR</div>
+          <div style="border:1px solid #30363d;border-radius:6px;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif">
+            <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#161b22;border-bottom:1px solid #30363d">
+              <div style="width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#2563eb);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#fff;flex-shrink:0">S</div>
+              <div style="flex:1">
+                <span style="font-size:13px;font-weight:600;color:#e6edf3">sigil-bot</span>
+                <span style="font-size:12px;color:#7d8590;margin-left:8px">commented just now</span>
+              </div>
+              <span style="font-size:11px;color:#7d8590;background:#21262d;border:1px solid #30363d;border-radius:10px;padding:1px 8px">Bot</span>
+            </div>
+            <div style="padding:14px 16px;background:#0d1117;font-size:13px;line-height:1.6">
+              <div style="font-size:15px;font-weight:700;color:#e6edf3;margin-bottom:12px">🔮 Sigil Intent Review</div>
+              <table style="border-collapse:collapse;margin-bottom:12px;font-size:12px;width:auto">
+                <tr>
+                  <th style="text-align:left;padding:4px 16px 4px 0;color:#7d8590;font-weight:500;white-space:nowrap">Metric</th>
+                  <th style="text-align:left;padding:4px 0;color:#7d8590;font-weight:500">Value</th>
+                </tr>
+                <tr><td style="padding:3px 16px 3px 0;color:#c9d1d9">Intent Coverage</td><td style="padding:3px 0;font-weight:600;color:${pct>=80?'#3fb950':pct>=50?'#d29922':'#f85149'}">${pct}% ${covIcon}</td></tr>
+                <tr><td style="padding:3px 16px 3px 0;color:#c9d1d9">Intent Changes</td><td style="padding:3px 0;color:#c9d1d9">${s.intent_changes||0} (spec/ADR updates)</td></tr>
+                <tr><td style="padding:3px 16px 3px 0;color:#c9d1d9">Gates</td><td style="padding:3px 0;font-weight:600;color:${gatesPassed===gatesTotal?'#3fb950':'#f85149'}">${gatesPassed}/${gatesTotal} ${gateIcon}</td></tr>
+                <tr><td style="padding:3px 16px 3px 0;color:#c9d1d9">Ungoverned Files</td><td style="padding:3px 0;font-weight:600;color:${(s.uncovered_files||0)>0?'#d29922':'#3fb950'}">${s.uncovered_files||0} ${govIcon}</td></tr>
+              </table>
+              ${intentChangesSummary ? `<details style="margin-bottom:10px"><summary style="color:#7d8590;font-size:12px;cursor:pointer;margin-bottom:6px">Intent document changes (${(review.intent_changes||[]).length})</summary>${intentChangesSummary}</details>` : ''}
+              ${gateRows ? `<details style="margin-bottom:10px"><summary style="color:#7d8590;font-size:12px;cursor:pointer;margin-bottom:6px">Gate results (${gatesPassed}/${gatesTotal} passing)</summary>${gateRows}</details>` : ''}
+              ${uncovRows ? `<details><summary style="color:#d29922;font-size:12px;cursor:pointer;margin-bottom:6px">⚠️ Ungoverned files (${(review.uncovered||[]).length})</summary>${uncovRows}</details>` : ''}
+            </div>
+          </div>
+        </div>
+      `;
+
+      let html = ghComment + prBanner + `
         <div class="cov-grid">
           <div class="cov-card">
             <div class="cov-card-title">Intent Coverage</div>
