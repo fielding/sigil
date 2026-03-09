@@ -1015,6 +1015,21 @@ def cmd_status(args) -> int:
         }, indent=2))
         return 0
 
+    # Empty state: not initialized
+    intent_dir = repo / ".intent"
+    if not g.nodes and not intent_dir.exists():
+        print()
+        print(f"  Sigil Intent Status")
+        print(f"  ====================")
+        print()
+        print(f"  No intent graph found.")
+        print()
+        print(f"  Get started:")
+        print(f"    sigil init        Set up Sigil and open the interactive viewer")
+        print(f"    sigil doctor      Check your installation")
+        print()
+        return 0
+
     # Terminal output
     bar_len = 20
     filled = round(pct / 100 * bar_len)
@@ -1038,6 +1053,21 @@ def cmd_status(args) -> int:
         print("  Issues:")
         for i in issues:
             print(f"    -   {i}")
+        print()
+        print("  Next steps:")
+        if uncomps:
+            print(f"    sigil new spec <component> <title>   Document what a component does and why")
+        if draft_adrs:
+            print(f"    sigil show <ADR-ID>                  Review and update ADR status to accepted")
+        if dangling:
+            print(f"    sigil lint                           Find and fix dangling references")
+        print(f"    sigil serve                          Open the viewer to explore your graph")
+    elif not g.nodes:
+        print("  No intent documents yet.")
+        print()
+        print(f"  Next steps:")
+        print(f"    sigil bootstrap   Auto-detect components from your repo")
+        print(f"    sigil new spec <component> <title>   Add your first spec")
     else:
         print("  No issues found.")
     print()
@@ -1585,10 +1615,20 @@ def cmd_init(args) -> int:
         gi_text = gitignore.read_text(encoding="utf-8", errors="ignore")
     else:
         gi_text = ""
+    needs_update = False
+    additions = []
     if ".intent/index/" not in gi_text:
+        additions.append(".intent/index/")
+        needs_update = True
+    if "tools/intent_viewer/" not in gi_text:
+        additions.append("tools/intent_viewer/")
+        needs_update = True
+    if needs_update:
         with open(gitignore, "a", encoding="utf-8") as f:
-            f.write("\n# Sigil generated artifacts\n.intent/index/\n")
-        print(f"  [4/6] Added .intent/index/ to .gitignore")
+            f.write("\n# Sigil generated artifacts\n")
+            for entry in additions:
+                f.write(f"{entry}\n")
+        print(f"  [4/6] Added {', '.join(additions)} to .gitignore")
     else:
         print(f"  [4/6] .gitignore configured")
 
@@ -5011,6 +5051,28 @@ def cmd_ci(args) -> int:
     return 0
 
 
+def _hoist_repo_flag(argv: list) -> list:
+    """Allow --repo to appear anywhere after the subcommand.
+
+    argparse only sees global flags that precede the subcommand, so
+    ``sigil status --repo foo`` fails.  Move ``--repo VALUE`` before the
+    first non-option token (the subcommand) so both orderings work.
+    """
+    result = list(argv)
+    i = 1
+    while i < len(result):
+        if result[i] == "--repo" and i + 1 < len(result):
+            # Move --repo VALUE to the front if it's not already there
+            if i > 0:
+                val = result[i + 1]
+                del result[i : i + 2]
+                result.insert(0, val)
+                result.insert(0, "--repo")
+            break
+        i += 1
+    return result
+
+
 def main() -> int:
     epilog = """\
 commands (grouped by workflow):
@@ -5215,7 +5277,7 @@ commands (grouped by workflow):
     sp.add_argument("--json", action="store_true", default=False, help="Output results as JSON")
     sp.set_defaults(fn=cmd_impact)
 
-    args = ap.parse_args()
+    args = ap.parse_args(_hoist_repo_flag(sys.argv[1:]))
     if not args.cmd:
         ap.print_help()
         return 0
