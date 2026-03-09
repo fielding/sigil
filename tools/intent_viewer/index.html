@@ -1466,9 +1466,15 @@
           .attr("transform", `translate(${pos.x},${pos.y})`)
           .attr("cursor", "pointer")
           .on("click", () => selectNodeById(n.id))
-          .on("mouseenter", (ev) => showTooltip(ev, n))
+          .on("mouseenter", function(ev) {
+            ng.select("circle").attr("stroke", "#f8f6f2");
+            showTooltip(ev, n);
+          })
           .on("mousemove", (ev) => moveTooltip(ev))
-          .on("mouseleave", () => hideTooltip());
+          .on("mouseleave", function() {
+            ng.select("circle").attr("stroke", selectedNode && selectedNode.id === n.id ? "#f8f6f2" : "none");
+            hideTooltip();
+          });
 
         ng.append("circle")
           .attr("r", n.type === "component" ? 12 : 8)
@@ -2562,6 +2568,9 @@
         });
         node.attr("opacity", n => connected.has(n.id) ? 1 : 0.2);
         label.attr("opacity", n => connected.has(n.id) ? 1 : 0.15);
+        // Preview selected state: highlight hovered node with selected-node stroke
+        node.attr("stroke", n => n.id === d.id ? "#f8f6f2" : (selectedNode && n.id === selectedNode.id ? "#f8f6f2" : "none"))
+            .attr("stroke-width", n => (n.id === d.id || (selectedNode && n.id === selectedNode.id)) ? 2.5 : 0);
         showTooltip(ev, d);
       }).on("mousemove", function(ev, d) {
         moveTooltip(ev);
