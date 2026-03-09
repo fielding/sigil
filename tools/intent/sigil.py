@@ -1167,7 +1167,7 @@ def cmd_new(args) -> int:
         if dest.exists():
             print(f"Interface already exists: {dest.relative_to(repo)}")
             return 1
-        content = content.replace("<API-NAME-V1|EVT-NAME-V1|SCHEMA-NAME-V1>", iface_id)
+        content = content.replace("<API-NAME-V1>", iface_id)
         content = content.replace("<Interface Name>", title)
         dest.write_text(content, encoding="utf-8")
         print(f"Created {dest.relative_to(repo)}")

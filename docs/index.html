@@ -9,7 +9,7 @@
   <link rel="apple-touch-icon" sizes="180x180" href="branding/apple-touch-icon.png" />
   <meta property="og:image" content="branding/social-card.png" />
   <meta property="og:title" content="Sigil — Intent-first engineering" />
-  <meta property="og:description" content="Live demo: explore Sigil's own intent graph. Every architectural decision, spec, gate, and constraint — queryable, diffable, enforced in CI. Run npx sigil-cli init to try it on your repo." />
+  <meta property="og:description" content="Live demo: explore Sigil's own intent graph. Every architectural decision, spec, gate, and constraint — queryable, diffable, enforced in CI. Run pip install sigil-cli &amp;&amp; sigil init to try it on your repo." />
   <meta name="twitter:card" content="summary_large_image" />
   <style>
     :root {
@@ -98,6 +98,26 @@
     #breadcrumb span { cursor: pointer; }
     #breadcrumb span:hover { color: var(--base0D); }
     #breadcrumb .sep { color: var(--base03); margin: 0 6px; cursor: default; }
+
+    /* Nav bar (back / forward / home) */
+    #nav-bar {
+      display: flex; align-items: center; gap: 6px;
+      padding: 6px 14px; border-bottom: 1px solid var(--base02);
+      background: var(--base00); flex-shrink: 0;
+    }
+    .nav-btn {
+      padding: 2px 8px; font-size: 12px; font-weight: 600;
+      background: transparent; border: 1px solid var(--base02);
+      color: var(--base04); border-radius: 4px; cursor: pointer;
+      font-family: inherit; transition: all 0.15s;
+    }
+    .nav-btn:hover:not([disabled]) { color: var(--base05); border-color: var(--base03); }
+    .nav-btn[disabled] { opacity: 0.3; cursor: default; }
+    #nav-home {
+      color: var(--base0F); border-color: var(--base0F);
+      background: rgba(187,255,0,0.06);
+    }
+    #nav-home:hover { background: rgba(187,255,0,0.14); }
 
     /* Node header */
     #node-header {
@@ -239,13 +259,6 @@
     .welcome .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
     .welcome .welcome-hint { font-size: 12px; color: var(--base03); border-top: 1px solid var(--base02); padding-top: 12px; }
     .welcome .welcome-hint kbd { background: var(--base02); color: var(--base05); padding: 2px 6px; border-radius: 3px; font-size: 11px; font-family: inherit; }
-    .welcome .welcome-cta { margin-top: 16px; padding: 14px 16px; background: rgba(187,255,0,0.06); border: 1px solid rgba(187,255,0,0.2); border-radius: 6px; }
-    .welcome .welcome-cta h3 { font-size: 12px; font-weight: 700; color: var(--base0F); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 8px; }
-    .welcome .welcome-cta .cta-code { font-family: inherit; font-size: 12px; color: var(--base0B); background: var(--base01); border: 1px solid var(--base02); border-radius: 4px; padding: 8px 12px; display: block; margin-bottom: 10px; user-select: all; cursor: text; }
-    .welcome .welcome-cta .cta-links { display: flex; gap: 12px; font-size: 12px; }
-    .welcome .welcome-cta .cta-links a { color: var(--base0D); text-decoration: none; }
-    .welcome .welcome-cta .cta-links a:hover { color: var(--base0C); text-decoration: underline; }
-    .welcome .demo-label { font-size: 11px; color: var(--base03); margin-bottom: 4px; letter-spacing: 0.5px; }
 
     /* Legend */
     #legend {
@@ -527,86 +540,167 @@
     // Injected by sigil export — no server needed
     window.__SIGIL_GRAPH__ = {
   "version": "1.0",
-  "generated_at": "2026-03-07T10:08:50Z",
+  "generated_at": "2026-03-09T03:06:51Z",
   "nodes": [
     {
-      "id": "COMP-sigil-ci",
+      "id": "COMP-search-service",
       "type": "component",
-      "title": "Sigil CI Pipeline",
-      "path": "components/sigil-ci.yaml",
-      "body_summary": "GitHub Actions workflow that runs intent linting, gate checks, drift detection, and posts PR comments."
-    },
-    {
-      "id": "COMP-sigil-viewer",
-      "type": "component",
-      "title": "Sigil Viewer",
-      "path": "components/sigil-viewer.yaml",
-      "body_summary": "Interactive web-based intent graph explorer with 7 view modes, command palette, and human++ theming."
-    },
-    {
-      "id": "COMP-intent-system",
-      "type": "component",
-      "title": "Intent System",
-      "path": "components/intent-system.yaml",
+      "title": "Search Service",
+      "path": "components/search-service.yaml",
       "body_summary": ""
     },
     {
-      "id": "API-INTENT-CLI-V1",
+      "id": "COMP-auth-service",
+      "type": "component",
+      "title": "Auth Service",
+      "path": "components/auth-service.yaml",
+      "body_summary": ""
+    },
+    {
+      "id": "COMP-payment-gateway",
+      "type": "component",
+      "title": "Payment Gateway",
+      "path": "components/payment-gateway.yaml",
+      "body_summary": ""
+    },
+    {
+      "id": "COMP-cart-service",
+      "type": "component",
+      "title": "Cart Service",
+      "path": "components/cart-service.yaml",
+      "body_summary": ""
+    },
+    {
+      "id": "COMP-catalog-service",
+      "type": "component",
+      "title": "Catalog Service",
+      "path": "components/catalog-service.yaml",
+      "body_summary": ""
+    },
+    {
+      "id": "COMP-order-service",
+      "type": "component",
+      "title": "Order Service",
+      "path": "components/order-service.yaml",
+      "body_summary": ""
+    },
+    {
+      "id": "COMP-notification-service",
+      "type": "component",
+      "title": "Notification Service",
+      "path": "components/notification-service.yaml",
+      "body_summary": ""
+    },
+    {
+      "id": "COMP-admin-dashboard",
+      "type": "component",
+      "title": "Admin Dashboard",
+      "path": "components/admin-dashboard.yaml",
+      "body_summary": ""
+    },
+    {
+      "id": "COMP-web-app",
+      "type": "component",
+      "title": "Web App",
+      "path": "components/web-app.yaml",
+      "body_summary": ""
+    },
+    {
+      "id": "API-CATALOG-V1",
       "type": "interface",
-      "title": "Intent CLI Interface v1",
-      "path": "interfaces/API-INTENT-CLI-V1/README.md",
+      "title": "Catalog API",
+      "path": "interfaces/API-CATALOG-V1/README.md",
       "body_summary": ""
     },
     {
-      "id": "SPEC-0006",
+      "id": "API-PAYMENTS-V1",
+      "type": "interface",
+      "title": "Payments API",
+      "path": "interfaces/API-PAYMENTS-V1/README.md",
+      "body_summary": ""
+    },
+    {
+      "id": "API-CART-V1",
+      "type": "interface",
+      "title": "Cart API",
+      "path": "interfaces/API-CART-V1/README.md",
+      "body_summary": ""
+    },
+    {
+      "id": "API-ORDERS-V1",
+      "type": "interface",
+      "title": "Orders API",
+      "path": "interfaces/API-ORDERS-V1/README.md",
+      "body_summary": ""
+    },
+    {
+      "id": "API-AUTH-V1",
+      "type": "interface",
+      "title": "Auth API",
+      "path": "interfaces/API-AUTH-V1/README.md",
+      "body_summary": ""
+    },
+    {
+      "id": "SPEC-0002",
       "type": "spec",
-      "title": "CI Pipeline Spec",
-      "path": "intent/sigil-ci/specs/SPEC-0006-ci-pipeline.md",
-      "body_summary": "The Sigil CI workflow runs on every pull request and produces a comprehensive intent report.\n\n## Intent\n\nIntent drift happens silently. Without enforcement, teams write intent docs once and never update them. CI integration makes intent a living part of the development workflow.\n\n## Pipeline Steps\n\n1. `sigil index` -- build the knowledge graph\n2. `sigil lint` -- check docs for structural issues\n3. `sigil check` -- enforce gates\n4. `sigil drift` -- compare intent vs code\n5. `sigil timeline` --...",
+      "title": "JWT Authentication",
+      "path": "intent/auth-service/specs/SPEC-0002-jwt-authentication.md",
+      "body_summary": "## Intent\n\nGive users a way to sign up, log in, and prove their identity to other services. We're using stateless JWT tokens so that services can verify requests without calling back to auth on every request.\n\n## Context\n\nThe cart and order services need to know who the user is. We could use sessions, but JWTs let us keep services stateless and avoid a shared session store. This is a small app, so we're not building a full identity provider \u2014 just enough auth to demonstrate the flow.\n\n##...",
       "frontmatter": {
-        "id": "SPEC-0006",
+        "id": "SPEC-0002",
+        "status": "accepted"
+      }
+    },
+    {
+      "id": "ADR-0002",
+      "type": "adr",
+      "title": "Use JWT tokens instead of server-side sessions",
+      "path": "intent/auth-service/adrs/ADR-0002-jwt-over-sessions.md",
+      "body_summary": "## Context\n\nWe need authentication across multiple services. The question is whether to use stateful sessions (requiring a shared session store) or stateless tokens (requiring nothing shared).\n\n## Decision\n\nUse JWT-style tokens signed with HMAC-SHA256. Each service can verify tokens independently without calling back to the auth service or sharing a database.\n\n## Alternatives\n\n- **Server-side sessions with Redis**: More traditional, but adds a shared dependency. Every service would need Redis...",
+      "frontmatter": {
+        "id": "ADR-0002",
         "status": "accepted"
       }
     },
     {
       "id": "SPEC-0001",
       "type": "spec",
-      "title": "Intent-First Review System",
-      "path": "intent/intent-system/specs/SPEC-0001-intent-first-review-system.md",
-      "body_summary": "## Intent\n\nReplace diff-centric code review with intent-centric review. Humans review what and why; machines verify that code conforms to stated intent.\n\n## Context\n\nCode review today is broken at scale. Reviewers scroll through thousands of lines of diffs without understanding the purpose, constraints, or risks of a change. This leads to rubber-stamping, slow cycles, and missed architectural issues.\n\n## Goals\n\n- Intent documents (specs, ADRs, interfaces, gates) become the primary review...",
+      "title": "Book Catalog API",
+      "path": "intent/catalog-service/specs/SPEC-0001-book-catalog-api.md",
+      "body_summary": "## Intent\n\nProvide a read-only API for browsing and searching the book inventory. This is the foundational data service \u2014 everything else (cart, orders, search) depends on being able to look up books by ID and list what's available.\n\n## Context\n\nWe need a single source of truth for book data. The web app needs it for product pages, the cart service needs it to validate items, and the order service needs it to lock in prices at checkout time. Without a clean catalog API, every service would...",
       "frontmatter": {
         "id": "SPEC-0001",
         "status": "accepted"
       }
     },
     {
-      "id": "SPEC-0002",
+      "id": "SPEC-0007",
       "type": "spec",
-      "title": "Bootstrapper and Demo Strategy",
-      "path": "intent/intent-system/specs/SPEC-0002-bootstrapper-and-demo-strategy.md",
-      "body_summary": "## Intent\n\nProvide a way to adopt intent-first on existing projects by generating an \"as-built\" intent skeleton, and define a demo flow that makes the value proposition immediately visible.\n\n## Context\n\nGreenfield adoption is easy but rare. Most teams have existing codebases. A bootstrapper that generates components, interfaces, and spec skeletons from an existing repo removes the cold-start problem. A compelling demo sells the concept.\n\n## Goals\n\n- `intent bootstrap` scans a repo and generates...",
+      "title": "Catalog Search Improvements",
+      "path": "intent/catalog-service/specs/SPEC-0007-catalog-search.md",
+      "body_summary": "## Intent\n\nUpgrade the catalog search from basic substring matching to something that handles typos, partial words, and relevance ranking. This makes the storefront usable for real browsing, not just exact-match lookups.\n\n## Context\n\nThe current search (SPEC-0001) does case-insensitive substring matching on title and author. That's fine for 3 books, but falls apart with a real catalog. Users expect search to be forgiving \u2014 \"pragmatc progrmmr\" should still find the right book.\n\nThis spec...",
       "frontmatter": {
-        "id": "SPEC-0002",
+        "id": "SPEC-0007",
         "status": "proposed"
       }
     },
     {
-      "id": "SPEC-0004",
-      "type": "spec",
-      "title": "Sigil CLI",
-      "path": "intent/intent-system/specs/SPEC-0004-sigil-cli.md",
-      "body_summary": "## Intent\n\nProvide a single command-line tool that manages the full lifecycle of intent documents: scaffolding, indexing, linting, searching, and diffing. The CLI is the kernel that everything else builds on.\n\n!! If the CLI is slow or unreliable, nothing else works. Keep it fast and dependency-light.\n\n## Context\n\nEngineers already live in their terminal. A CLI that fits into existing workflows (git hooks, CI, editor tasks) has zero adoption friction. We chose Python because it's universal and...",
+      "id": "ADR-0001",
+      "type": "adr",
+      "title": "Use in-memory store for the book catalog",
+      "path": "intent/catalog-service/adrs/ADR-0001-in-memory-catalog-store.md",
+      "body_summary": "## Context\n\nThe catalog service needs a data store. Options range from a real database (Postgres, SQLite) to a flat file to an in-memory dict. This is a demo app with a handful of books, not a production bookstore.\n\n## Decision\n\nUse a Python dictionary as the data store. Books are defined as dataclass instances in the source code.\n\n## Alternatives\n\n- **SQLite**: Would add realism but also adds setup steps, migrations, and a dependency. Not worth it for a demo that's showing off the intent...",
       "frontmatter": {
-        "id": "SPEC-0004",
+        "id": "ADR-0001",
         "status": "accepted"
       }
     },
     {
       "id": "SPEC-0003",
       "type": "spec",
-      "title": "Sigil Viewer",
-      "path": "intent/intent-system/specs/SPEC-0003-sigil-viewer.md",
-      "body_summary": "## Intent\n\nBuild a browser-based graph explorer that makes the intent graph tangible. Engineers should be able to see their entire decision landscape at a glance, drill into any node to read the full spec/ADR, and understand blast radius before making changes.\n\n!! The viewer is the primary interface for non-CLI users. If it doesn't work well, Sigil doesn't work.\n\n## Context\n\nThe CLI kernel ([[SPEC-0001]]) produces `graph.json` with nodes and edges. Without a visual layer, that JSON is useful...",
+      "title": "Shopping Cart",
+      "path": "intent/cart-service/specs/SPEC-0003-shopping-cart.md",
+      "body_summary": "## Intent\n\nLet users collect books they want to buy before checking out. The cart is per-user, lives in memory, and acts as a staging area between browsing and ordering.\n\n## Context\n\nWithout a cart, users would have to buy one book at a time. The cart service is intentionally simple \u2014 in-memory, no persistence across restarts. If we need durability later, we'd swap in Redis or a database behind the same API.\n\n## Goals\n\n- Add books to cart with quantity\n- Remove individual books\n- Clear entire...",
       "frontmatter": {
         "id": "SPEC-0003",
         "status": "accepted"
@@ -615,109 +709,201 @@
     {
       "id": "ADR-0003",
       "type": "adr",
-      "title": "Gate Model",
-      "path": "intent/intent-system/adrs/ADR-0003-gate-model.md",
-      "body_summary": "## Context\n\nIf intent documents are the \"what and why,\" gates are the \"enforcement.\" We need a way to define constraints that are tied to intent nodes and can be run in CI.\n\n## Decision\n\nGates are YAML files in `/gates/` with:\n\n- An ID (`GATE-*`)\n- An `applies_to` list referencing intent nodes\n- An `enforced_by` block specifying how to check (command, builtin rule, or AI prompt)\n- A `policy` block specifying warn vs. block behavior\n\nGate types include: command (run a script), builtin...",
+      "title": "Session-scoped in-memory carts",
+      "path": "intent/cart-service/adrs/ADR-0003-session-scoped-cart.md",
+      "body_summary": "## Context\n\nCarts need to be per-user and available across requests within a session. We could persist them to a database or keep them in memory.\n\n## Decision\n\nStore carts in a Python dict keyed by user ID. Carts exist only as long as the server process is running.\n\n## Alternatives\n\n- **Redis**: The standard choice for session data. Fast, persistent enough, supports TTL. But adds infrastructure for a demo app.\n- **Database**: Durable but slow for the frequent read-modify-write pattern of cart...",
       "frontmatter": {
         "id": "ADR-0003",
         "status": "accepted"
       }
     },
     {
-      "id": "ADR-0002",
-      "type": "adr",
-      "title": "Repo Schema for Intent",
-      "path": "intent/intent-system/adrs/ADR-0002-repo-schema-for-intent.md",
-      "body_summary": "## Context\n\nIntent artifacts need a home. They could live in a database, a wiki, or the repo itself. We need a convention that is portable, versionable, and doesn't require a running service.\n\n## Decision\n\nStore all intent artifacts in the git repo using a structured directory layout:\n\n- `/components/` \u2014 component registry (YAML)\n- `/intent/<component>/specs/` \u2014 spec documents (Markdown + front matter)\n- `/intent/<component>/adrs/` \u2014 decision records\n- `/interfaces/` \u2014 contract definitions...",
+      "id": "SPEC-0008",
+      "type": "spec",
+      "title": "Order Status Tracking",
+      "path": "intent/order-service/specs/SPEC-0008-order-status-tracking.md",
+      "body_summary": "## Intent\n\nLet users and internal systems track an order through its lifecycle: pending, confirmed, shipped, delivered, cancelled. Right now orders are created and that's it \u2014 there's no state machine.\n\n## Context\n\n[[SPEC-0004]] handles checkout but leaves orders in a permanent \"pending\" state. For a real system, we need status transitions so the UI can show \"your order shipped\" and internal tools can manage fulfillment.\n\n## Goals\n\n- Define a clear order status state machine\n- Add a PATCH...",
       "frontmatter": {
-        "id": "ADR-0002",
-        "status": "accepted"
+        "id": "SPEC-0008",
+        "status": "proposed"
       }
     },
     {
-      "id": "ADR-0001",
-      "type": "adr",
-      "title": "Why Intent-First",
-      "path": "intent/intent-system/adrs/ADR-0001-why-intent-first.md",
-      "body_summary": "## Context\n\nTraditional code review focuses on diffs \u2014 line-by-line implementation details. At scale, this fails: reviewers lack context, rubber-stamp approvals, and miss architectural issues. Meanwhile, AI can generate code faster than humans can review it.\n\n## Decision\n\nAdopt an intent-first model where the primary review surface is structured intent documents (specs, ADRs, interface definitions) rather than code diffs. Implementation review is delegated to automated gates and AI conformance...",
+      "id": "SPEC-0004",
+      "type": "spec",
+      "title": "Checkout Flow",
+      "path": "intent/order-service/specs/SPEC-0004-checkout-flow.md",
+      "body_summary": "## Intent\n\nTurn a user's cart into a confirmed order. This is the critical path \u2014 it touches every other service and is where money changes hands (conceptually). Getting this right means prices are locked, inventory is checked, and the user gets confirmation.\n\n## Context\n\nThe checkout flow is the most complex interaction in the app. It needs to:\n1. Read the user's cart\n2. Look up current prices from the catalog\n3. Create an order record\n4. Clear the cart\n5. Send a confirmation...",
       "frontmatter": {
-        "id": "ADR-0001",
+        "id": "SPEC-0004",
         "status": "accepted"
       }
     },
     {
       "id": "ADR-0004",
       "type": "adr",
-      "title": "IDs and Wikilinks",
-      "path": "intent/intent-system/adrs/ADR-0004-ids-and-wikilinks.md",
-      "body_summary": "## Context\n\nNodes in the intent graph need stable, human-readable identifiers. Relationships between nodes need a lightweight syntax that works in plain Markdown.\n\n## Decision\n\n- Every node gets a prefixed ID: `SPEC-0042`, `ADR-0001`, `COMP-user-service`, `API-USER-V1`, `GATE-0021`\n- IDs are declared in YAML front matter (`id: SPEC-0042`)\n- References use `[[ID]]` wikilink syntax: `[[COMP-user-service]]`, `[[API-USER-V1]]`\n- Typed relationships use a `## Links` section with labeled entries:\n ...",
+      "title": "Synchronous checkout orchestration",
+      "path": "intent/order-service/adrs/ADR-0004-synchronous-checkout.md",
+      "body_summary": "## Context\n\nThe checkout flow crosses 4 service boundaries: auth, cart, catalog, and notifications. We need to decide whether this orchestration is synchronous (single request, all steps in sequence) or asynchronous (event-driven, saga pattern).\n\n## Decision\n\nKeep it synchronous. The checkout endpoint makes sequential calls to each service and returns the complete order in a single response.\n\n## Alternatives\n\n- **Saga pattern with events**: Each step publishes an event, the next service picks...",
       "frontmatter": {
         "id": "ADR-0004",
         "status": "accepted"
       }
     },
     {
-      "id": "ADR-0006",
-      "type": "adr",
-      "title": "Graph Storage Format",
-      "path": "intent/intent-system/adrs/ADR-0006-graph-storage-format.md",
-      "body_summary": "## Context\n\nThe intent indexer needs to persist the knowledge graph in a format that the viewer, CI, and search tools can all consume. The graph consists of nodes (components, specs, ADRs, interfaces, gates) and typed edges (belongs_to, decided_by, depends_on, etc.).\n\n?? We considered a database but decided it was overkill for a repo-local tool.\n\n## Decision\n\nUse a single JSON file (`.intent/index/graph.json`) as the canonical graph artifact. Structure:\n\n```json\n{\n  \"version\": \"1.0\",\n ...",
+      "id": "ROLLOUT-0001",
+      "type": "rollout",
+      "title": "Checkout Flow v1 Rollout",
+      "path": "intent/order-service/rollouts/ROLLOUT-0001-checkout-v1.md",
+      "body_summary": "## Overview\n\nRolling out the synchronous checkout flow described in [[SPEC-0004]]. This is the first version of the order pipeline \u2014 all services need to be deployed and healthy before we can enable checkout.\n\n## Prerequisites\n\n- [x] Catalog service deployed with [[API-CATALOG-V1]] operational\n- [x] Auth service deployed with [[API-AUTH-V1]] operational\n- [x] Cart service deployed with [[API-CART-V1]] operational\n- [ ] Order service deployed with [[API-ORDERS-V1]] operational\n- [ ] Notification...",
       "frontmatter": {
-        "id": "ADR-0006",
-        "status": "accepted"
+        "id": "ROLLOUT-0001",
+        "status": "in-progress"
       }
     },
     {
-      "id": "ADR-0005",
+      "id": "ADR-0007",
       "type": "adr",
-      "title": "Human++ Integration",
-      "path": "intent/intent-system/adrs/ADR-0005-human++-integration.md",
-      "body_summary": "## Context\n\nSigil needed a visual identity for its viewer and a convention for annotating intent documents. The founder already maintained human++, a Base24 color scheme built around the thesis that \"code is cheap, intent is scarce.\" The scheme provides 24 colors in three tiers (grayscale, loud accents, quiet accents) plus three annotation markers for human judgment in code.\n\n!! Annotation markers are what make intent docs scannable. Without them, everything looks the same.\n\n## Decision\n\nAdopt...",
+      "title": "Dedicated search service instead of in-catalog search",
+      "path": "intent/search-service/adrs/ADR-0007-dedicated-search-service.md",
+      "body_summary": "## Context\n\nSearch is currently handled inside the catalog service (see [[SPEC-0007]]). As the catalog grows, search needs its own index, ranking logic, and potentially a different data store (e.g., Elasticsearch). Running search queries against the primary catalog store creates contention.\n\nThe question is whether to extract search into its own service now or keep it coupled to the catalog.\n\n## Decision\n\nExtract search into a dedicated service that maintains its own index built from catalog...",
       "frontmatter": {
-        "id": "ADR-0005",
-        "status": "accepted"
+        "id": "ADR-0007",
+        "status": "proposed"
+      }
+    },
+    {
+      "id": "SPEC-0009",
+      "type": "spec",
+      "title": "Payment Processing",
+      "path": "intent/payment-gateway/specs/SPEC-0009-payment-processing.md",
+      "body_summary": "## Intent\n\nAccept payments for confirmed orders through a pluggable payment provider. The demo uses a stub that always succeeds; production would swap in Stripe or similar. This keeps the order service from knowing anything about payment internals.\n\n## Context\n\nCurrently the checkout flow in [[SPEC-0004]] creates orders but doesn't actually charge anyone. Adding payment processing closes the loop \u2014 orders aren't truly \"confirmed\" until payment succeeds.\n\nThe payment gateway is a separate...",
+      "frontmatter": {
+        "id": "SPEC-0009",
+        "status": "proposed"
       }
     },
     {
       "id": "SPEC-0005",
       "type": "spec",
-      "title": "Seven View Modes",
-      "path": "intent/sigil-viewer/specs/SPEC-0005-seven-view-modes.md",
-      "body_summary": "The Sigil viewer provides seven distinct visualizations of the intent graph, each optimized for a different analysis task.\n\n## Intent\n\nArchitects and developers need multiple lenses to understand a system's intent structure. A single graph view is not enough -- you need to see topology, hierarchy, coverage, drift, history, and coupling.\n\n## Views\n\n1. **Graph** -- force-directed knowledge graph with drag, zoom, glow effects on high-connectivity nodes, colored edges by type, and curved paths with...",
+      "title": "Order Notifications",
+      "path": "intent/notification-service/specs/SPEC-0005-order-notifications.md",
+      "body_summary": "## Intent\n\nSend confirmation emails when orders are placed. Users need to know their order went through, and we need a notification abstraction that can grow to support more channels later.\n\n## Context\n\nRight now we only send order confirmations via email. But the notification service is designed as a standalone component so we can add push notifications, SMS, or webhook integrations later without changing the order service.\n\n## Goals\n\n- Send email notification on order confirmation\n- Abstract...",
       "frontmatter": {
         "id": "SPEC-0005",
         "status": "accepted"
       }
     },
     {
-      "id": "GATE-0002",
+      "id": "ADR-0005",
+      "type": "adr",
+      "title": "Fire-and-forget notification delivery",
+      "path": "intent/notification-service/adrs/ADR-0005-fire-and-forget-notifications.md",
+      "body_summary": "## Context\n\nThe order service triggers notifications after checkout. We need to decide whether notification delivery blocks the checkout response or happens best-effort in the background.\n\n## Decision\n\nNotifications are fire-and-forget. The order service calls the notification function, logs any errors, and continues. Checkout success doesn't depend on notification success.\n\n## Alternatives\n\n- **Guaranteed delivery with a queue**: Publish to a message queue, have a worker consume and retry....",
+      "frontmatter": {
+        "id": "ADR-0005",
+        "status": "accepted"
+      }
+    },
+    {
+      "id": "SPEC-0006",
+      "type": "spec",
+      "title": "Storefront UI",
+      "path": "intent/web-app/specs/SPEC-0006-storefront-ui.md",
+      "body_summary": "## Intent\n\nGive users a web interface to browse books, manage their cart, and check out. The frontend is a thin layer over the backend APIs \u2014 it shouldn't contain business logic.\n\n## Context\n\nWe need a frontend. Next.js gives us server-side rendering for the catalog pages (good for SEO and initial load) and client-side interactivity for the cart. The UI is deliberately minimal \u2014 this is a Sigil demo, not a design showcase.\n\n## Goals\n\n- Product listing page showing all books\n- Individual book...",
+      "frontmatter": {
+        "id": "SPEC-0006",
+        "status": "accepted"
+      }
+    },
+    {
+      "id": "ADR-0006",
+      "type": "adr",
+      "title": "Use Next.js for the storefront frontend",
+      "path": "intent/web-app/adrs/ADR-0006-nextjs-for-frontend.md",
+      "body_summary": "## Context\n\nWe need a web frontend for the bookstore. The catalog pages benefit from server-side rendering (fast first paint, SEO), while the cart needs client-side interactivity. We want a framework that handles both without a complex build setup.\n\n## Decision\n\nUse Next.js with the App Router. Server components for catalog pages, client components for cart interactions.\n\n## Alternatives\n\n- **Plain React (Create React App / Vite)**: Simpler, but no SSR. Catalog pages would show a loading...",
+      "frontmatter": {
+        "id": "ADR-0006",
+        "status": "accepted"
+      }
+    },
+    {
+      "id": "GATE-0003",
       "type": "gate",
-      "title": "Ensures ADRs progress beyond draft status in a timely manner",
-      "path": "gates/GATE-0002-adr-maturity.yaml",
+      "title": "Order service can only depend on catalog, cart, auth, and notification. Prevents uncontrolled coupling.",
+      "path": "gates/GATE-0003-order-service-deps.yaml",
+      "body_summary": ""
+    },
+    {
+      "id": "GATE-0005",
+      "type": "gate",
+      "title": "Payment gateway must never handle raw card numbers \u2014 only tokenized payment methods. Prevents accidental PCI scope expansion.",
+      "path": "gates/GATE-0005-payment-no-raw-card-numbers.yaml",
+      "body_summary": ""
+    },
+    {
+      "id": "GATE-0004",
+      "type": "gate",
+      "title": "All specs must have Intent, Goals, Non-goals, Design, Acceptance Criteria, and Links sections. Every spec must declare which component it belongs to.",
+      "path": "gates/GATE-0004-spec-quality.yaml",
       "body_summary": ""
     },
     {
       "id": "GATE-0001",
       "type": "gate",
-      "title": "Ensures all specs under intent-system have acceptance criteria, status, and valid references",
-      "path": "gates/GATE-0001-spec-quality.yaml",
+      "title": "Prevents breaking changes to the Catalog API: required endpoints must exist, prices must be integer cents",
+      "path": "gates/GATE-0001-catalog-api-compat.yaml",
+      "body_summary": ""
+    },
+    {
+      "id": "GATE-0002",
+      "type": "gate",
+      "title": "Ensures auth service hashes passwords and never returns them in plaintext",
+      "path": "gates/GATE-0002-auth-no-plaintext-passwords.yaml",
       "body_summary": ""
     }
   ],
   "edges": [
     {
       "type": "belongs_to",
-      "src": "SPEC-0006",
-      "dst": "COMP-sigil-ci",
+      "src": "SPEC-0002",
+      "dst": "COMP-auth-service",
       "confidence": 1.0,
       "evidence": [
         "Links block"
       ]
     },
     {
-      "type": "depends_on",
-      "src": "SPEC-0006",
-      "dst": "API-INTENT-CLI-V1",
+      "type": "provides",
+      "src": "SPEC-0002",
+      "dst": "API-AUTH-V1",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "decided_by",
+      "src": "SPEC-0002",
+      "dst": "ADR-0002",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "gated_by",
+      "src": "SPEC-0002",
+      "dst": "GATE-0002",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "decided_by",
+      "src": "ADR-0002",
+      "dst": "SPEC-0002",
       "confidence": 1.0,
       "evidence": [
         "Links block"
@@ -726,7 +912,34 @@
     {
       "type": "belongs_to",
       "src": "SPEC-0001",
-      "dst": "COMP-intent-system",
+      "dst": "COMP-catalog-service",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "provides",
+      "src": "SPEC-0001",
+      "dst": "API-CATALOG-V1",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "decided_by",
+      "src": "SPEC-0001",
+      "dst": "ADR-0001",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "gated_by",
+      "src": "SPEC-0001",
+      "dst": "GATE-0001",
       "confidence": 1.0,
       "evidence": [
         "Links block"
@@ -734,16 +947,43 @@
     },
     {
       "type": "belongs_to",
-      "src": "SPEC-0002",
-      "dst": "COMP-intent-system",
+      "src": "SPEC-0007",
+      "dst": "COMP-catalog-service",
       "confidence": 1.0,
       "evidence": [
         "Links block"
       ]
     },
     {
-      "type": "depends_on",
-      "src": "SPEC-0002",
+      "type": "provides",
+      "src": "SPEC-0007",
+      "dst": "API-CATALOG-V1",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "supersedes",
+      "src": "SPEC-0007",
+      "dst": "SPEC-0001",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "gated_by",
+      "src": "SPEC-0007",
+      "dst": "GATE-0001",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "decided_by",
+      "src": "ADR-0001",
       "dst": "SPEC-0001",
       "confidence": 1.0,
       "evidence": [
@@ -752,8 +992,125 @@
     },
     {
       "type": "belongs_to",
+      "src": "SPEC-0003",
+      "dst": "COMP-cart-service",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "provides",
+      "src": "SPEC-0003",
+      "dst": "API-CART-V1",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "consumes",
+      "src": "SPEC-0003",
+      "dst": "API-CATALOG-V1",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "decided_by",
+      "src": "SPEC-0003",
+      "dst": "ADR-0003",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "depends_on",
+      "src": "SPEC-0003",
+      "dst": "COMP-catalog-service",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "decided_by",
+      "src": "ADR-0003",
+      "dst": "SPEC-0003",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "belongs_to",
+      "src": "SPEC-0008",
+      "dst": "COMP-order-service",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "provides",
+      "src": "SPEC-0008",
+      "dst": "API-ORDERS-V1",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "depends_on",
+      "src": "SPEC-0008",
+      "dst": "SPEC-0004",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "belongs_to",
       "src": "SPEC-0004",
-      "dst": "COMP-intent-system",
+      "dst": "COMP-order-service",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "provides",
+      "src": "SPEC-0004",
+      "dst": "API-ORDERS-V1",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "consumes",
+      "src": "SPEC-0004",
+      "dst": "API-CATALOG-V1",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "consumes",
+      "src": "SPEC-0004",
+      "dst": "API-CART-V1",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "consumes",
+      "src": "SPEC-0004",
+      "dst": "API-AUTH-V1",
       "confidence": 1.0,
       "evidence": [
         "Links block"
@@ -762,7 +1119,34 @@
     {
       "type": "depends_on",
       "src": "SPEC-0004",
-      "dst": "ADR-0002",
+      "dst": "COMP-catalog-service",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "depends_on",
+      "src": "SPEC-0004",
+      "dst": "COMP-cart-service",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "depends_on",
+      "src": "SPEC-0004",
+      "dst": "COMP-auth-service",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "depends_on",
+      "src": "SPEC-0004",
+      "dst": "COMP-notification-service",
       "confidence": 1.0,
       "evidence": [
         "Links block"
@@ -778,54 +1162,9 @@
       ]
     },
     {
-      "type": "belongs_to",
-      "src": "SPEC-0003",
-      "dst": "COMP-intent-system",
-      "confidence": 1.0,
-      "evidence": [
-        "Links block"
-      ]
-    },
-    {
-      "type": "depends_on",
-      "src": "SPEC-0003",
-      "dst": "SPEC-0001",
-      "confidence": 1.0,
-      "evidence": [
-        "Links block"
-      ]
-    },
-    {
-      "type": "decided_by",
-      "src": "SPEC-0003",
-      "dst": "ADR-0005",
-      "confidence": 1.0,
-      "evidence": [
-        "Links block"
-      ]
-    },
-    {
-      "type": "decided_by",
-      "src": "ADR-0003",
-      "dst": "SPEC-0001",
-      "confidence": 1.0,
-      "evidence": [
-        "Links block"
-      ]
-    },
-    {
-      "type": "decided_by",
-      "src": "ADR-0002",
-      "dst": "SPEC-0001",
-      "confidence": 1.0,
-      "evidence": [
-        "Links block"
-      ]
-    },
-    {
-      "type": "decided_by",
-      "src": "ADR-0001",
-      "dst": "SPEC-0001",
+      "type": "gated_by",
+      "src": "SPEC-0004",
+      "dst": "GATE-0003",
       "confidence": 1.0,
       "evidence": [
         "Links block"
@@ -834,15 +1173,6 @@
     {
       "type": "decided_by",
       "src": "ADR-0004",
-      "dst": "SPEC-0001",
-      "confidence": 1.0,
-      "evidence": [
-        "Links block"
-      ]
-    },
-    {
-      "type": "decided_by",
-      "src": "ADR-0006",
       "dst": "SPEC-0004",
       "confidence": 1.0,
       "evidence": [
@@ -850,17 +1180,35 @@
       ]
     },
     {
-      "type": "belongs_to",
-      "src": "ADR-0006",
-      "dst": "COMP-intent-system",
+      "type": "decided_by",
+      "src": "ROLLOUT-0001",
+      "dst": "SPEC-0004",
       "confidence": 1.0,
       "evidence": [
         "Links block"
       ]
     },
     {
-      "type": "decided_by",
-      "src": "ADR-0005",
+      "type": "depends_on",
+      "src": "ROLLOUT-0001",
+      "dst": "SPEC-0001",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "depends_on",
+      "src": "ROLLOUT-0001",
+      "dst": "SPEC-0002",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "depends_on",
+      "src": "ROLLOUT-0001",
       "dst": "SPEC-0003",
       "confidence": 1.0,
       "evidence": [
@@ -868,9 +1216,108 @@
       ]
     },
     {
+      "type": "gated_by",
+      "src": "ROLLOUT-0001",
+      "dst": "GATE-0001",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "gated_by",
+      "src": "ROLLOUT-0001",
+      "dst": "GATE-0002",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "gated_by",
+      "src": "ROLLOUT-0001",
+      "dst": "GATE-0003",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "decided_by",
+      "src": "ADR-0007",
+      "dst": "COMP-search-service",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "relates_to",
+      "src": "ADR-0007",
+      "dst": "SPEC-0007",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "relates_to",
+      "src": "ADR-0007",
+      "dst": "COMP-catalog-service",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
       "type": "belongs_to",
-      "src": "ADR-0005",
-      "dst": "COMP-intent-system",
+      "src": "SPEC-0009",
+      "dst": "COMP-payment-gateway",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "depends_on",
+      "src": "SPEC-0009",
+      "dst": "SPEC-0004",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "depends_on",
+      "src": "SPEC-0009",
+      "dst": "COMP-order-service",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "consumes",
+      "src": "SPEC-0009",
+      "dst": "API-AUTH-V1",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "provides",
+      "src": "SPEC-0009",
+      "dst": "API-PAYMENTS-V1",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "gated_by",
+      "src": "SPEC-0009",
+      "dst": "GATE-0005",
       "confidence": 1.0,
       "evidence": [
         "Links block"
@@ -879,7 +1326,16 @@
     {
       "type": "belongs_to",
       "src": "SPEC-0005",
-      "dst": "COMP-sigil-viewer",
+      "dst": "COMP-notification-service",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "consumes",
+      "src": "SPEC-0005",
+      "dst": "API-AUTH-V1",
       "confidence": 1.0,
       "evidence": [
         "Links block"
@@ -888,7 +1344,7 @@
     {
       "type": "depends_on",
       "src": "SPEC-0005",
-      "dst": "API-INTENT-CLI-V1",
+      "dst": "COMP-auth-service",
       "confidence": 1.0,
       "evidence": [
         "Links block"
@@ -898,6 +1354,15 @@
       "type": "decided_by",
       "src": "SPEC-0005",
       "dst": "ADR-0005",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "decided_by",
+      "src": "ADR-0005",
+      "dst": "SPEC-0005",
       "confidence": 1.0,
       "evidence": [
         "Links block"
@@ -906,61 +1371,106 @@
     {
       "type": "belongs_to",
       "src": "SPEC-0006",
-      "dst": "COMP-sigil-ci",
-      "confidence": 0.95,
+      "dst": "COMP-web-app",
+      "confidence": 1.0,
       "evidence": [
-        "path inference"
+        "Links block"
       ]
     },
     {
-      "type": "belongs_to",
-      "src": "SPEC-0001",
-      "dst": "COMP-intent-system",
-      "confidence": 0.95,
+      "type": "consumes",
+      "src": "SPEC-0006",
+      "dst": "API-CATALOG-V1",
+      "confidence": 1.0,
       "evidence": [
-        "path inference"
+        "Links block"
       ]
     },
     {
-      "type": "belongs_to",
-      "src": "SPEC-0002",
-      "dst": "COMP-intent-system",
-      "confidence": 0.95,
+      "type": "consumes",
+      "src": "SPEC-0006",
+      "dst": "API-AUTH-V1",
+      "confidence": 1.0,
       "evidence": [
-        "path inference"
+        "Links block"
       ]
     },
     {
-      "type": "belongs_to",
-      "src": "SPEC-0004",
-      "dst": "COMP-intent-system",
-      "confidence": 0.95,
+      "type": "consumes",
+      "src": "SPEC-0006",
+      "dst": "API-CART-V1",
+      "confidence": 1.0,
       "evidence": [
-        "path inference"
+        "Links block"
       ]
     },
     {
-      "type": "belongs_to",
-      "src": "SPEC-0003",
-      "dst": "COMP-intent-system",
-      "confidence": 0.95,
+      "type": "consumes",
+      "src": "SPEC-0006",
+      "dst": "API-ORDERS-V1",
+      "confidence": 1.0,
       "evidence": [
-        "path inference"
+        "Links block"
       ]
     },
     {
-      "type": "belongs_to",
-      "src": "ADR-0003",
-      "dst": "COMP-intent-system",
-      "confidence": 0.95,
+      "type": "depends_on",
+      "src": "SPEC-0006",
+      "dst": "COMP-catalog-service",
+      "confidence": 1.0,
       "evidence": [
-        "path inference"
+        "Links block"
+      ]
+    },
+    {
+      "type": "depends_on",
+      "src": "SPEC-0006",
+      "dst": "COMP-auth-service",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "depends_on",
+      "src": "SPEC-0006",
+      "dst": "COMP-cart-service",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "depends_on",
+      "src": "SPEC-0006",
+      "dst": "COMP-order-service",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "decided_by",
+      "src": "SPEC-0006",
+      "dst": "ADR-0006",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "decided_by",
+      "src": "ADR-0006",
+      "dst": "SPEC-0006",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
       ]
     },
     {
       "type": "belongs_to",
       "src": "ADR-0002",
-      "dst": "COMP-intent-system",
+      "dst": "COMP-auth-service",
       "confidence": 0.95,
       "evidence": [
         "path inference"
@@ -969,7 +1479,16 @@
     {
       "type": "belongs_to",
       "src": "ADR-0001",
-      "dst": "COMP-intent-system",
+      "dst": "COMP-catalog-service",
+      "confidence": 0.95,
+      "evidence": [
+        "path inference"
+      ]
+    },
+    {
+      "type": "belongs_to",
+      "src": "ADR-0003",
+      "dst": "COMP-cart-service",
       "confidence": 0.95,
       "evidence": [
         "path inference"
@@ -978,7 +1497,7 @@
     {
       "type": "belongs_to",
       "src": "ADR-0004",
-      "dst": "COMP-intent-system",
+      "dst": "COMP-order-service",
       "confidence": 0.95,
       "evidence": [
         "path inference"
@@ -986,8 +1505,17 @@
     },
     {
       "type": "belongs_to",
-      "src": "ADR-0006",
-      "dst": "COMP-intent-system",
+      "src": "ROLLOUT-0001",
+      "dst": "COMP-order-service",
+      "confidence": 0.95,
+      "evidence": [
+        "path inference"
+      ]
+    },
+    {
+      "type": "belongs_to",
+      "src": "ADR-0007",
+      "dst": "COMP-search-service",
       "confidence": 0.95,
       "evidence": [
         "path inference"
@@ -996,7 +1524,7 @@
     {
       "type": "belongs_to",
       "src": "ADR-0005",
-      "dst": "COMP-intent-system",
+      "dst": "COMP-notification-service",
       "confidence": 0.95,
       "evidence": [
         "path inference"
@@ -1004,8 +1532,8 @@
     },
     {
       "type": "belongs_to",
-      "src": "SPEC-0005",
-      "dst": "COMP-sigil-viewer",
+      "src": "ADR-0006",
+      "dst": "COMP-web-app",
       "confidence": 0.95,
       "evidence": [
         "path inference"
@@ -1013,8 +1541,44 @@
     },
     {
       "type": "relates_to",
-      "src": "SPEC-0003",
-      "dst": "ADR-0001",
+      "src": "SPEC-0004",
+      "dst": "ROLLOUT-0001",
+      "confidence": 0.5,
+      "evidence": [
+        "wikilink"
+      ]
+    },
+    {
+      "type": "relates_to",
+      "src": "ROLLOUT-0001",
+      "dst": "API-AUTH-V1",
+      "confidence": 0.5,
+      "evidence": [
+        "wikilink"
+      ]
+    },
+    {
+      "type": "relates_to",
+      "src": "ROLLOUT-0001",
+      "dst": "API-CART-V1",
+      "confidence": 0.5,
+      "evidence": [
+        "wikilink"
+      ]
+    },
+    {
+      "type": "relates_to",
+      "src": "ROLLOUT-0001",
+      "dst": "API-CATALOG-V1",
+      "confidence": 0.5,
+      "evidence": [
+        "wikilink"
+      ]
+    },
+    {
+      "type": "relates_to",
+      "src": "ROLLOUT-0001",
+      "dst": "API-ORDERS-V1",
       "confidence": 0.5,
       "evidence": [
         "wikilink"
@@ -1022,7 +1586,52 @@
     },
     {
       "type": "gated_by",
-      "src": "COMP-intent-system",
+      "src": "COMP-order-service",
+      "dst": "GATE-0003",
+      "confidence": 1.0,
+      "evidence": [
+        "gate applies_to"
+      ]
+    },
+    {
+      "type": "gated_by",
+      "src": "API-ORDERS-V1",
+      "dst": "GATE-0003",
+      "confidence": 1.0,
+      "evidence": [
+        "gate applies_to"
+      ]
+    },
+    {
+      "type": "gated_by",
+      "src": "COMP-payment-gateway",
+      "dst": "GATE-0005",
+      "confidence": 1.0,
+      "evidence": [
+        "gate applies_to"
+      ]
+    },
+    {
+      "type": "gated_by",
+      "src": "API-PAYMENTS-V1",
+      "dst": "GATE-0005",
+      "confidence": 1.0,
+      "evidence": [
+        "gate applies_to"
+      ]
+    },
+    {
+      "type": "gated_by",
+      "src": "API-CATALOG-V1",
+      "dst": "GATE-0001",
+      "confidence": 1.0,
+      "evidence": [
+        "gate applies_to"
+      ]
+    },
+    {
+      "type": "gated_by",
+      "src": "API-AUTH-V1",
       "dst": "GATE-0002",
       "confidence": 1.0,
       "evidence": [
@@ -1031,8 +1640,8 @@
     },
     {
       "type": "gated_by",
-      "src": "COMP-intent-system",
-      "dst": "GATE-0001",
+      "src": "COMP-auth-service",
+      "dst": "GATE-0002",
       "confidence": 1.0,
       "evidence": [
         "gate applies_to"
@@ -1042,241 +1651,88 @@
   "gates": [
     {
       "id": "GATE-0001",
-      "summary": "Ensures all specs under intent-system have acceptance criteria, status, and valid references",
-      "kind": "lint-rule",
+      "summary": "Prevents breaking changes to the Catalog API: required endpoints must exist, prices must be integer cents",
+      "kind": "command",
       "policy": "block",
       "passed": true,
-      "scope": 11,
+      "scope": 1,
       "findings": []
     },
     {
       "id": "GATE-0002",
-      "summary": "Ensures ADRs progress beyond draft status in a timely manner",
-      "kind": "lint-rule",
+      "summary": "Ensures auth service hashes passwords and never returns them in plaintext",
+      "kind": "command",
+      "policy": "block",
+      "passed": true,
+      "scope": 4,
+      "findings": []
+    },
+    {
+      "id": "GATE-0003",
+      "summary": "Order service can only depend on catalog, cart, auth, and notification. Prevents uncontrolled coupling.",
+      "kind": "builtin",
+      "policy": "block",
+      "passed": true,
+      "scope": 6,
+      "findings": []
+    },
+    {
+      "id": "GATE-0004",
+      "summary": "All specs must have Intent, Goals, Non-goals, Design, Acceptance Criteria, and Links sections. Every spec must declare which component it belongs to.",
+      "kind": "builtin",
       "policy": "warn",
       "passed": true,
-      "scope": 11,
+      "scope": 0,
+      "findings": []
+    },
+    {
+      "id": "GATE-0005",
+      "summary": "Payment gateway must never handle raw card numbers \u2014 only tokenized payment methods. Prevents accidental PCI scope expansion.",
+      "kind": "pattern",
+      "policy": "block",
+      "passed": true,
+      "scope": 3,
       "findings": []
     }
   ]
 };
-    window.__SIGIL_FILES__ = {"components/sigil-ci.yaml": "id: COMP-sigil-ci\nname: Sigil CI Pipeline\ndescription: GitHub Actions workflow that runs intent linting, gate checks, drift detection, and posts PR comments.\n\nowners:\n  - core-team\n\npaths:\n  - .github/workflows/intent.yml\n\ninterfaces:\n  provides: []\n  consumes:\n    - API-INTENT-CLI-V1\n\nattributes:\n  tier: 1\n  runtime: [ci]\n", "components/sigil-viewer.yaml": "id: COMP-sigil-viewer\nname: Sigil Viewer\ndescription: Interactive web-based intent graph explorer with 7 view modes, command palette, and human++ theming.\n\nowners:\n  - core-team\n\npaths:\n  - tools/intent_viewer/**\n\ninterfaces:\n  provides: []\n  consumes:\n    - API-INTENT-CLI-V1\n\nattributes:\n  tier: 1\n  runtime: [browser]\n", "components/intent-system.yaml": "id: COMP-intent-system\nname: Intent System\n\nowners:\n  - core-team\n\npaths:\n  - tools/intent/**\n  - tools/intent_viewer/**\n  - .intent/**\n\ninterfaces:\n  provides:\n    - API-INTENT-CLI-V1\n  consumes: []\n\nattributes:\n  tier: 0\n  runtime: [cli, ci]\n", "interfaces/API-INTENT-CLI-V1/README.md": "---\nid: API-INTENT-CLI-V1\nstatus: active\n---\n\n# Intent CLI Interface v1\n\nThe Sigil CLI exposes 15 commands that operate on the intent graph. This interface is consumed by the viewer (via `sigil serve` HTTP API) and CI (via direct CLI invocation).\n\n## Commands\n\n| Command | Input | Output | Used by |\n|---------|-------|--------|---------|\n| `index` | repo root | graph.json, search.json | viewer, CI |\n| `status` | repo root | terminal health report | developer |\n| `diff` | base SHA, head SHA | diff.json, diff.md | CI |\n| `new` | type, component, title | new intent doc | viewer (via API), developer |\n| `lint` | repo root | lint results | CI |\n| `check` | repo root | gate results | CI |\n| `drift` | repo root | drift.json | viewer, CI |\n| `timeline` | repo root | timeline.json | viewer, CI |\n| `export` | repo root | self-contained HTML | CI, developer |\n| `badge` | repo root | badge.svg | CI |\n| `serve` | port | HTTP server + file watcher | viewer |\n| `ask` | query | search results | developer |\n| `init` | repo root | scaffolded repo + running server | developer |\n| `fmt` | repo root | normalized docs | developer |\n| `bootstrap` | repo root | component stubs | developer |\n\n## HTTP API (via `sigil serve`)\n\n| Endpoint | Method | Description |\n|----------|--------|-------------|\n| `/api/new` | POST | Create a new intent document |\n| `/**` | GET | Static file serving for viewer |\n\n## Links\n\n- Provided by: [[COMP-intent-system]]\n- Consumed by: [[COMP-sigil-viewer]], [[COMP-sigil-ci]]\n", "intent/sigil-ci/specs/SPEC-0006-ci-pipeline.md": "---\nid: SPEC-0006\nstatus: accepted\n---\n\n# CI Pipeline Spec\n\nThe Sigil CI workflow runs on every pull request and produces a comprehensive intent report.\n\n## Intent\n\nIntent drift happens silently. Without enforcement, teams write intent docs once and never update them. CI integration makes intent a living part of the development workflow.\n\n## Pipeline Steps\n\n1. `sigil index` -- build the knowledge graph\n2. `sigil lint` -- check docs for structural issues\n3. `sigil check` -- enforce gates\n4. `sigil drift` -- compare intent vs code\n5. `sigil timeline` -- build evolution history\n6. `sigil badge` -- generate coverage badge\n7. `sigil export` -- create self-contained HTML snapshot\n8. `sigil diff` -- compute graph changes between PR base and head\n\n## PR Comment\n\nThe workflow posts a comment with:\n- Stats table (nodes, edges, specs, ADRs, gates)\n- Graph diff showing what changed\n\n## Acceptance Criteria\n\n- [ ] Workflow runs on PR open, sync, and reopen\n- [ ] All artifacts uploaded (graph.json, diff.json, badge.svg, export.html, drift.json, timeline.json)\n- [ ] PR comment includes stats table and diff\n- [ ] Gate failures block merge (when configured)\n\n## Links\n\n- Belongs to: [[COMP-sigil-ci]]\n- Depends on: [[API-INTENT-CLI-V1]]\n", "intent/intent-system/specs/SPEC-0001-intent-first-review-system.md": "---\nid: SPEC-0001\nstatus: accepted\n---\n\n# Intent-First Review System\n\n## Intent\n\nReplace diff-centric code review with intent-centric review. Humans review what and why; machines verify that code conforms to stated intent.\n\n## Context\n\nCode review today is broken at scale. Reviewers scroll through thousands of lines of diffs without understanding the purpose, constraints, or risks of a change. This leads to rubber-stamping, slow cycles, and missed architectural issues.\n\n## Goals\n\n- Intent documents (specs, ADRs, interfaces, gates) become the primary review surface\n- A dependency graph connects components, interfaces, specs, and constraints\n- CI enforces conformance via gates tied to intent nodes\n- Adoption is low-friction: CLI-first, editor-integrated, repo-portable\n\n## Non-goals\n\n- Replacing version control (git remains the storage layer)\n- Eliminating all human review (humans still review intent; machines review implementation)\n- Building a full project management tool\n\n## Design\n\nThe system has four layers:\n\n1. **Repo conventions** \u2014 structured directories for components, intent docs, interfaces, and gates\n2. **CLI/indexer** \u2014 parses repo into a graph, produces diffs, runs lints\n3. **Editor plugin** \u2014 autocomplete for `[[ID]]` references, quick-fixes, inline lint\n4. **Platform UI** \u2014 graph explorer, intent review view, impact analysis, drift dashboard\n\n### Core node types\n\n- Component (COMP-*): a service, package, or module\n- Spec (SPEC-*): an intent plan describing what and why\n- Decision (ADR-*): architectural decision records\n- Interface (API-*, EVT-*, SCHEMA-*, PROTO-*): contract definitions\n- Gate (GATE-*): enforceable constraints tied to nodes\n\n### Edge vocabulary\n\n- belongs_to, decided_by, provides, consumes, depends_on, gated_by, supersedes, relates_to\n\n## Links\n\n- Belongs to: [[COMP-intent-system]]\n\n## Acceptance Criteria\n\n- [ ] Repo schema supports all core node types\n- [ ] CLI can index repo into graph.json\n- [ ] CLI can compute graph diff between two commits\n- [ ] Templates exist for all core node types\n- [ ] CI can post intent diff as PR comment\n- [ ] Editor plugin provides autocomplete for [[ID]] references\n", "intent/intent-system/specs/SPEC-0002-bootstrapper-and-demo-strategy.md": "---\nid: SPEC-0002\nstatus: proposed\n---\n\n# Bootstrapper and Demo Strategy\n\n## Intent\n\nProvide a way to adopt intent-first on existing projects by generating an \"as-built\" intent skeleton, and define a demo flow that makes the value proposition immediately visible.\n\n## Context\n\nGreenfield adoption is easy but rare. Most teams have existing codebases. A bootstrapper that generates components, interfaces, and spec skeletons from an existing repo removes the cold-start problem. A compelling demo sells the concept.\n\n## Goals\n\n- `intent bootstrap` scans a repo and generates components, interfaces, and spec skeletons\n- Bootstrap output includes confidence scores on inferred relationships\n- Demo flow: bootstrap -> index -> viewer -> make a change -> see graph diff in PR\n\n## Non-goals\n\n- Recovering true \"why\" from code (bootstrapper generates as-built maps, not real intent)\n- Production-grade inference (heuristics are sufficient for v1)\n\n## Design\n\n### Bootstrap pipeline\n\n1. **Repo scan** \u2014 discover services/packages/modules, interface files, deployment topology\n2. **Dependency extraction** \u2014 regex heuristics for imports, build graph analysis\n3. **Graph assembly** \u2014 create nodes and edges with confidence scores\n4. **Emit skeleton intent** \u2014 spec skeletons, component registry, interface nodes\n5. **Emit diagnostics** \u2014 low-confidence edges, unknown ownership, TODOs\n\n### Demo narrative\n\n1. \"Here's the system map\" (graph viewer after bootstrap)\n2. \"Here's an intent PR\" (SPEC + ADR + interface change)\n3. \"Here's the graph diff review\" (CI comment)\n4. \"Here's an implementation PR \u2014 it merges because gates pass\"\n\n## Links\n\n- Belongs to: [[COMP-intent-system]]\n- Depends on: [[SPEC-0001]]\n\n## Acceptance Criteria\n\n- [ ] `intent bootstrap` produces valid components/*.yaml from repo structure\n- [ ] Bootstrap detects interface artifacts (OpenAPI, protobuf, JSON Schema)\n- [ ] Inferred edges include confidence scores and evidence\n- [ ] DEMO.md walks through the full narrative\n", "intent/intent-system/specs/SPEC-0004-sigil-cli.md": "---\nid: SPEC-0004\nstatus: accepted\n---\n\n# Sigil CLI\n\n## Intent\n\nProvide a single command-line tool that manages the full lifecycle of intent documents: scaffolding, indexing, linting, searching, and diffing. The CLI is the kernel that everything else builds on.\n\n!! If the CLI is slow or unreliable, nothing else works. Keep it fast and dependency-light.\n\n## Context\n\nEngineers already live in their terminal. A CLI that fits into existing workflows (git hooks, CI, editor tasks) has zero adoption friction. We chose Python because it's universal and the YAML/markdown parsing ecosystem is mature.\n\n>> See [[ADR-0002]] for the repo schema that the CLI operates on.\n\n## Goals\n\n- **index** -- build the knowledge graph from repo contents into `.intent/index/graph.json`\n- **lint** -- validate intent documents (front matter, required sections, dangling refs)\n- **new** -- scaffold new specs/ADRs from templates with auto-incrementing IDs\n- **diff** -- compute structural graph changes between two git commits\n- **fmt** -- normalize front matter and ensure Links sections exist\n- **bootstrap** -- scan a repo for manifest files and create component stubs\n- **init** -- zero-to-working setup: scaffold dirs, bootstrap, index, open viewer\n- **ask** -- local keyword search across the intent corpus\n\n## Non-goals\n\n- GUI or TUI interface (use the viewer for that)\n- Package manager distribution yet (run from source for now)\n- LLM-powered features in the core CLI (keep it offline-first)\n\n## Design\n\n### Single-file architecture\n\nEverything lives in `tools/intent/sigil.py`. No package structure, no setup.py. One file, one entry point.\n\n?? Will this scale past 2000 lines? Probably fine for now. Split when it hurts.\n\n### Graph model\n\n- **Node**: id, type, title, path, body_summary\n- **Edge**: type, src, dst, confidence, evidence\n- **Graph**: dict of nodes + list of edges\n\nNodes are discovered from four directory scanners (components, interfaces, intent docs, gates). Edges come from three sources: typed Links blocks, path-inferred belongs_to, and wikilink-derived relates_to.\n\n### Output artifacts\n\n- `graph.json` -- full graph with frontmatter enrichment\n- `search.json` -- lightweight index for autocomplete/search\n\n## Links\n\n- Belongs to: [[COMP-intent-system]]\n- Depends on: [[ADR-0002]]\n- Decided by: [[ADR-0004]]\n\n## Acceptance Criteria\n\n- [x] All 7 commands work: index, lint, new, diff, fmt, bootstrap, init\n- [x] 45+ tests passing\n- [x] graph.json includes body_summary and frontmatter fields\n- [x] Zero external dependencies beyond PyYAML\n- [x] Runs on Python 3.11+\n- [ ] `ask` command with local keyword search\n", "intent/intent-system/specs/SPEC-0003-sigil-viewer.md": "---\nid: SPEC-0003\nstatus: accepted\n---\n\n# Sigil Viewer\n\n## Intent\n\nBuild a browser-based graph explorer that makes the intent graph tangible. Engineers should be able to see their entire decision landscape at a glance, drill into any node to read the full spec/ADR, and understand blast radius before making changes.\n\n!! The viewer is the primary interface for non-CLI users. If it doesn't work well, Sigil doesn't work.\n\n## Context\n\nThe CLI kernel ([[SPEC-0001]]) produces `graph.json` with nodes and edges. Without a visual layer, that JSON is useful only to scripts. Architects need a spatial view; new team members need a reading surface; reviewers need blast radius analysis.\n\n>> See [[ADR-0001]] for why we chose intent-first review over traditional code review.\n\n## Goals\n\n- Render the full intent graph as an interactive force-directed diagram\n- Click any node to read its full markdown content with proper rendering\n- Show blast radius (Impact Radar) for any selected node\n- Compute and display an Intent Coverage health score\n- Support the human++ color scheme and annotation markers (`!!`, `??`, `>>`)\n- Resolve `[[wikilinks]]` as clickable navigation within the viewer\n\n## Non-goals\n\n- Real-time collaboration (this is a local tool)\n- Editing intent docs from the viewer (use your editor)\n- Server-side rendering (static HTML + JS only)\n\n## Design\n\n### Architecture\n\nSingle `index.html` file with inline CSS and JS. Dependencies: D3.js (graph rendering), marked.js (markdown parsing). Loaded via CDN. No build step.\n\n### Views\n\n1. **Graph View** -- D3 force-directed layout. Nodes colored by type. Edge labels on hover. Zoom/pan via scroll/drag.\n2. **Impact Radar** -- Concentric ring visualization. Center = selected node. Rings = direct/secondary/tertiary connections. Click to navigate.\n3. **Coverage Dashboard** -- Health score (0-100%), stat cards, and actionable findings list.\n\n### Content Panel\n\nRight-side panel with tabs:\n- **Content** -- fetches the source file, strips YAML frontmatter, renders markdown with human++ markers\n- **Edges** -- lists all incoming/outgoing edges with type badges\n- **Blast Radius** -- text-based impact analysis\n- **Raw** -- JSON representation of the node\n\n### Human++ Integration\n\n?? Should we bundle the palette or fetch it from the human++ repo?\n\nCurrent approach: CSS variables with hardcoded Base24 hex values from the human++ palette.json. Annotation markers (`!!`, `??`, `>>`) and keyword aliases (FIXME, TODO, NOTE) are post-processed after markdown rendering.\n\n>> See [[ADR-0005]] for why we integrated human++.\n\n## Links\n\n- Belongs to: [[COMP-intent-system]]\n- Depends on: [[SPEC-0001]]\n- Decided by: [[ADR-0005]]\n\n## Acceptance Criteria\n\n- [x] Force-directed graph renders all nodes and edges from graph.json\n- [x] Clicking a node shows rendered markdown content\n- [x] Human++ annotation markers render as colored badges\n- [x] Wikilinks navigate to the referenced node in the graph\n- [x] Impact Radar shows blast radius in concentric rings\n- [x] Coverage Dashboard shows health score and findings\n- [x] Edge labels visible on hover\n- [x] Search matches node IDs, titles, and body content\n- [x] Breadcrumb navigation shows Component > Node chain\n", "intent/intent-system/adrs/ADR-0003-gate-model.md": "---\nid: ADR-0003\nstatus: accepted\n---\n\n# Gate Model\n\n## Context\n\nIf intent documents are the \"what and why,\" gates are the \"enforcement.\" We need a way to define constraints that are tied to intent nodes and can be run in CI.\n\n## Decision\n\nGates are YAML files in `/gates/` with:\n\n- An ID (`GATE-*`)\n- An `applies_to` list referencing intent nodes\n- An `enforced_by` block specifying how to check (command, builtin rule, or AI prompt)\n- A `policy` block specifying warn vs. block behavior\n\nGate types include: command (run a script), builtin (framework-provided rules like spec-quality checks), and AI (LLM conformance check against a spec).\n\n## Alternatives\n\n1. **Hardcoded CI checks** \u2014 inflexible, not tied to intent graph\n2. **Policy-as-code tools (OPA, Kyverno)** \u2014 powerful but separate from intent model\n3. **No enforcement** \u2014 intent becomes aspirational documentation\n\n## Consequences\n\n- Gates make intent actionable, not just documentary\n- CI becomes the enforcement layer, not human reviewers\n- Gate YAML is simple enough for non-infra engineers to author\n- Must be careful about gate proliferation; start with high-value checks\n\n## Links\n\n- For: [[SPEC-0001]]\n", "intent/intent-system/adrs/ADR-0002-repo-schema-for-intent.md": "---\nid: ADR-0002\nstatus: accepted\n---\n\n# Repo Schema for Intent\n\n## Context\n\nIntent artifacts need a home. They could live in a database, a wiki, or the repo itself. We need a convention that is portable, versionable, and doesn't require a running service.\n\n## Decision\n\nStore all intent artifacts in the git repo using a structured directory layout:\n\n- `/components/` \u2014 component registry (YAML)\n- `/intent/<component>/specs/` \u2014 spec documents (Markdown + front matter)\n- `/intent/<component>/adrs/` \u2014 decision records\n- `/interfaces/` \u2014 contract definitions (OpenAPI, protobuf, JSON Schema)\n- `/gates/` \u2014 constraint definitions (YAML)\n- `/.intent/` \u2014 tooling config and generated index\n\nFront matter provides machine-readable metadata (id, status). Markdown body provides human-readable content. `[[ID]]` wikilinks create typed relationships.\n\n## Alternatives\n\n1. **External database** \u2014 queryable but not versionable, not portable\n2. **Wiki (Notion, Confluence)** \u2014 easy to write but disconnected from code, no enforcement\n3. **Inline code annotations** \u2014 close to code but hard to get a system view\n\n## Consequences\n\n- Repo is the source of truth; no external dependency\n- Git history tracks intent evolution\n- Tooling (CLI, editor, CI) reads directly from the filesystem\n- Requires discipline: teams must follow conventions\n\n## Links\n\n- For: [[SPEC-0001]]\n", "intent/intent-system/adrs/ADR-0001-why-intent-first.md": "---\nid: ADR-0001\nstatus: accepted\n---\n\n# Why Intent-First\n\n## Context\n\nTraditional code review focuses on diffs \u2014 line-by-line implementation details. At scale, this fails: reviewers lack context, rubber-stamp approvals, and miss architectural issues. Meanwhile, AI can generate code faster than humans can review it.\n\n## Decision\n\nAdopt an intent-first model where the primary review surface is structured intent documents (specs, ADRs, interface definitions) rather than code diffs. Implementation review is delegated to automated gates and AI conformance checks.\n\n## Alternatives\n\n1. **Status quo (diff review)** \u2014 doesn't scale with AI-generated code velocity\n2. **PR templates / checklists** \u2014 lightweight but unstructured, no enforcement\n3. **Architecture-as-code tools (Backstage, etc.)** \u2014 catalog-focused, not review-focused\n\n## Consequences\n\n- Higher upfront cost: teams must write specs before (or alongside) implementation\n- Lower review cost: reviewers read intent, not diffs\n- Better traceability: every change links back to a spec and its constraints\n- Requires tooling investment: CLI, editor plugin, CI integration\n\n## Links\n\n- For: [[SPEC-0001]]\n", "intent/intent-system/adrs/ADR-0004-ids-and-wikilinks.md": "---\nid: ADR-0004\nstatus: accepted\n---\n\n# IDs and Wikilinks\n\n## Context\n\nNodes in the intent graph need stable, human-readable identifiers. Relationships between nodes need a lightweight syntax that works in plain Markdown.\n\n## Decision\n\n- Every node gets a prefixed ID: `SPEC-0042`, `ADR-0001`, `COMP-user-service`, `API-USER-V1`, `GATE-0021`\n- IDs are declared in YAML front matter (`id: SPEC-0042`)\n- References use `[[ID]]` wikilink syntax: `[[COMP-user-service]]`, `[[API-USER-V1]]`\n- Typed relationships use a `## Links` section with labeled entries:\n  ```\n  - Belongs to: [[COMP-user-service]]\n  - Provides: [[API-USER-V1]]\n  ```\n- The CLI resolves wikilinks to file paths via the generated index\n\n## Alternatives\n\n1. **UUIDs** \u2014 stable but unreadable\n2. **File paths as IDs** \u2014 fragile across renames\n3. **Custom DSL** \u2014 higher learning curve than Markdown conventions\n\n## Consequences\n\n- IDs are grep-friendly and human-readable\n- Wikilinks are familiar (Obsidian, Notion, wiki conventions)\n- Renaming requires updating references (mitigated by `intent fmt`)\n- Tooling must maintain an ID-to-path mapping\n\n## Links\n\n- For: [[SPEC-0001]]\n", "intent/intent-system/adrs/ADR-0006-graph-storage-format.md": "---\nid: ADR-0006\nstatus: accepted\n---\n\n# Graph Storage Format\n\n## Context\n\nThe intent indexer needs to persist the knowledge graph in a format that the viewer, CI, and search tools can all consume. The graph consists of nodes (components, specs, ADRs, interfaces, gates) and typed edges (belongs_to, decided_by, depends_on, etc.).\n\n?? We considered a database but decided it was overkill for a repo-local tool.\n\n## Decision\n\nUse a single JSON file (`.intent/index/graph.json`) as the canonical graph artifact. Structure:\n\n```json\n{\n  \"version\": \"1.0\",\n  \"generated_at\": \"ISO-8601 timestamp\",\n  \"nodes\": [\n    {\n      \"id\": \"SPEC-0001\",\n      \"type\": \"spec\",\n      \"title\": \"Intent-First Review System\",\n      \"path\": \"intent/intent-system/specs/SPEC-0001-intent-first-review-system.md\",\n      \"body_summary\": \"First 500 chars of markdown body...\",\n      \"frontmatter\": { \"id\": \"SPEC-0001\", \"status\": \"accepted\" }\n    }\n  ],\n  \"edges\": [\n    {\n      \"type\": \"belongs_to\",\n      \"src\": \"SPEC-0001\",\n      \"dst\": \"COMP-intent-system\",\n      \"confidence\": 1.0,\n      \"evidence\": [\"Links block\"]\n    }\n  ]\n}\n```\n\nKey design choices:\n\n1. **body_summary** (max 500 chars) -- enables content search and preview without loading source files\n2. **frontmatter** object -- enables the viewer to show status badges and the coverage engine to score document maturity\n3. **confidence + evidence** on edges -- not all edges are explicit; some are inferred from paths or wikilinks\n4. **Flat arrays** -- no nesting, easy to parse in any language\n\nA secondary `search.json` with lightweight node records is also generated for autocomplete use cases.\n\n## Alternatives\n\n1. **SQLite** -- full query power, but adds a binary dependency and doesn't diff well in git. Rejected.\n2. **Multiple JSON files** (one per node) -- avoids large single files, but complicates viewer loading. Rejected.\n3. **YAML graph** -- more readable, but slower to parse and D3 expects JSON anyway. Rejected.\n\n## Consequences\n\n- Single file load in the viewer (one fetch for the entire graph)\n- Git-friendly: graph.json can be diffed and tracked\n- Regenerated on every `sigil index` -- not a source of truth, just a cache\n- Will need pagination or streaming if graphs exceed ~10,000 nodes\n\n!! If graph.json ever becomes a bottleneck, consider splitting into chunks or adding lazy loading.\n\n>> See [[SPEC-0004]] for the CLI commands that produce this file.\n\n## Links\n\n- For: [[SPEC-0004]]\n- Belongs to: [[COMP-intent-system]]\n", "intent/intent-system/adrs/ADR-0005-human++-integration.md": "---\nid: ADR-0005\nstatus: accepted\n---\n\n# Human++ Integration\n\n## Context\n\nSigil needed a visual identity for its viewer and a convention for annotating intent documents. The founder already maintained human++, a Base24 color scheme built around the thesis that \"code is cheap, intent is scarce.\" The scheme provides 24 colors in three tiers (grayscale, loud accents, quiet accents) plus three annotation markers for human judgment in code.\n\n!! Annotation markers are what make intent docs scannable. Without them, everything looks the same.\n\n## Decision\n\nAdopt human++ as the default color scheme and annotation system for all Sigil surfaces.\n\n**Color palette:** All 24 Base24 colors from `palette.json`, applied via CSS variables (`--base00` through `--base17`). Dark background (base00: `#1a1c22`), muted syntax (base10-17), loud accents for diagnostics and human markers (base08-0F).\n\n**Annotation markers:**\n\n| Marker | Meaning | Color |\n|--------|---------|-------|\n| `!!` | Attention -- critical concern | base0F (lime `#bbff00`) |\n| `??` | Uncertainty -- low confidence | base0E (purple `#9871fe`) |\n| `>>` | Reference -- pointer to related context | base0C (cyan `#1ad0d6`) |\n\nKeyword aliases are also recognized: FIXME/BUG/XXX map to `!!`, TODO/HACK map to `??`, NOTE/NB map to `>>`.\n\n**Rendering:** Markers are post-processed after markdown-to-HTML conversion. Each marker becomes a styled `<span>` with colored background, bold text, and 4px border radius.\n\n## Alternatives\n\n1. **No theme** -- plain markdown rendering. Rejected: too bland, no visual distinction for human judgment markers.\n2. **Custom theme** -- build a Sigil-specific palette. Rejected: unnecessary work when human++ already exists and the founder uses it everywhere.\n3. **Configurable themes** -- let users pick their own Base16/24 scheme. Deferred: good idea for later, but premature for v1.\n\n## Consequences\n\n- Viewer has a strong visual identity out of the box\n- Intent docs can use `!!`, `??`, `>>` markers that render meaningfully in the viewer\n- VS Code users who install the human++ extension get consistent highlighting in both editor and viewer\n- Tight coupling to one color scheme -- will need a theme system if we open-source\n\n>> See [[SPEC-0003]] for how the viewer implements human++ rendering.\n\n## Links\n\n- For: [[SPEC-0003]]\n- Belongs to: [[COMP-intent-system]]\n", "intent/sigil-viewer/specs/SPEC-0005-seven-view-modes.md": "---\nid: SPEC-0005\nstatus: accepted\n---\n\n# Seven View Modes\n\nThe Sigil viewer provides seven distinct visualizations of the intent graph, each optimized for a different analysis task.\n\n## Intent\n\nArchitects and developers need multiple lenses to understand a system's intent structure. A single graph view is not enough -- you need to see topology, hierarchy, coverage, drift, history, and coupling.\n\n## Views\n\n1. **Graph** -- force-directed knowledge graph with drag, zoom, glow effects on high-connectivity nodes, colored edges by type, and curved paths with directional arrows\n2. **Impact Radar** -- concentric ring visualization showing blast radius from any selected node\n3. **Hierarchy** -- layered view with components at top, specs/gates in middle, ADRs at bottom\n4. **Coverage** -- health dashboard with weighted scoring (component coverage, ADR maturity, spec quality, reference integrity)\n5. **Drift** -- comparison of intent graph against actual codebase file structure\n6. **Timeline** -- swim-lane visualization of intent evolution from git history\n7. **Matrix** -- dependency grid showing node-to-node relationships as a heatmap\n\n## Acceptance Criteria\n\n- [ ] All seven views render without errors\n- [ ] Each view has a keyboard shortcut (g/r/h/c/d/t/m)\n- [ ] Views are accessible from command palette (Cmd+K)\n- [ ] View state persists across node selections\n\n## Links\n\n- Belongs to: [[COMP-sigil-viewer]]\n- Depends on: [[API-INTENT-CLI-V1]]\n- Decided by: [[ADR-0005]]\n", "gates/GATE-0002-adr-maturity.yaml": "id: GATE-0002\ntype: spec-quality\nstatus: active\n\napplies_to:\n  - node: COMP-intent-system\n\nenforced_by:\n  kind: lint-rule\n  checks:\n    - all_adrs_have_status\n    - no_draft_adrs_older_than_30_days\n\npolicy:\n  mode: \"warn\"\n  on_fail: \"warn\"\n\ndocs:\n  summary: \"Ensures ADRs progress beyond draft status in a timely manner\"\n  owner: \"sigil-team\"\n", "gates/GATE-0001-spec-quality.yaml": "id: GATE-0001\ntype: spec-quality\nstatus: active\n\napplies_to:\n  - node: COMP-intent-system\n\nenforced_by:\n  kind: lint-rule\n  checks:\n    - all_specs_have_acceptance_criteria\n    - all_specs_have_status\n    - no_dangling_references\n\npolicy:\n  mode: \"warn\"\n  on_fail: \"block\"\n\ndocs:\n  summary: \"Ensures all specs under intent-system have acceptance criteria, status, and valid references\"\n  owner: \"sigil-team\"\n"};
+    window.__SIGIL_FILES__ = {"components/search-service.yaml": "id: COMP-search-service\nname: Search Service\n\nowners:\n  - team-platform\n\npaths:\n  - services/search/**\n\ninterfaces:\n  provides: []\n  consumes:\n    - API-CATALOG-V1\n\ndependency_policy:\n  allowed_components:\n    - COMP-catalog-service\n\nattributes:\n  tier: 2\n  data: [search-index]\n  runtime: [docker]\n", "components/auth-service.yaml": "id: COMP-auth-service\nname: Auth Service\n\nowners:\n  - team-platform\n\npaths:\n  - services/auth/**\n\ninterfaces:\n  provides:\n    - API-AUTH-V1\n  consumes: []\n\ndependency_policy:\n  allowed_components: []\n\nattributes:\n  tier: 0\n  data: [credentials, pii]\n  runtime: [docker]\n", "components/payment-gateway.yaml": "id: COMP-payment-gateway\nname: Payment Gateway\n\nowners:\n  - team-payments\n\npaths:\n  - services/payments/**\n\ninterfaces:\n  provides:\n    - API-PAYMENTS-V1\n  consumes:\n    - API-AUTH-V1\n    - API-ORDERS-V1\n\ndependency_policy:\n  allowed_components:\n    - COMP-auth-service\n    - COMP-order-service\n\nattributes:\n  tier: 1\n  data: [payment-tokens, pii]\n  runtime: [docker]\n", "components/cart-service.yaml": "id: COMP-cart-service\nname: Cart Service\n\nowners:\n  - team-platform\n\npaths:\n  - services/cart/**\n\ninterfaces:\n  provides:\n    - API-CART-V1\n  consumes:\n    - API-CATALOG-V1\n\ndependency_policy:\n  allowed_components:\n    - COMP-catalog-service\n\nattributes:\n  tier: 2\n  data: [session]\n  runtime: [docker]\n", "components/catalog-service.yaml": "id: COMP-catalog-service\nname: Catalog Service\n\nowners:\n  - team-platform\n\npaths:\n  - services/catalog/**\n\ninterfaces:\n  provides:\n    - API-CATALOG-V1\n  consumes: []\n\ndependency_policy:\n  allowed_components: []\n\nattributes:\n  tier: 1\n  data: [book-inventory]\n  runtime: [docker]\n", "components/order-service.yaml": "id: COMP-order-service\nname: Order Service\n\nowners:\n  - team-platform\n\npaths:\n  - services/orders/**\n\ninterfaces:\n  provides:\n    - API-ORDERS-V1\n  consumes:\n    - API-CATALOG-V1\n    - API-CART-V1\n    - API-AUTH-V1\n    - API-PAYMENTS-V1\n\ndependency_policy:\n  allowed_components:\n    - COMP-catalog-service\n    - COMP-cart-service\n    - COMP-auth-service\n    - COMP-notification-service\n    - COMP-payment-gateway\n\nattributes:\n  tier: 1\n  data: [orders, pii]\n  runtime: [docker]\n", "components/notification-service.yaml": "id: COMP-notification-service\nname: Notification Service\n\nowners:\n  - team-platform\n\npaths:\n  - services/notifications/**\n\ninterfaces:\n  provides: []\n  consumes:\n    - API-AUTH-V1\n\ndependency_policy:\n  allowed_components:\n    - COMP-auth-service\n\nattributes:\n  tier: 2\n  data: [pii]\n  runtime: [docker]\n", "components/admin-dashboard.yaml": "id: COMP-admin-dashboard\nname: Admin Dashboard\n\nowners:\n  - team-internal-tools\n\npaths:\n  - app/admin/**\n\ninterfaces:\n  provides: []\n  consumes:\n    - API-CATALOG-V1\n    - API-ORDERS-V1\n    - API-AUTH-V1\n\ndependency_policy:\n  allowed_components:\n    - COMP-catalog-service\n    - COMP-order-service\n    - COMP-auth-service\n\nattributes:\n  tier: 3\n  data: []\n  runtime: [docker]\n", "components/web-app.yaml": "id: COMP-web-app\nname: Web App\n\nowners:\n  - team-frontend\n\npaths:\n  - app/**\n\ninterfaces:\n  provides: []\n  consumes:\n    - API-CATALOG-V1\n    - API-AUTH-V1\n    - API-CART-V1\n    - API-ORDERS-V1\n\ndependency_policy:\n  allowed_components:\n    - COMP-catalog-service\n    - COMP-auth-service\n    - COMP-cart-service\n    - COMP-order-service\n\nattributes:\n  tier: 1\n  data: []\n  runtime: [vercel]\n", "interfaces/API-CATALOG-V1/README.md": "---\nid: API-CATALOG-V1\ntype: api\nstatus: active\n---\n\n# Catalog API\n\n## Description\n\nREST API for browsing and searching the book catalog. Read-only. Used by the web app to render product pages and search results, and by the cart/order services to validate book IDs and look up prices.\n\n## Contract\n\n### `GET /api/catalog/books`\n\nReturns all in-stock books.\n\n```json\n[\n  {\n    \"id\": \"b-001\",\n    \"title\": \"Designing Data-Intensive Applications\",\n    \"author\": \"Martin Kleppmann\",\n    \"price_cents\": 4500,\n    \"isbn\": \"978-1449373320\",\n    \"in_stock\": true\n  }\n]\n```\n\n### `GET /api/catalog/books/:id`\n\nReturns a single book by ID. 404 if not found.\n\n### `GET /api/catalog/search?q=:query`\n\nFull-text search across title and author.\n\n## Links\n\n- Provided by: [[COMP-catalog-service]]\n- Consumed by: [[COMP-web-app]] [[COMP-cart-service]] [[COMP-order-service]]\n- Gates: [[GATE-0001]]\n", "interfaces/API-PAYMENTS-V1/README.md": "---\nid: API-PAYMENTS-V1\ntype: api\nstatus: active\n---\n\n# Payments API\n\n## Description\n\nHandles payment processing for confirmed orders. Wraps a third-party payment provider (Stripe in production, stub in demo) and provides a uniform interface for charging, refunding, and checking payment status.\n\n## Contract\n\n### `POST /api/payments/charge`\n\nCharges a payment method for a confirmed order. Requires auth token.\n\nRequest:\n\n```json\n{\n  \"order_id\": \"ord-a1b2c3d4\",\n  \"payment_method\": \"pm-tok-visa\",\n  \"amount_cents\": 9000,\n  \"currency\": \"usd\"\n}\n```\n\nReturns `201` with payment confirmation:\n\n```json\n{\n  \"id\": \"pay-x1y2z3\",\n  \"order_id\": \"ord-a1b2c3d4\",\n  \"amount_cents\": 9000,\n  \"status\": \"succeeded\"\n}\n```\n\n### `POST /api/payments/refund`\n\nRefunds a completed payment.\n\n### `GET /api/payments/:id`\n\nReturns a single payment by ID.\n\n## Links\n\n- Provided by: [[COMP-payment-gateway]]\n- Consumed by: [[COMP-order-service]], [[COMP-admin-dashboard]]\n- Gates: [[GATE-0005]]\n", "interfaces/API-CART-V1/README.md": "---\nid: API-CART-V1\ntype: api\nstatus: active\n---\n\n# Cart API\n\n## Description\n\nManages per-user shopping carts. Carts are session-scoped and backed by in-memory storage. The web app uses this to let users add/remove books before checkout. The order service reads the cart to create orders.\n\n## Contract\n\n### `GET /api/cart`\n\nReturns the current user's cart. Requires auth token.\n\n```json\n{\n  \"user_id\": \"u-001\",\n  \"items\": [\n    { \"book_id\": \"b-001\", \"quantity\": 2 }\n  ],\n  \"total_items\": 2\n}\n```\n\n### `POST /api/cart/add`\n\n```json\n{ \"book_id\": \"b-001\", \"quantity\": 1 }\n```\n\n### `DELETE /api/cart/:book_id`\n\nRemoves a book from the cart.\n\n### `POST /api/cart/clear`\n\nEmpties the cart (called after successful checkout).\n\n## Links\n\n- Provided by: [[COMP-cart-service]]\n- Consumed by: [[COMP-web-app]] [[COMP-order-service]]\n", "interfaces/API-ORDERS-V1/README.md": "---\nid: API-ORDERS-V1\ntype: api\nstatus: active\n---\n\n# Orders API\n\n## Description\n\nHandles the checkout flow: creates orders from cart contents, tracks order status, and triggers notifications. This is the most complex service because it orchestrates across catalog (price verification), cart (reading items), auth (user identity), and notifications (confirmation emails).\n\n## Contract\n\n### `POST /api/orders/checkout`\n\nCreates an order from the user's current cart. Requires auth token.\n\nReturns `201` with the new order:\n\n```json\n{\n  \"id\": \"ord-a1b2c3d4\",\n  \"user_id\": \"u-001\",\n  \"lines\": [\n    { \"book_id\": \"b-001\", \"quantity\": 2, \"price_cents\": 4500 }\n  ],\n  \"total_cents\": 9000,\n  \"status\": \"confirmed\"\n}\n```\n\n### `GET /api/orders`\n\nLists all orders for the authenticated user.\n\n### `GET /api/orders/:id`\n\nReturns a single order by ID.\n\n## Links\n\n- Provided by: [[COMP-order-service]]\n- Consumed by: [[COMP-web-app]]\n- Gates: [[GATE-0003]]\n", "interfaces/API-AUTH-V1/README.md": "---\nid: API-AUTH-V1\ntype: api\nstatus: active\n---\n\n# Auth API\n\n## Description\n\nHandles user registration, login, and token verification. Issues JWT tokens consumed by all other services for authentication. This is the security boundary \u2014 every authenticated request must carry a valid token issued by this service.\n\n## Contract\n\n### `POST /api/auth/register`\n\n```json\n{ \"email\": \"user@example.com\", \"password\": \"...\" }\n```\n\nReturns `201` with `{ \"token\": \"...\" }`.\n\n### `POST /api/auth/login`\n\n```json\n{ \"email\": \"user@example.com\", \"password\": \"...\" }\n```\n\nReturns `200` with `{ \"token\": \"...\" }` or `401`.\n\n### `GET /api/auth/verify`\n\nHeader: `Authorization: Bearer <token>`\n\nReturns `200` with `{ \"sub\": \"user-id\", \"email\": \"...\" }` or `401`.\n\n## Links\n\n- Provided by: [[COMP-auth-service]]\n- Consumed by: [[COMP-web-app]] [[COMP-order-service]] [[COMP-notification-service]]\n- Gates: [[GATE-0002]]\n", "intent/auth-service/specs/SPEC-0002-jwt-authentication.md": "---\nid: SPEC-0002\nstatus: accepted\n---\n\n# JWT Authentication\n\n## Intent\n\nGive users a way to sign up, log in, and prove their identity to other services. We're using stateless JWT tokens so that services can verify requests without calling back to auth on every request.\n\n## Context\n\nThe cart and order services need to know who the user is. We could use sessions, but JWTs let us keep services stateless and avoid a shared session store. This is a small app, so we're not building a full identity provider \u2014 just enough auth to demonstrate the flow.\n\n## Goals\n\n- Register with email + password\n- Login returns a JWT valid for 1 hour\n- Any service can verify a token without a database call\n- Passwords are hashed before storage\n\n## Non-goals\n\n- OAuth/social login\n- Refresh tokens (1-hour expiry is fine for a demo)\n- Role-based access control (all authenticated users have equal access)\n- Password reset flow\n\n## Design\n\nThe auth service exposes three endpoints through [[API-AUTH-V1]]:\n- `POST /register` \u2014 hash password, store user, return token\n- `POST /login` \u2014 verify password, return token\n- `GET /verify` \u2014 validate token from Authorization header\n\nTokens are HMAC-signed JSON payloads containing `sub` (user ID), `email`, and `exp` (expiry timestamp). We're not using a full JWT library for the demo \u2014 just a simplified encode/decode with HMAC-SHA256.\n\nPassword storage uses SHA-256 hashing. In production you'd use bcrypt, but this is a demo.\n\n## Links\n\n- Belongs to: [[COMP-auth-service]]\n- Provides: [[API-AUTH-V1]]\n- Decided by: [[ADR-0002]]\n- Gates: [[GATE-0002]]\n\n## Acceptance Criteria\n\n- [ ] Registration creates a user and returns a valid token\n- [ ] Login with correct credentials returns a token\n- [ ] Login with wrong credentials returns 401\n- [ ] Token verification rejects expired tokens\n- [ ] Passwords are never stored or returned in plaintext\n", "intent/auth-service/adrs/ADR-0002-jwt-over-sessions.md": "---\nid: ADR-0002\nstatus: accepted\n---\n\n# Use JWT tokens instead of server-side sessions\n\n## Context\n\nWe need authentication across multiple services. The question is whether to use stateful sessions (requiring a shared session store) or stateless tokens (requiring nothing shared).\n\n## Decision\n\nUse JWT-style tokens signed with HMAC-SHA256. Each service can verify tokens independently without calling back to the auth service or sharing a database.\n\n## Alternatives\n\n- **Server-side sessions with Redis**: More traditional, but adds a shared dependency. Every service would need Redis access or would need to call back to auth on every request. Adds latency and a single point of failure.\n- **OAuth2 / OpenID Connect**: The right choice for production, but enormously complex for a 6-service demo. We'd spend more time on auth configuration than on demonstrating intent-first engineering.\n- **API keys**: Simple but not user-facing. Works for service-to-service but doesn't help with user login.\n\n## Consequences\n\n- Services can verify tokens without network calls. Good for independence.\n- Token revocation is hard \u2014 we'd need a blocklist. Acceptable for a demo with 1-hour expiry.\n- The \"JWT\" implementation is simplified (not a real JWT library). Good enough to demonstrate the auth flow.\n- Secret management is trivial (hardcoded). In production, this would be a serious security concern.\n\n## Links\n\n- For: [[SPEC-0002]]\n", "intent/catalog-service/specs/SPEC-0001-book-catalog-api.md": "---\nid: SPEC-0001\nstatus: accepted\n---\n\n# Book Catalog API\n\n## Intent\n\nProvide a read-only API for browsing and searching the book inventory. This is the foundational data service \u2014 everything else (cart, orders, search) depends on being able to look up books by ID and list what's available.\n\n## Context\n\nWe need a single source of truth for book data. The web app needs it for product pages, the cart service needs it to validate items, and the order service needs it to lock in prices at checkout time. Without a clean catalog API, every service would either duplicate book data or reach directly into the database.\n\n## Goals\n\n- Expose book listing, lookup by ID, and text search\n- Keep it read-only (writes go through a separate admin flow, out of scope)\n- Sub-100ms response times for all endpoints\n- Return enough data for the frontend to render product cards without extra calls\n\n## Non-goals\n\n- Admin CRUD operations (will be a separate spec)\n- Full-text search with relevance ranking (basic substring match is fine for v1)\n- Pagination (catalog is small enough to return all results)\n\n## Design\n\nThree endpoints:\n- `GET /api/catalog/books` \u2014 list all in-stock books\n- `GET /api/catalog/books/:id` \u2014 single book by ID\n- `GET /api/catalog/search?q=` \u2014 substring search on title and author\n\nData lives in an in-memory store for now. The schema is flat: id, title, author, price_cents, isbn, in_stock.\n\nPrice is stored in cents to avoid floating point issues.\n\n## Links\n\n- Belongs to: [[COMP-catalog-service]]\n- Provides: [[API-CATALOG-V1]]\n- Decided by: [[ADR-0001]]\n- Gates: [[GATE-0001]]\n\n## Acceptance Criteria\n\n- [ ] GET /api/catalog/books returns all in-stock books as JSON\n- [ ] GET /api/catalog/books/:id returns 404 for unknown IDs\n- [ ] GET /api/catalog/search?q=design matches partial titles case-insensitively\n- [ ] All responses include price_cents as an integer, never a float\n- [ ] Response times under 100ms for a catalog of up to 1000 books\n", "intent/catalog-service/specs/SPEC-0007-catalog-search.md": "---\nid: SPEC-0007\nstatus: proposed\n---\n\n# Catalog Search Improvements\n\n## Intent\n\nUpgrade the catalog search from basic substring matching to something that handles typos, partial words, and relevance ranking. This makes the storefront usable for real browsing, not just exact-match lookups.\n\n## Context\n\nThe current search (SPEC-0001) does case-insensitive substring matching on title and author. That's fine for 3 books, but falls apart with a real catalog. Users expect search to be forgiving \u2014 \"pragmatc progrmmr\" should still find the right book.\n\nThis spec supersedes the search portion of [[SPEC-0001]] without changing the catalog listing or lookup endpoints.\n\n## Goals\n\n- Fuzzy matching that tolerates typos (edit distance <= 2)\n- Results ranked by relevance (exact match > prefix > fuzzy)\n- Still fast enough for typeahead (sub-50ms for catalogs under 10k books)\n\n## Non-goals\n\n- Elasticsearch or external search infrastructure\n- Faceted search / filters\n- Search analytics or query logging\n\n## Design\n\nReplace the substring filter with a scoring function:\n1. Exact substring match: score 1.0\n2. Prefix match: score 0.8\n3. Levenshtein distance <= 2: score 0.5\n4. No match: excluded\n\nResults sorted by score descending. The endpoint signature doesn't change \u2014 same `GET /api/catalog/search?q=` contract.\n\n## Links\n\n- Belongs to: [[COMP-catalog-service]]\n- Provides: [[API-CATALOG-V1]]\n- Supersedes: [[SPEC-0001]]\n- Gates: [[GATE-0001]]\n\n## Acceptance Criteria\n\n- [ ] \"pragmatc\" returns \"The Pragmatic Programmer\"\n- [ ] Exact matches rank higher than fuzzy matches\n- [ ] Performance stays under 50ms for 10k books\n- [ ] API contract (request/response shape) is unchanged\n", "intent/catalog-service/adrs/ADR-0001-in-memory-catalog-store.md": "---\nid: ADR-0001\nstatus: accepted\n---\n\n# Use in-memory store for the book catalog\n\n## Context\n\nThe catalog service needs a data store. Options range from a real database (Postgres, SQLite) to a flat file to an in-memory dict. This is a demo app with a handful of books, not a production bookstore.\n\n## Decision\n\nUse a Python dictionary as the data store. Books are defined as dataclass instances in the source code.\n\n## Alternatives\n\n- **SQLite**: Would add realism but also adds setup steps, migrations, and a dependency. Not worth it for a demo that's showing off the intent layer, not the data layer.\n- **JSON file**: Slightly more realistic than in-memory, but adds file I/O concerns for no real benefit at this scale.\n- **Postgres**: Way too heavy. Would require Docker Compose or a cloud database just to browse 3 books.\n\n## Consequences\n\n- The catalog resets on every restart. That's fine \u2014 it's a demo.\n- No migration story. If we need to change the book schema, we just edit the Python code.\n- Can't demonstrate database-related gates (migration safety, schema drift). That's a tradeoff we accept.\n- Easy to swap out later \u2014 the API contract stays the same regardless of the backing store.\n\n## Links\n\n- For: [[SPEC-0001]]\n", "intent/cart-service/specs/SPEC-0003-shopping-cart.md": "---\nid: SPEC-0003\nstatus: accepted\n---\n\n# Shopping Cart\n\n## Intent\n\nLet users collect books they want to buy before checking out. The cart is per-user, lives in memory, and acts as a staging area between browsing and ordering.\n\n## Context\n\nWithout a cart, users would have to buy one book at a time. The cart service is intentionally simple \u2014 in-memory, no persistence across restarts. If we need durability later, we'd swap in Redis or a database behind the same API.\n\n## Goals\n\n- Add books to cart with quantity\n- Remove individual books\n- Clear entire cart (used after checkout)\n- Return total item count for the cart badge in the UI\n\n## Non-goals\n\n- Cart persistence across server restarts\n- Saved carts / wishlists\n- Price calculation (that's the order service's job, using catalog prices)\n- Cart merging for anonymous-to-logged-in transitions\n\n## Design\n\nThe cart is a simple data structure: a user ID and a list of `(book_id, quantity)` pairs. Adding a book that's already in the cart increments the quantity.\n\nStorage is a Python dict keyed by user ID. The [[API-CART-V1]] interface requires an auth token so we always know whose cart we're operating on.\n\nThe cart service calls [[API-CATALOG-V1]] only to validate that a book_id actually exists before adding it.\n\n## Links\n\n- Belongs to: [[COMP-cart-service]]\n- Provides: [[API-CART-V1]]\n- Consumes: [[API-CATALOG-V1]]\n- Decided by: [[ADR-0003]]\n- Depends on: [[COMP-catalog-service]]\n\n## Acceptance Criteria\n\n- [ ] Adding a book creates a new cart entry or increments existing quantity\n- [ ] Removing a book leaves other items untouched\n- [ ] Clearing the cart results in an empty items list\n- [ ] Cart operations require a valid auth token\n- [ ] Invalid book_ids are rejected with 400\n", "intent/cart-service/adrs/ADR-0003-session-scoped-cart.md": "---\nid: ADR-0003\nstatus: accepted\n---\n\n# Session-scoped in-memory carts\n\n## Context\n\nCarts need to be per-user and available across requests within a session. We could persist them to a database or keep them in memory.\n\n## Decision\n\nStore carts in a Python dict keyed by user ID. Carts exist only as long as the server process is running.\n\n## Alternatives\n\n- **Redis**: The standard choice for session data. Fast, persistent enough, supports TTL. But adds infrastructure for a demo app.\n- **Database**: Durable but slow for the frequent read-modify-write pattern of cart operations. Also requires schema/migration setup.\n- **Client-side storage (localStorage)**: No server state, but then the cart API can't be used by the order service during checkout.\n\n## Consequences\n\n- Carts disappear on restart. Acceptable for a demo.\n- No TTL or cleanup \u2014 abandoned carts grow forever during a session. Fine for demo scale.\n- The cart API contract is identical regardless of backing store, so swapping to Redis later is straightforward.\n- Cart operations are O(1) for lookup, O(n) for the item list where n is number of distinct books (trivially small).\n\n## Links\n\n- For: [[SPEC-0003]]\n", "intent/order-service/specs/SPEC-0008-order-status-tracking.md": "---\nid: SPEC-0008\nstatus: proposed\n---\n\n# Order Status Tracking\n\n## Intent\n\nLet users and internal systems track an order through its lifecycle: pending, confirmed, shipped, delivered, cancelled. Right now orders are created and that's it \u2014 there's no state machine.\n\n## Context\n\n[[SPEC-0004]] handles checkout but leaves orders in a permanent \"pending\" state. For a real system, we need status transitions so the UI can show \"your order shipped\" and internal tools can manage fulfillment.\n\n## Goals\n\n- Define a clear order status state machine\n- Add a PATCH endpoint to advance order status\n- Validate transitions (can't go from \"delivered\" back to \"pending\")\n- Include timestamps for each transition\n\n## Non-goals\n\n- Webhook notifications on status change (notification service handles that separately)\n- Shipping carrier integration\n- Return/refund flow\n\n## Design\n\nStatus transitions:\n```\npending -> confirmed -> shipped -> delivered\npending -> cancelled\nconfirmed -> cancelled\n```\n\nNew endpoint: `PATCH /api/orders/:id/status` with `{ \"status\": \"confirmed\" }`.\n\nInvalid transitions return 409 Conflict with a message explaining what transitions are allowed from the current state.\n\nEach order gets a `status_history` array: `[{ \"status\": \"pending\", \"at\": \"...\" }, ...]`\n\n## Links\n\n- Belongs to: [[COMP-order-service]]\n- Provides: [[API-ORDERS-V1]]\n- Depends on: [[SPEC-0004]]\n\n## Acceptance Criteria\n\n- [ ] Orders start in \"pending\" status\n- [ ] Valid transitions update the status and append to history\n- [ ] Invalid transitions return 409 with allowed transitions\n- [ ] Status history includes timestamps\n- [ ] GET /api/orders/:id includes status_history in response\n", "intent/order-service/specs/SPEC-0004-checkout-flow.md": "---\nid: SPEC-0004\nstatus: accepted\n---\n\n# Checkout Flow\n\n## Intent\n\nTurn a user's cart into a confirmed order. This is the critical path \u2014 it touches every other service and is where money changes hands (conceptually). Getting this right means prices are locked, inventory is checked, and the user gets confirmation.\n\n## Context\n\nThe checkout flow is the most complex interaction in the app. It needs to:\n1. Read the user's cart\n2. Look up current prices from the catalog\n3. Create an order record\n4. Clear the cart\n5. Send a confirmation notification\n\nEach of these steps crosses a service boundary, so the failure modes matter.\n\n## Goals\n\n- Single POST endpoint that orchestrates the full checkout\n- Lock prices at checkout time (not cart-add time)\n- Clear the cart only after order is confirmed\n- Trigger a notification on success\n- Return the complete order object to the caller\n\n## Non-goals\n\n- Payment processing (we're treating all orders as free for the demo)\n- Inventory reservation / stock decrement\n- Partial orders (if any item fails, the whole checkout fails)\n- Async order processing (everything is synchronous)\n\n## Design\n\n`POST /api/orders/checkout` does the following:\n\n1. Verify auth token via [[API-AUTH-V1]]\n2. Fetch cart via [[API-CART-V1]]\n3. For each item, look up current price via [[API-CATALOG-V1]]\n4. Create order with line items and totals\n5. Clear cart via [[API-CART-V1]]\n6. Send confirmation via notification service\n7. Return order to caller\n\nIf the cart is empty, return 400. If any book isn't found in catalog, return 400. No partial success \u2014 it's all or nothing.\n\n## Links\n\n- Belongs to: [[COMP-order-service]]\n- Provides: [[API-ORDERS-V1]]\n- Consumes: [[API-CATALOG-V1]] [[API-CART-V1]] [[API-AUTH-V1]]\n- Depends on: [[COMP-catalog-service]] [[COMP-cart-service]] [[COMP-auth-service]] [[COMP-notification-service]]\n- Decided by: [[ADR-0004]]\n- Gates: [[GATE-0003]]\n\n## Rollout\n\n- [[ROLLOUT-0001]]\n\n## Acceptance Criteria\n\n- [ ] Checkout with a non-empty cart creates an order and returns it\n- [ ] Checkout with an empty cart returns 400\n- [ ] Order total is calculated from current catalog prices, not stored cart prices\n- [ ] Cart is empty after successful checkout\n- [ ] Notification service receives order confirmation\n- [ ] Order appears in GET /api/orders for that user\n", "intent/order-service/adrs/ADR-0004-synchronous-checkout.md": "---\nid: ADR-0004\nstatus: accepted\n---\n\n# Synchronous checkout orchestration\n\n## Context\n\nThe checkout flow crosses 4 service boundaries: auth, cart, catalog, and notifications. We need to decide whether this orchestration is synchronous (single request, all steps in sequence) or asynchronous (event-driven, saga pattern).\n\n## Decision\n\nKeep it synchronous. The checkout endpoint makes sequential calls to each service and returns the complete order in a single response.\n\n## Alternatives\n\n- **Saga pattern with events**: Each step publishes an event, the next service picks it up. More resilient to partial failures, but requires an event bus (Kafka, RabbitMQ) and compensating transactions. Massive overkill for a demo.\n- **Async with polling**: Start checkout, return an order ID, let the client poll for completion. Adds complexity without clear benefit at demo scale.\n- **Two-phase commit**: Guarantees atomicity across services. Extremely complex, and we don't even have real databases to commit to.\n\n## Consequences\n\n- The checkout request blocks until all steps complete. Latency is the sum of all service calls.\n- If any step fails, the whole checkout fails. No partial orders.\n- No need for an event bus, message queue, or distributed transaction coordinator.\n- Notification failure doesn't fail the order (it's fire-and-forget with a try/except).\n- Easy to understand and debug \u2014 the entire flow is visible in one function.\n\n## Links\n\n- For: [[SPEC-0004]]\n", "intent/order-service/rollouts/ROLLOUT-0001-checkout-v1.md": "---\nid: ROLLOUT-0001\nstatus: in-progress\n---\n\n# Checkout Flow v1 Rollout\n\n## Overview\n\nRolling out the synchronous checkout flow described in [[SPEC-0004]]. This is the first version of the order pipeline \u2014 all services need to be deployed and healthy before we can enable checkout.\n\n## Prerequisites\n\n- [x] Catalog service deployed with [[API-CATALOG-V1]] operational\n- [x] Auth service deployed with [[API-AUTH-V1]] operational\n- [x] Cart service deployed with [[API-CART-V1]] operational\n- [ ] Order service deployed with [[API-ORDERS-V1]] operational\n- [ ] Notification service deployed and connected\n- [ ] [[GATE-0001]] passing (catalog API compat)\n- [ ] [[GATE-0002]] passing (auth security)\n- [ ] [[GATE-0003]] passing (order service deps)\n\n## Rollout Plan\n\n### Phase 1: Backend services (current)\n- Deploy order service to staging\n- Run integration tests: checkout with mock cart\n- Verify notification service receives events\n\n### Phase 2: Frontend integration\n- Enable checkout button in web app\n- Add order confirmation page\n- Add order history page\n\n### Phase 3: Production\n- Feature flag: `checkout_enabled=true` for 10% of users\n- Monitor error rates and latency\n- Ramp to 100% if p99 latency < 500ms and error rate < 1%\n\n## Rollback\n\nIf checkout errors exceed 5%:\n1. Set `checkout_enabled=false`\n2. Cart data is preserved (no data loss)\n3. Orders already placed remain in the system\n\n## Links\n\n- For: [[SPEC-0004]]\n- Depends on: [[SPEC-0001]] [[SPEC-0002]] [[SPEC-0003]]\n- Gates: [[GATE-0001]] [[GATE-0002]] [[GATE-0003]]\n", "intent/search-service/adrs/ADR-0007-dedicated-search-service.md": "---\nid: ADR-0007\nstatus: proposed\n---\n\n# Dedicated search service instead of in-catalog search\n\n## Context\n\nSearch is currently handled inside the catalog service (see [[SPEC-0007]]). As the catalog grows, search needs its own index, ranking logic, and potentially a different data store (e.g., Elasticsearch). Running search queries against the primary catalog store creates contention.\n\nThe question is whether to extract search into its own service now or keep it coupled to the catalog.\n\n## Decision\n\nExtract search into a dedicated service that maintains its own index built from catalog data. The search service consumes the Catalog API to build and refresh its index, but serves queries independently.\n\nThis decision is still **proposed** \u2014 we haven't committed to the migration yet. SPEC-0007 covers the immediate fuzzy search improvements inside the catalog service. This ADR captures the longer-term direction.\n\n## Alternatives\n\n- **Keep search in catalog**: Simpler, fewer moving parts. But search and catalog have different scaling characteristics \u2014 search is read-heavy with complex ranking, catalog is CRUD with consistency requirements.\n- **Use a managed search service (Algolia, Typesense)**: Offloads the problem entirely. But adds an external dependency and costs money for what's currently a simple feature.\n- **Client-side search**: Ship the catalog to the browser and search there. Works for small catalogs but doesn't scale.\n\n## Consequences\n\n- Search service needs its own data refresh mechanism (poll or event-driven)\n- Catalog service gets simpler \u2014 just CRUD, no search logic\n- Two services to deploy and monitor instead of one\n- Search can scale independently (more replicas, different instance type)\n- Index staleness becomes a concern \u2014 search results may lag behind catalog updates\n\n## Links\n\n- For: [[COMP-search-service]]\n- Relates to: [[SPEC-0007]]\n- Relates to: [[COMP-catalog-service]]\n", "intent/payment-gateway/specs/SPEC-0009-payment-processing.md": "---\nid: SPEC-0009\nstatus: proposed\n---\n\n# Payment Processing\n\n## Intent\n\nAccept payments for confirmed orders through a pluggable payment provider. The demo uses a stub that always succeeds; production would swap in Stripe or similar. This keeps the order service from knowing anything about payment internals.\n\n## Context\n\nCurrently the checkout flow in [[SPEC-0004]] creates orders but doesn't actually charge anyone. Adding payment processing closes the loop \u2014 orders aren't truly \"confirmed\" until payment succeeds.\n\nThe payment gateway is a separate component because payment logic has its own compliance requirements, error handling, and third-party dependencies. Keeping it isolated means the order service stays clean.\n\n## Goals\n\n- Charge a payment method when checkout completes\n- Return clear success/failure status to the order service\n- Support refunds for cancelled orders\n- Pluggable provider interface (stub for demo, Stripe for prod)\n\n## Non-goals\n\n- PCI DSS compliance (demo only)\n- Saved payment methods or wallets\n- Multi-currency support beyond USD\n- Subscription or recurring billing\n\n## Design\n\nThe payment gateway exposes a simple REST API. The order service calls `POST /api/payments/charge` after creating the order record. If the charge fails, the order status moves to `payment_failed`.\n\nProvider interface:\n\n```python\nclass PaymentProvider:\n    def charge(self, amount_cents: int, token: str) -> ChargeResult\n    def refund(self, charge_id: str) -> RefundResult\n```\n\nThe demo `StubProvider` always returns success after a 50ms fake delay.\n\n## Links\n\n- Belongs to: [[COMP-payment-gateway]]\n- Depends on: [[SPEC-0004]]\n- Depends on: [[COMP-order-service]]\n- Consumes: [[API-AUTH-V1]]\n- Provides: [[API-PAYMENTS-V1]]\n- Gates: [[GATE-0005]]\n\n## Acceptance Criteria\n\n- [ ] Successful charge returns payment ID and `succeeded` status\n- [ ] Failed charge returns `failed` status with error reason\n- [ ] Refund endpoint reverses a completed charge\n- [ ] Stub provider is swappable without changing calling code\n", "intent/notification-service/specs/SPEC-0005-order-notifications.md": "---\nid: SPEC-0005\nstatus: accepted\n---\n\n# Order Notifications\n\n## Intent\n\nSend confirmation emails when orders are placed. Users need to know their order went through, and we need a notification abstraction that can grow to support more channels later.\n\n## Context\n\nRight now we only send order confirmations via email. But the notification service is designed as a standalone component so we can add push notifications, SMS, or webhook integrations later without changing the order service.\n\n## Goals\n\n- Send email notification on order confirmation\n- Abstract the notification channel (email today, push/SMS later)\n- Log all sent notifications for debugging\n\n## Non-goals\n\n- Delivery guarantees (best-effort is fine for a demo)\n- User notification preferences\n- Template engine for email formatting\n- Retry logic for failed sends\n\n## Design\n\nThe notification service exposes a simple internal function (not a REST API in v1) that the order service calls directly. It takes a user_id, order_id, and channel, then formats and \"sends\" the notification.\n\nFor the demo, \"sending\" means appending to an in-memory list. In production, this would be a queue + worker pattern.\n\nThe service uses [[API-AUTH-V1]] only to resolve user email from user_id if needed.\n\n## Links\n\n- Belongs to: [[COMP-notification-service]]\n- Consumes: [[API-AUTH-V1]]\n- Depends on: [[COMP-auth-service]]\n- Decided by: [[ADR-0005]]\n\n## Acceptance Criteria\n\n- [ ] Order confirmation creates a notification record with correct order ID\n- [ ] Notification includes user ID and channel\n- [ ] Sent notifications are retrievable for debugging\n- [ ] Service handles missing user gracefully (logs warning, doesn't crash)\n", "intent/notification-service/adrs/ADR-0005-fire-and-forget-notifications.md": "---\nid: ADR-0005\nstatus: accepted\n---\n\n# Fire-and-forget notification delivery\n\n## Context\n\nThe order service triggers notifications after checkout. We need to decide whether notification delivery blocks the checkout response or happens best-effort in the background.\n\n## Decision\n\nNotifications are fire-and-forget. The order service calls the notification function, logs any errors, and continues. Checkout success doesn't depend on notification success.\n\n## Alternatives\n\n- **Guaranteed delivery with a queue**: Publish to a message queue, have a worker consume and retry. Guarantees delivery but adds infrastructure (queue, dead-letter handling, monitoring).\n- **Synchronous with retry**: Call the notification service and retry on failure. Would make checkout slower and more fragile.\n- **Outbox pattern**: Write notification intent to the database as part of the order transaction, process asynchronously. Requires a real database and a background worker.\n\n## Consequences\n\n- Notifications can be silently lost. Acceptable for a demo \u2014 we log the attempt.\n- Checkout latency is not affected by notification speed.\n- No need for queue infrastructure.\n- Easy to upgrade later: swap the direct function call for a queue publish.\n\n## Links\n\n- For: [[SPEC-0005]]\n", "intent/web-app/specs/SPEC-0006-storefront-ui.md": "---\nid: SPEC-0006\nstatus: accepted\n---\n\n# Storefront UI\n\n## Intent\n\nGive users a web interface to browse books, manage their cart, and check out. The frontend is a thin layer over the backend APIs \u2014 it shouldn't contain business logic.\n\n## Context\n\nWe need a frontend. Next.js gives us server-side rendering for the catalog pages (good for SEO and initial load) and client-side interactivity for the cart. The UI is deliberately minimal \u2014 this is a Sigil demo, not a design showcase.\n\n## Goals\n\n- Product listing page showing all books\n- Individual book detail page\n- Cart sidebar with add/remove/quantity\n- Checkout button that calls the orders API\n- Login/register forms\n- Order history page\n\n## Non-goals\n\n- Responsive design polish\n- Accessibility audit (would be important in production)\n- Client-side search (server-side is fine)\n- Animations or transitions\n\n## Design\n\nPages map directly to API endpoints:\n\n- `/` \u2014 home, links to catalog\n- `/catalog` \u2014 calls [[API-CATALOG-V1]], renders book grid\n- `/catalog/:id` \u2014 book detail page\n- `/cart` \u2014 reads [[API-CART-V1]], add/remove controls\n- `/checkout` \u2014 calls [[API-ORDERS-V1]] checkout endpoint\n- `/orders` \u2014 calls [[API-ORDERS-V1]] list endpoint\n- `/login`, `/register` \u2014 calls [[API-AUTH-V1]]\n\nAuth state is stored in a cookie. All API calls include the JWT token.\n\n## Links\n\n- Belongs to: [[COMP-web-app]]\n- Consumes: [[API-CATALOG-V1]] [[API-AUTH-V1]] [[API-CART-V1]] [[API-ORDERS-V1]]\n- Depends on: [[COMP-catalog-service]] [[COMP-auth-service]] [[COMP-cart-service]] [[COMP-order-service]]\n- Decided by: [[ADR-0006]]\n\n## Acceptance Criteria\n\n- [ ] Catalog page renders book titles, authors, and prices\n- [ ] Adding a book from catalog updates the cart count\n- [ ] Cart page shows all items with quantities and a checkout button\n- [ ] Checkout redirects to order confirmation\n- [ ] Unauthenticated users are redirected to login\n", "intent/web-app/adrs/ADR-0006-nextjs-for-frontend.md": "---\nid: ADR-0006\nstatus: accepted\n---\n\n# Use Next.js for the storefront frontend\n\n## Context\n\nWe need a web frontend for the bookstore. The catalog pages benefit from server-side rendering (fast first paint, SEO), while the cart needs client-side interactivity. We want a framework that handles both without a complex build setup.\n\n## Decision\n\nUse Next.js with the App Router. Server components for catalog pages, client components for cart interactions.\n\n## Alternatives\n\n- **Plain React (Create React App / Vite)**: Simpler, but no SSR. Catalog pages would show a loading spinner while fetching books. Not a great first impression.\n- **Remix**: Also does SSR well, but smaller ecosystem and less familiar to most developers. Next.js is the safer bet for a demo that people need to understand quickly.\n- **Static site + API**: Pre-render catalog at build time. Works for a fixed inventory, but doesn't demonstrate real-time data fetching.\n- **No frontend (API only)**: Would simplify the demo but make it less compelling. People want to see a UI.\n\n## Consequences\n\n- Need Node.js in addition to Python for the backend services. Adds to the tech stack.\n- Server components can call backend APIs directly, reducing client-side JavaScript.\n- The frontend is a thin layer \u2014 no business logic, just API calls and rendering.\n- The app/ directory follows Next.js conventions, which is well-documented.\n\n## Links\n\n- For: [[SPEC-0006]]\n", "gates/GATE-0003-order-service-deps.yaml": "id: GATE-0003\ntype: dependency-policy\nstatus: active\n\napplies_to:\n  - node: COMP-order-service\n  - node: API-ORDERS-V1\n\nenforced_by:\n  kind: builtin\n  rule: \"dependency-check\"\n  config:\n    # Order service may only depend on these components.\n    # Prevents accidental coupling to services it shouldn't know about.\n    allowed_dependencies:\n      - COMP-catalog-service\n      - COMP-cart-service\n      - COMP-auth-service\n      - COMP-notification-service\n      - COMP-payment-gateway\n\npolicy:\n  mode: \"warn\"\n  on_fail: \"block\"\n\ndocs:\n  summary: \"Order service can only depend on catalog, cart, auth, and notification. Prevents uncontrolled coupling.\"\n  owner: \"team-platform\"\n", "gates/GATE-0005-payment-no-raw-card-numbers.yaml": "id: GATE-0005\ntype: pattern\nstatus: active\n\napplies_to:\n  - node: COMP-payment-gateway\n  - node: API-PAYMENTS-V1\n\nenforced_by:\n  kind: pattern\n  config:\n    paths:\n      - \"services/payments/**\"\n    pattern: \"card_number|credit_card|cc_num|pan_number\"\n    negate: true\n    message: \"Payment code must not contain raw card number references. Use tokenized payment methods only.\"\n\npolicy:\n  mode: \"enforce\"\n  on_fail: \"block\"\n\ndocs:\n  summary: \"Payment gateway must never handle raw card numbers \u2014 only tokenized payment methods. Prevents accidental PCI scope expansion.\"\n  owner: \"team-payments\"\n", "gates/GATE-0004-spec-quality.yaml": "id: GATE-0004\ntype: spec-quality\nstatus: active\n\napplies_to:\n  - node_type: spec\n\nenforced_by:\n  kind: builtin\n  rules:\n    - require_sections: [\"Intent\", \"Goals\", \"Non-goals\", \"Design\", \"Acceptance Criteria\", \"Links\"]\n    - require_links: [\"Belongs to\"]\n    - max_missing_links: 2\n\npolicy:\n  mode: \"warn\"\n  on_fail: \"warn\"\n\ndocs:\n  summary: \"All specs must have Intent, Goals, Non-goals, Design, Acceptance Criteria, and Links sections. Every spec must declare which component it belongs to.\"\n  owner: \"team-platform\"\n", "gates/GATE-0001-catalog-api-compat.yaml": "id: GATE-0001\ntype: api-compat\nstatus: active\n\napplies_to:\n  - node: API-CATALOG-V1\n\nenforced_by:\n  kind: command\n  workdir: .\n  command: [\"python3\", \"-c\", \"\nimport json, sys;\n# Verify the catalog API contract hasn't changed in a breaking way.\n# Checks: required fields present, price is int not float, search endpoint exists.\nroutes = open('services/catalog/routes.py').read();\nchecks = [\n  ('list_books' in routes, 'list_books function must exist'),\n  ('get_book' in routes, 'get_book function must exist'),\n  ('search_books' in routes, 'search_books function must exist'),\n  ('price_cents' in routes, 'price must use price_cents (integer cents)'),\n  ('float' not in routes.split('price')[1][:50] if 'price' in routes else True, 'price must not use float'),\n];\nfailures = [msg for ok, msg in checks if not ok];\n[print(f'FAIL: {f}') for f in failures];\nsys.exit(1 if failures else 0)\n\"]\n\npolicy:\n  mode: \"block\"\n  on_fail: \"block\"\n\ndocs:\n  summary: \"Prevents breaking changes to the Catalog API: required endpoints must exist, prices must be integer cents\"\n  owner: \"team-platform\"\n", "gates/GATE-0002-auth-no-plaintext-passwords.yaml": "id: GATE-0002\ntype: security\nstatus: active\n\napplies_to:\n  - node: API-AUTH-V1\n  - node: COMP-auth-service\n\nenforced_by:\n  kind: command\n  workdir: .\n  command: [\"bash\", \"-lc\", \"\n    # Verify that auth service never stores or returns plaintext passwords.\n    # This is a simplified security gate for the demo.\n    AUTH_CODE=$(cat services/auth/auth.py)\n\n    # Check 1: hash_password function must exist\n    echo \\\"$AUTH_CODE\\\" | grep -q 'def hash_password' || { echo 'FAIL: hash_password function missing'; exit 1; }\n\n    # Check 2: password should never appear in a return/response without hashing\n    # Look for 'password' in return statements (crude but effective for demo)\n    RETURNS_WITH_PASSWORD=$(echo \\\"$AUTH_CODE\\\" | grep 'return.*password' | grep -v 'hash' || true)\n    if [ -n \\\"$RETURNS_WITH_PASSWORD\\\" ]; then\n      echo \\\"FAIL: password appears in return statement without hashing\\\"\n      echo \\\"$RETURNS_WITH_PASSWORD\\\"\n      exit 1\n    fi\n\n    # Check 3: SECRET should not be an empty string\n    echo \\\"$AUTH_CODE\\\" | grep -q 'SECRET = \\\"\\\"' && { echo 'FAIL: SECRET is empty'; exit 1; }\n\n    echo 'PASS: auth security checks passed'\n  \"]\n\npolicy:\n  mode: \"block\"\n  on_fail: \"block\"\n\ndocs:\n  summary: \"Ensures auth service hashes passwords and never returns them in plaintext\"\n  owner: \"team-platform\"\n"};
     window.__SIGIL_DRIFT__ = {
-  "scanned": 41,
-  "mapped": 9,
-  "unowned": 10,
+  "scanned": 61,
+  "mapped": 6,
+  "unowned": 4,
+  "drift_signals": 4,
   "findings": [
     {
       "type": "unowned_files",
-      "count": 10,
+      "count": 4,
       "files": [
-        ".gitignore",
-        "agents/tbd-engineer/AGENTS.md",
-        "agents/tbd-engineer/HEARTBEAT.md",
-        "agents/tbd-engineer/SOUL.md",
-        "docs/marketing/README-draft.md",
-        "docs/marketing/competitive-landscape.md",
-        "docs/marketing/launch-strategy.md",
-        "docs/marketing/positioning.md",
-        "docs/marketing/tagline-and-pitch.md",
-        "idea.md"
+        "BEFORE-AFTER.md",
+        "DEMO.md",
+        "README.md",
+        "tools/intent_viewer/index.html"
+      ]
+    },
+    {
+      "type": "spec_no_code",
+      "items": [
+        "COMP-payment-gateway"
       ]
     }
   ]
 };
     window.__SIGIL_TIMELINE__ = {
-  "events": [
-    {
-      "date": "2026-03-06T02:07:49Z",
-      "sha": "working-tree",
-      "message": "current state",
-      "action": "added",
-      "node_id": "SPEC-0001",
-      "node_type": "spec",
-      "node_title": "Intent-First Review System",
-      "path": "intent/intent-system/specs/SPEC-0001-intent-first-review-system.md"
-    },
-    {
-      "date": "2026-03-06T02:07:56Z",
-      "sha": "working-tree",
-      "message": "current state",
-      "action": "added",
-      "node_id": "ADR-0001",
-      "node_type": "adr",
-      "node_title": "Why Intent-First",
-      "path": "intent/intent-system/adrs/ADR-0001-why-intent-first.md"
-    },
-    {
-      "date": "2026-03-06T02:08:05Z",
-      "sha": "working-tree",
-      "message": "current state",
-      "action": "added",
-      "node_id": "ADR-0002",
-      "node_type": "adr",
-      "node_title": "Repo Schema for Intent",
-      "path": "intent/intent-system/adrs/ADR-0002-repo-schema-for-intent.md"
-    },
-    {
-      "date": "2026-03-06T02:08:12Z",
-      "sha": "working-tree",
-      "message": "current state",
-      "action": "added",
-      "node_id": "ADR-0003",
-      "node_type": "adr",
-      "node_title": "Gate Model",
-      "path": "intent/intent-system/adrs/ADR-0003-gate-model.md"
-    },
-    {
-      "date": "2026-03-06T02:08:20Z",
-      "sha": "working-tree",
-      "message": "current state",
-      "action": "added",
-      "node_id": "ADR-0004",
-      "node_type": "adr",
-      "node_title": "IDs and Wikilinks",
-      "path": "intent/intent-system/adrs/ADR-0004-ids-and-wikilinks.md"
-    },
-    {
-      "date": "2026-03-06T02:08:33Z",
-      "sha": "working-tree",
-      "message": "current state",
-      "action": "added",
-      "node_id": "SPEC-0002",
-      "node_type": "spec",
-      "node_title": "Bootstrapper and Demo Strategy",
-      "path": "intent/intent-system/specs/SPEC-0002-bootstrapper-and-demo-strategy.md"
-    },
-    {
-      "date": "2026-03-06T20:23:16Z",
-      "sha": "working-tree",
-      "message": "current state",
-      "action": "added",
-      "node_id": "SPEC-0003",
-      "node_type": "spec",
-      "node_title": "Sigil Viewer",
-      "path": "intent/intent-system/specs/SPEC-0003-sigil-viewer.md"
-    },
-    {
-      "date": "2026-03-06T20:23:52Z",
-      "sha": "working-tree",
-      "message": "current state",
-      "action": "added",
-      "node_id": "SPEC-0004",
-      "node_type": "spec",
-      "node_title": "Sigil CLI",
-      "path": "intent/intent-system/specs/SPEC-0004-sigil-cli.md"
-    },
-    {
-      "date": "2026-03-06T20:24:16Z",
-      "sha": "working-tree",
-      "message": "current state",
-      "action": "added",
-      "node_id": "ADR-0005",
-      "node_type": "adr",
-      "node_title": "Human++ Integration",
-      "path": "intent/intent-system/adrs/ADR-0005-human++-integration.md"
-    },
-    {
-      "date": "2026-03-06T20:24:43Z",
-      "sha": "working-tree",
-      "message": "current state",
-      "action": "added",
-      "node_id": "ADR-0006",
-      "node_type": "adr",
-      "node_title": "Graph Storage Format",
-      "path": "intent/intent-system/adrs/ADR-0006-graph-storage-format.md"
-    },
-    {
-      "date": "2026-03-06T20:28:28Z",
-      "sha": "working-tree",
-      "message": "current state",
-      "action": "added",
-      "node_id": "GATE-0001",
-      "node_type": "gate",
-      "node_title": "Ensures all specs under intent-system have acceptance criteria, status, and valid references",
-      "path": "gates/GATE-0001-spec-quality.yaml"
-    },
-    {
-      "date": "2026-03-06T20:28:33Z",
-      "sha": "working-tree",
-      "message": "current state",
-      "action": "added",
-      "node_id": "GATE-0002",
-      "node_type": "gate",
-      "node_title": "Ensures ADRs progress beyond draft status in a timely manner",
-      "path": "gates/GATE-0002-adr-maturity.yaml"
-    },
-    {
-      "date": "2026-03-06T20:35:28Z",
-      "sha": "working-tree",
-      "message": "current state",
-      "action": "added",
-      "node_id": "COMP-intent-system",
-      "node_type": "component",
-      "node_title": "Intent System",
-      "path": "components/intent-system.yaml"
-    },
-    {
-      "date": "2026-03-06T20:52:45Z",
-      "sha": "working-tree",
-      "message": "current state",
-      "action": "added",
-      "node_id": "COMP-sigil-viewer",
-      "node_type": "component",
-      "node_title": "Sigil Viewer",
-      "path": "components/sigil-viewer.yaml"
-    },
-    {
-      "date": "2026-03-06T20:52:49Z",
-      "sha": "working-tree",
-      "message": "current state",
-      "action": "added",
-      "node_id": "COMP-sigil-ci",
-      "node_type": "component",
-      "node_title": "Sigil CI Pipeline",
-      "path": "components/sigil-ci.yaml"
-    },
-    {
-      "date": "2026-03-06T20:53:05Z",
-      "sha": "working-tree",
-      "message": "current state",
-      "action": "added",
-      "node_id": "API-INTENT-CLI-V1",
-      "node_type": "interface",
-      "node_title": "Intent CLI Interface v1",
-      "path": "interfaces/API-INTENT-CLI-V1/README.md"
-    },
-    {
-      "date": "2026-03-06T20:53:21Z",
-      "sha": "working-tree",
-      "message": "current state",
-      "action": "added",
-      "node_id": "SPEC-0005",
-      "node_type": "spec",
-      "node_title": "Seven View Modes",
-      "path": "intent/sigil-viewer/specs/SPEC-0005-seven-view-modes.md"
-    },
-    {
-      "date": "2026-03-06T20:53:31Z",
-      "sha": "working-tree",
-      "message": "current state",
-      "action": "added",
-      "node_id": "SPEC-0006",
-      "node_type": "spec",
-      "node_title": "CI Pipeline Spec",
-      "path": "intent/sigil-ci/specs/SPEC-0006-ci-pipeline.md"
-    }
-  ],
-  "generated_at": "2026-03-06T20:53:43Z"
+  "events": [],
+  "generated_at": "2026-03-08T18:23:02Z"
 };
     window.__SIGIL_REVIEW__ = {
-  "generated_at": "2026-03-07T10:08:50Z",
+  "generated_at": "2026-03-09T03:06:51Z",
   "summary": {
-    "total_changes": 2,
+    "total_changes": 1,
     "intent_changes": 0,
-    "code_changes": 2,
+    "code_changes": 1,
     "covered_files": 0,
-    "uncovered_files": 2,
+    "uncovered_files": 1,
     "coverage_pct": 0
   },
   "intent_changes": [],
@@ -1284,94 +1740,180 @@
   "uncovered": [
     {
       "status": "M",
-      "path": "branding/BRAND.md"
-    },
-    {
-      "status": "M",
-      "path": "pyproject.toml"
+      "path": "docs/index.html"
     }
   ],
   "governance": {},
   "gates": [
     {
       "id": "GATE-0001",
-      "summary": "Ensures all specs under intent-system have acceptance criteria, status, and valid references",
-      "kind": "lint-rule",
+      "summary": "Prevents breaking changes to the Catalog API: required endpoints must exist, prices must be integer cents",
+      "kind": "command",
       "policy": "block",
       "passed": true,
-      "scope": 11,
+      "scope": 1,
       "findings": []
     },
     {
       "id": "GATE-0002",
-      "summary": "Ensures ADRs progress beyond draft status in a timely manner",
-      "kind": "lint-rule",
+      "summary": "Ensures auth service hashes passwords and never returns them in plaintext",
+      "kind": "command",
+      "policy": "block",
+      "passed": true,
+      "scope": 4,
+      "findings": []
+    },
+    {
+      "id": "GATE-0003",
+      "summary": "Order service can only depend on catalog, cart, auth, and notification. Prevents uncontrolled coupling.",
+      "kind": "builtin",
+      "policy": "block",
+      "passed": true,
+      "scope": 6,
+      "findings": []
+    },
+    {
+      "id": "GATE-0004",
+      "summary": "All specs must have Intent, Goals, Non-goals, Design, Acceptance Criteria, and Links sections. Every spec must declare which component it belongs to.",
+      "kind": "builtin",
       "policy": "warn",
       "passed": true,
-      "scope": 11,
+      "scope": 0,
+      "findings": []
+    },
+    {
+      "id": "GATE-0005",
+      "summary": "Payment gateway must never handle raw card numbers \u2014 only tokenized payment methods. Prevents accidental PCI scope expansion.",
+      "kind": "pattern",
+      "policy": "block",
+      "passed": true,
+      "scope": 3,
       "findings": []
     }
   ]
 };
     window.__SIGIL_COVERAGE__ = {
-  "score": 100,
+  "score": 91,
   "metrics": {
     "components_with_spec": {
-      "value": 3,
-      "total": 3,
-      "pct": 100
+      "value": 8,
+      "total": 9,
+      "pct": 89
     },
     "specs_with_acceptance": {
-      "value": 6,
-      "total": 6,
+      "value": 9,
+      "total": 9,
       "pct": 100
     },
     "adrs_with_status": {
-      "value": 6,
-      "total": 6,
+      "value": 7,
+      "total": 7,
       "pct": 100
     },
     "adrs_accepted": {
       "value": 6,
-      "total": 6,
-      "pct": 100
+      "total": 7,
+      "pct": 86
     }
   },
   "stats": {
-    "nodes": 18,
-    "edges": 37,
-    "components": 3,
-    "specs": 6,
-    "adrs": 6,
-    "gates": 2
+    "nodes": 36,
+    "edges": 87,
+    "components": 9,
+    "specs": 9,
+    "adrs": 7,
+    "gates": 5
   },
   "components": [
     {
-      "id": "COMP-sigil-ci",
-      "title": "Sigil CI Pipeline",
+      "id": "COMP-search-service",
+      "title": "Search Service",
       "has_spec": true,
       "adr_count": 0,
       "gate_count": 0,
       "level": "yellow"
     },
     {
-      "id": "COMP-sigil-viewer",
-      "title": "Sigil Viewer",
+      "id": "COMP-auth-service",
+      "title": "Auth Service",
+      "has_spec": true,
+      "adr_count": 1,
+      "gate_count": 1,
+      "level": "green"
+    },
+    {
+      "id": "COMP-payment-gateway",
+      "title": "Payment Gateway",
+      "has_spec": true,
+      "adr_count": 0,
+      "gate_count": 1,
+      "level": "yellow"
+    },
+    {
+      "id": "COMP-cart-service",
+      "title": "Cart Service",
       "has_spec": true,
       "adr_count": 1,
       "gate_count": 0,
       "level": "green"
     },
     {
-      "id": "COMP-intent-system",
-      "title": "Intent System",
+      "id": "COMP-catalog-service",
+      "title": "Catalog Service",
       "has_spec": true,
-      "adr_count": 6,
-      "gate_count": 2,
+      "adr_count": 1,
+      "gate_count": 0,
+      "level": "green"
+    },
+    {
+      "id": "COMP-order-service",
+      "title": "Order Service",
+      "has_spec": true,
+      "adr_count": 1,
+      "gate_count": 1,
+      "level": "green"
+    },
+    {
+      "id": "COMP-notification-service",
+      "title": "Notification Service",
+      "has_spec": true,
+      "adr_count": 1,
+      "gate_count": 0,
+      "level": "green"
+    },
+    {
+      "id": "COMP-admin-dashboard",
+      "title": "Admin Dashboard",
+      "has_spec": false,
+      "adr_count": 0,
+      "gate_count": 0,
+      "level": "red"
+    },
+    {
+      "id": "COMP-web-app",
+      "title": "Web App",
+      "has_spec": true,
+      "adr_count": 1,
+      "gate_count": 0,
       "level": "green"
     }
   ],
-  "findings": []
+  "findings": [
+    {
+      "severity": "warn",
+      "message": "1 component(s) have no governing spec",
+      "nodes": [
+        "COMP-admin-dashboard"
+      ]
+    },
+    {
+      "severity": "info",
+      "message": "1 ADR(s) still in draft/proposed",
+      "nodes": [
+        "ADR-0007"
+      ]
+    }
+  ]
 };
 
     // Override fetch to serve embedded data
@@ -1405,10 +1947,80 @@
     
 </head>
 <body>
+
+  <!-- Welcome overlay: shown on first visit, dismissed by clicking anywhere or pressing a key -->
+  <div id="welcome-overlay" style="
+    position: fixed; inset: 0; z-index: 9999;
+    background: rgba(26,28,34,0.96);
+    display: flex; align-items: center; justify-content: center;
+    backdrop-filter: blur(2px);
+    cursor: pointer;
+  " onclick="dismissWelcome()" onkeydown="if(event.key){dismissWelcome()}" tabindex="0">
+    <div style="
+      max-width: 560px; width: 90%;
+      border: 1px solid #3a3d42;
+      border-radius: 8px;
+      padding: 40px 44px;
+      background: #1a1c22;
+      font-family: 'SF Mono','Fira Code','JetBrains Mono',monospace;
+    " onclick="event.stopPropagation()">
+      <div style="font-size:11px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#bbff00;margin-bottom:20px;">SIGIL</div>
+      <h2 style="font-size:22px;font-weight:700;color:#f8f6f2;line-height:1.3;margin-bottom:12px;">
+        Review intent,<br>not just diffs.
+      </h2>
+      <p style="font-size:13px;color:#9a9690;line-height:1.7;margin-bottom:8px;">
+        Sigil turns your specs, ADRs, and constraints into a connected knowledge graph — right in your Git repo.
+        On every PR, it posts an intent diff so reviewers see <em style="color:#dbd6cc;">what changed architecturally</em> before they read a single line of code.
+      </p>
+      <p style="font-size:12px;color:#5a5d62;margin-bottom:28px;">
+        You're looking at the Shelf demo — a bookstore with 9 components, 36 nodes, 96 edges.
+      </p>
+      <div style="
+        background:#282b31; border:1px solid #3a3d42; border-radius:5px;
+        padding:12px 16px; margin-bottom:28px;
+        display:flex; align-items:center; justify-content:space-between;
+        gap:12px;
+      ">
+        <code style="font-size:13px;color:#bbff00;">pip install sigil-cli &amp;&amp; sigil init</code>
+        <button onclick="navigator.clipboard.writeText('pip install sigil-cli && sigil init').then(()=>{this.textContent='Copied!';setTimeout(()=>{this.textContent='Copy'},1500)})" style="
+          background:transparent; border:1px solid #3a3d42; border-radius:4px;
+          color:#828079; font-size:11px; font-family:inherit;
+          padding:4px 10px; cursor:pointer;
+        ">Copy</button>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;">
+        <button onclick="dismissWelcome()" style="
+          background:#bbff00; color:#1a1c22;
+          border:none; border-radius:5px;
+          font-family:inherit; font-size:13px; font-weight:700;
+          padding:10px 22px; cursor:pointer;
+          letter-spacing:0.5px;
+        ">Explore the Demo →</button>
+        <a href="https://github.com/fielding/sigil" target="_blank" style="
+          color:#5a5d62; font-size:12px; text-decoration:none;
+        " onclick="event.stopPropagation()">View on GitHub ↗</a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function dismissWelcome() {
+      const el = document.getElementById('welcome-overlay');
+      if (el) {
+        el.style.transition = 'opacity 0.2s';
+        el.style.opacity = '0';
+        setTimeout(() => el.remove(), 200);
+      }
+    }
+    // Also dismiss on any keypress
+    document.addEventListener('keydown', dismissWelcome, { once: true });
+  </script>
+
   <div id="topbar">
     <div id="topbar-left">
       <h1>Sigil</h1>
-      <button class="view-btn active" data-view="graph" onclick="switchView('graph')">Graph</button>
+      <button class="view-btn active" data-view="overview" onclick="switchView('overview')">Overview</button>
+      <button class="view-btn" data-view="graph" onclick="switchView('graph')">Graph</button>
       <button class="view-btn" data-view="radar" onclick="switchView('radar')">Impact Radar</button>
       <button class="view-btn" data-view="hierarchy" onclick="switchView('hierarchy')">Hierarchy</button>
       <button class="view-btn" data-view="coverage" onclick="switchView('coverage')">Coverage</button>
@@ -1433,17 +2045,21 @@
         <span class="keyhint-key">Cmd+K</span> palette
         <span class="keyhint-key">j</span><span class="keyhint-key">k</span> cycle
         <span class="keyhint-key">/</span> search
+        <span class="keyhint-key">Alt+&#8592;</span> back
+        <span class="keyhint-key">Alt+&#8594;</span> fwd
         <span class="keyhint-key">g</span> graph
         <span class="keyhint-key">r</span> radar
         <span class="keyhint-key">h</span> hier
         <span class="keyhint-key">c</span> cov
-        <span class="keyhint-key">d</span> drift
-        <span class="keyhint-key">t</span> time
-        <span class="keyhint-key">m</span> matrix
       </div>
     </div>
     <div id="right">
       <div id="search-bar"><input id="search" placeholder="Search nodes..." /></div>
+      <div id="nav-bar">
+        <button id="nav-back" class="nav-btn" onclick="navBack()" disabled title="Back (Alt+Left)">&#8592;</button>
+        <button id="nav-forward" class="nav-btn" onclick="navForward()" disabled title="Forward (Alt+Right)">&#8594;</button>
+        <button id="nav-home" class="nav-btn" onclick="selectRootNode()" title="Project Root">&#8962; Root</button>
+      </div>
       <div id="breadcrumb"></div>
       <div id="node-header"></div>
       <div id="tabs">
@@ -1454,7 +2070,6 @@
       </div>
       <div id="content-area">
         <div class="welcome" id="welcome-panel">
-          <div class="demo-label">LIVE DEMO — Sigil's own intent graph</div>
           <h2>You're looking at an intent graph</h2>
           <p>Every node on the left is a <strong>why</strong> behind your code — specs, decisions, constraints, and contracts. The edges show how they connect. Click any node to read the full reasoning.</p>
           <p>This is what Sigil tracks for your codebase. Instead of decisions rotting in Notion or Slack threads, they live here — queryable, diffable, and enforced in CI.</p>
@@ -1465,15 +2080,7 @@
             <div class="legend-item"><div class="legend-dot" style="background:var(--base08)"></div> Gate</div>
             <div class="legend-item"><div class="legend-dot" style="background:var(--base0C)"></div> Interface</div>
           </div>
-          <div class="welcome-cta">
-            <h3>Try it on your repo</h3>
-            <code class="cta-code">npx sigil-cli init</code>
-            <div class="cta-links">
-              <a href="https://github.com/fielding/sigil" target="_blank">GitHub →</a>
-              <a href="https://github.com/fielding/sigil#readme" target="_blank">README →</a>
-            </div>
-          </div>
-          <div class="welcome-hint" style="margin-top:12px;">
+          <div class="welcome-hint">
             <kbd>⌘K</kbd> command palette &nbsp; <kbd>r</kbd> blast radius &nbsp; <kbd>c</kbd> coverage &nbsp; <kbd>/</kbd> search
           </div>
         </div>
@@ -1524,6 +2131,20 @@
     let allNodes = [];
     let sim = null;
 
+    // Navigation state
+    let navHistory = [];
+    let navHistoryIdx = -1;
+    let visitedNodes = new Set();
+    let navigating = false;
+
+    // D3 refs for path highlighting + zoom
+    let svgRef = null;
+    let zoomRef = null;
+    let gRef = null;
+    let nodesRef = null;
+    let labelsRef = null;
+    let nodeGlowRef = null;
+
     const nodeColors = {
       component: "#828079",
       spec:      "#04b372",
@@ -1531,7 +2152,8 @@
       gate:      "#e7349c",
       adr:       "#9871fe",
       risk:      "#f26c33",
-      rollout:   "#1ad0d6"
+      rollout:   "#1ad0d6",
+      project:   "#bbff00"
     };
 
     const edgeColors = {
@@ -2531,6 +3153,130 @@
       if (tt) tt.classList.remove("show");
     }
 
+    // ---- Overview (Landing) View ----
+
+    async function renderOverview() {
+      const area = document.getElementById("content-area");
+      const headerEl = document.getElementById("node-header");
+      const breadcrumb = document.getElementById("breadcrumb");
+      breadcrumb.innerHTML = '';
+      document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+
+      const nodes = graphData.nodes;
+      const edges = graphData.edges;
+      const components = nodes.filter(n => n.type === "component");
+      const specs = nodes.filter(n => n.type === "spec");
+      const adrs = nodes.filter(n => n.type === "adr");
+      const gates = nodes.filter(n => n.type === "gate");
+      const cov = computeCoverage(graphData);
+
+      // Find root specs: specs that govern components via belongs_to edges
+      const specGovernance = {};
+      edges.filter(e => e.type === "belongs_to").forEach(e => {
+        const srcNode = nodes.find(n => n.id === e.src);
+        if (srcNode && srcNode.type === "component") {
+          if (!specGovernance[e.dst]) specGovernance[e.dst] = 0;
+          specGovernance[e.dst]++;
+        }
+      });
+
+      // Connectivity count for tie-breaking
+      const connectivity = {};
+      edges.forEach(e => {
+        connectivity[e.src] = (connectivity[e.src] || 0) + 1;
+        connectivity[e.dst] = (connectivity[e.dst] || 0) + 1;
+      });
+
+      const rootSpecs = specs
+        .map(s => ({ ...s, governed: specGovernance[s.id] || 0, conn: connectivity[s.id] || 0 }))
+        .sort((a, b) => b.governed !== a.governed ? b.governed - a.governed : b.conn - a.conn)
+        .slice(0, 8);
+
+      // Try to load project name + one-liner from README.md
+      let projectName = "Intent Graph";
+      let projectDesc = "";
+      try {
+        const res = await fetch("../../README.md");
+        if (res.ok) {
+          const text = await res.text();
+          const titleMatch = text.match(/^#\s+(.+)$/m);
+          if (titleMatch) projectName = titleMatch[1].trim();
+          const lines = text.split('\n');
+          let foundTitle = false;
+          for (const line of lines) {
+            if (!foundTitle && line.trim().startsWith('#')) { foundTitle = true; continue; }
+            if (foundTitle && line.trim() && !line.trim().startsWith('#') && !line.trim().startsWith('!')) {
+              projectDesc = line.trim().replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+              break;
+            }
+          }
+        }
+      } catch (_) {}
+
+      headerEl.innerHTML = `
+        <h2>${esc(projectName)}</h2>
+        <div>
+          <span class="pill pill-type">${components.length} components</span>
+          <span class="pill pill-type">${specs.length} specs</span>
+          <span class="pill pill-type">${adrs.length} ADRs</span>
+          <span class="pill pill-type">${gates.length} gates</span>
+        </div>`;
+
+      const barColor = cov.score >= 80 ? "var(--base0B)" : cov.score >= 60 ? "var(--base0D)" : cov.score >= 40 ? "var(--base0A)" : "var(--base08)";
+
+      let specsHtml = "";
+      if (rootSpecs.length) {
+        specsHtml = rootSpecs.map(s => {
+          const raw = s.body_summary || '';
+          // Strip markdown headings from the summary for a clean one-liner
+          const summary = raw.replace(/^#+\s+[^\n]+\n?/gm, '').trim().substring(0, 180);
+          const fm = s.frontmatter || {};
+          const statusPill = fm.status
+            ? `<span class="pill pill-status" data-status="${fm.status}" style="font-size:10px;padding:1px 6px">${fm.status}</span>`
+            : '';
+          const govText = s.governed > 0
+            ? `<span style="color:var(--base03);font-size:11px">&nbsp;·&nbsp;${s.governed} component${s.governed !== 1 ? 's' : ''}</span>`
+            : '';
+          return `<div style="padding:12px 14px;border:1px solid var(--base02);border-radius:8px;margin-bottom:8px;cursor:pointer;background:var(--base00);transition:border-color 0.15s"
+            onclick="switchView('graph');selectNodeById('${s.id}')"
+            onmouseenter="this.style.borderColor='var(--base0D)'"
+            onmouseleave="this.style.borderColor='var(--base02)'">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+              <span style="color:var(--base0B);font-weight:600;font-size:13px">${esc(s.title || s.id)}</span>
+              ${statusPill}${govText}
+            </div>
+            <div style="color:var(--base04);font-size:12px;line-height:1.5">${summary ? esc(summary) + (summary.length < raw.replace(/^#+\s+[^\n]+\n?/gm, '').trim().length ? '...' : '') : '<em style="color:var(--base03)">No description yet.</em>'}</div>
+            <div style="color:var(--base03);font-size:11px;margin-top:6px">${s.id}</div>
+          </div>`;
+        }).join("");
+      } else if (specs.length === 0) {
+        specsHtml = `<div style="color:var(--base03);font-size:13px;padding:8px 0">No specs found. Add intent documents to your <code>.intent/</code> directory.</div>`;
+      }
+
+      area.innerHTML = `
+        ${projectDesc ? `<div style="color:var(--base04);font-size:13px;line-height:1.6;margin-bottom:16px;padding:10px 12px;background:var(--base00);border-radius:6px;border-left:3px solid var(--base0D)">${esc(projectDesc)}</div>` : ''}
+        <div class="cov-grid" style="margin-bottom:16px">
+          <div class="cov-card">
+            <div class="cov-card-title">Intent Health</div>
+            <div class="cov-card-value" style="color:${barColor}">${cov.score}%</div>
+            <div class="cov-bar-track"><div class="cov-bar-fill" style="width:${cov.score}%;background:${barColor}"></div></div>
+          </div>
+          <div class="cov-card">
+            <div class="cov-card-title">Graph Size</div>
+            <div class="cov-card-value" style="color:var(--base06)">${nodes.length}</div>
+            <div class="cov-card-sub">${edges.length} relationships</div>
+          </div>
+        </div>
+        <h3 style="color:var(--base06);font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px">Start here — key design intents</h3>
+        ${specsHtml}
+        <div style="margin-top:12px;padding:8px 10px;background:var(--base00);border:1px solid var(--base02);border-radius:6px;font-size:11px;color:var(--base03)">
+          Click a card to explore on the graph &nbsp;·&nbsp;
+          <kbd style="background:var(--base02);color:var(--base04);padding:1px 4px;border-radius:3px;font-size:10px">⌘K</kbd> search &nbsp;·&nbsp;
+          <kbd style="background:var(--base02);color:var(--base04);padding:1px 4px;border-radius:3px;font-size:10px">c</kbd> coverage &nbsp;·&nbsp;
+          <kbd style="background:var(--base02);color:var(--base04);padding:1px 4px;border-radius:3px;font-size:10px">h</kbd> hierarchy
+        </div>`;
+    }
+
     // ---- View Switching ----
 
     function switchView(view) {
@@ -2552,7 +3298,11 @@
       mtxEl.style.display = "none";
       legend.style.display = "none";
 
-      if (view === "graph") {
+      if (view === "overview") {
+        svgEl.style.display = "block";
+        legend.style.display = "block";
+        renderOverview();
+      } else if (view === "graph") {
         svgEl.style.display = "block";
         legend.style.display = "block";
         if (selectedNode) showTab(activeTab);
@@ -2595,47 +3345,176 @@
       ).join("");
     }
 
-    function buildBreadcrumb(node) {
+    function buildBreadcrumb() {
       const el = document.getElementById("breadcrumb");
-      if (!node) { el.innerHTML = ""; return; }
+      if (navHistoryIdx < 0 || navHistory.length === 0) { el.innerHTML = ""; return; }
 
-      // Walk up the hierarchy: ADR → Spec (via decided_by) → Component (via belongs_to)
-      const chain = [node];
-      const visited = new Set([node.id]);
+      // Show up to 6 items of click history up to current position
+      const historySlice = navHistory.slice(0, navHistoryIdx + 1);
+      const chain = historySlice.slice(-6);
+      const offset = historySlice.length - chain.length;
 
-      function findParent(id) {
-        // Try decided_by first (ADR → Spec), then belongs_to (Spec/ADR → Component)
-        for (const relType of ["decided_by", "belongs_to"]) {
-          const edge = graphData.edges.find(e => e.src === id && e.type === relType && !visited.has(e.dst));
-          if (edge) {
-            const parent = graphData.nodes.find(n => n.id === edge.dst);
-            if (parent) return parent;
-          }
-        }
-        return null;
-      }
-
-      let current = node;
-      while (current) {
-        const parent = findParent(current.id);
-        if (parent) {
-          visited.add(parent.id);
-          chain.unshift(parent);
-          current = parent;
-        } else {
-          break;
-        }
-      }
-
-      el.innerHTML = chain.map((n, i) => {
+      el.innerHTML = chain.map((id, i) => {
+        const absoluteIdx = offset + i;
+        const n = allNodes.find(n => n.id === id);
+        const label = n ? (n._isRoot ? '&#8962; Root' : n.title || n.id) : id;
+        const isActive = absoluteIdx === navHistoryIdx;
+        const style = isActive ? 'color:var(--base06)' : '';
         const sep = i > 0 ? '<span class="sep">&rsaquo;</span>' : '';
-        const label = n.type === "component" ? n.title || n.id : n.id;
-        return `${sep}<span onclick="selectNodeById('${n.id}')">${label}</span>`;
+        return `${sep}<span style="${style}" onclick="navToHistoryIndex(${absoluteIdx})">${label}</span>`;
       }).join("");
+    }
+
+    // ---- Navigation ----
+
+    function updateNavButtons() {
+      const back = document.getElementById("nav-back");
+      const fwd = document.getElementById("nav-forward");
+      if (back) back.disabled = navHistoryIdx <= 0;
+      if (fwd) fwd.disabled = navHistoryIdx >= navHistory.length - 1;
+    }
+
+    function navBack() {
+      if (navHistoryIdx <= 0) return;
+      navigating = true;
+      navHistoryIdx--;
+      const id = navHistory[navHistoryIdx];
+      const node = allNodes.find(n => n.id === id);
+      if (node) selectNode(node);
+      navigating = false;
+    }
+
+    function navForward() {
+      if (navHistoryIdx >= navHistory.length - 1) return;
+      navigating = true;
+      navHistoryIdx++;
+      const id = navHistory[navHistoryIdx];
+      const node = allNodes.find(n => n.id === id);
+      if (node) selectNode(node);
+      navigating = false;
+    }
+
+    function navToHistoryIndex(idx) {
+      if (idx < 0 || idx >= navHistory.length) return;
+      navigating = true;
+      navHistoryIdx = idx;
+      const id = navHistory[navHistoryIdx];
+      const node = allNodes.find(n => n.id === id);
+      if (node) selectNode(node);
+      navigating = false;
+    }
+
+    function selectRootNode() {
+      const root = allNodes.find(n => n._isRoot);
+      if (!root) return;
+      if (activeView !== "graph" && activeView !== "overview") switchView("graph");
+      selectNode(root);
+    }
+
+    function highlightPath() {
+      if (!nodesRef || !labelsRef) return;
+      if (visitedNodes.size === 0) {
+        nodesRef.attr("opacity", 1)
+          .attr("stroke", d => d && selectedNode && d.id === selectedNode.id ? "#f8f6f2" : "none")
+          .attr("stroke-width", d => d && selectedNode && d.id === selectedNode.id ? 2.5 : 0);
+        labelsRef.attr("opacity", 1);
+        return;
+      }
+      nodesRef
+        .attr("opacity", d => {
+          if (!d) return 1;
+          if (d.id === (selectedNode && selectedNode.id)) return 1;
+          if (visitedNodes.has(d.id)) return 1;
+          return 0.2;
+        })
+        .attr("stroke", d => {
+          if (!d) return "none";
+          if (d.id === (selectedNode && selectedNode.id)) return "#f8f6f2";
+          if (visitedNodes.has(d.id)) return nodeColors[d.type] || "#5a5d62";
+          return "none";
+        })
+        .attr("stroke-width", d => {
+          if (!d) return 0;
+          if (d.id === (selectedNode && selectedNode.id)) return 2.5;
+          if (visitedNodes.has(d.id)) return 1.5;
+          return 0;
+        });
+      labelsRef.attr("opacity", d => (!d || visitedNodes.has(d.id)) ? 1 : 0.2);
+    }
+
+    function zoomToNode(node) {
+      if (!svgRef || !gRef || !zoomRef) return;
+      const svgNode = svgRef.node();
+      if (!svgNode || svgNode.style.display === "none") return;
+      const simNode = allNodes.find(n => n.id === node.id);
+      if (!simNode || simNode.x === undefined) return;
+      const width = svgNode.clientWidth;
+      const height = svgNode.clientHeight;
+      const scale = 1.4;
+      const tx = width / 2 - scale * simNode.x;
+      const ty = height / 2 - scale * simNode.y;
+      svgRef.transition().duration(450).call(
+        zoomRef.transform,
+        d3.zoomIdentity.translate(tx, ty).scale(scale)
+      );
+    }
+
+    // ---- Root Panel ----
+
+    function renderRootPanel() {
+      const area = document.getElementById("content-area");
+      const components = graphData.nodes.filter(n => n.type === "component");
+      const specs = graphData.nodes.filter(n => n.type === "spec");
+      const adrs = graphData.nodes.filter(n => n.type === "adr");
+      const gates = graphData.nodes.filter(n => n.type === "gate");
+
+      const compItems = components.map(c => {
+        const compSpecs = graphData.edges
+          .filter(e => e.type === "belongs_to" && e.dst === c.id)
+          .map(e => graphData.nodes.find(n => n.id === e.src))
+          .filter(Boolean);
+        const specCount = compSpecs.length;
+        return `<div style="cursor:pointer;padding:10px 12px;border:1px solid var(--base02);border-radius:6px;margin-bottom:6px;background:var(--base00);transition:border-color 0.15s"
+          onclick="selectNodeById('${c.id}')"
+          onmouseenter="this.style.borderColor='var(--base0D)'" onmouseleave="this.style.borderColor='var(--base02)'">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <span style="color:var(--base0D);font-weight:600;font-size:13px">${esc(c.title || c.id)}</span>
+            ${specCount ? `<span style="color:var(--base03);font-size:11px">${specCount} spec${specCount !== 1 ? 's' : ''}</span>` : ''}
+          </div>
+          <div style="color:var(--base03);font-size:11px;margin-top:2px">${c.id}</div>
+        </div>`;
+      }).join("") || '<div style="color:var(--base03);font-size:13px">No components found.</div>';
+
+      area.innerHTML = `
+        <div style="color:var(--base04);font-size:13px;line-height:1.6;margin-bottom:16px;padding:10px 12px;background:var(--base00);border-radius:6px;border-left:3px solid var(--base0F)">
+          Your intent graph: <strong style="color:var(--base05)">${graphData.nodes.length} nodes</strong>,
+          <strong style="color:var(--base05)">${graphData.edges.length} relationships</strong>.
+          Click a component to explore its intents.
+        </div>
+        <div class="cov-grid" style="margin-bottom:16px">
+          <div class="cov-card"><div class="cov-card-title">Components</div><div class="cov-card-value" style="color:var(--base0D)">${components.length}</div></div>
+          <div class="cov-card"><div class="cov-card-title">Specs</div><div class="cov-card-value" style="color:var(--base0B)">${specs.length}</div></div>
+          <div class="cov-card"><div class="cov-card-title">ADRs</div><div class="cov-card-value" style="color:var(--base0E)">${adrs.length}</div></div>
+          <div class="cov-card"><div class="cov-card-title">Gates</div><div class="cov-card-value" style="color:var(--base08)">${gates.length}</div></div>
+        </div>
+        <h3 style="color:var(--base06);font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px">Components — start here</h3>
+        ${compItems}`;
     }
 
     function renderHeader(node) {
       const el = document.getElementById("node-header");
+      if (node._isRoot) {
+        const n = graphData ? graphData.nodes.length : 0;
+        const e = graphData ? graphData.edges.length : 0;
+        el.innerHTML = `
+          <h2 style="color:var(--base0F)">&#8962; Project Root</h2>
+          <div>
+            <span class="pill pill-type">project</span>
+            <span class="pill" style="background:var(--base02);color:var(--base05)">${n} nodes</span>
+            <span class="pill" style="background:var(--base02);color:var(--base05)">${e} edges</span>
+          </div>`;
+        return;
+      }
       const fm = node.frontmatter || node._frontmatter || {};
       const status = fm.status;
       const statusPill = status
@@ -2673,6 +3552,11 @@
 
     async function renderContent(node) {
       const area = document.getElementById("content-area");
+
+      if (node._isRoot) {
+        renderRootPanel();
+        return;
+      }
 
       if (node.type === "component") {
         area.innerHTML = '<div class="loading">Loading component...</div>';
@@ -2712,6 +3596,10 @@
 
     function renderGraph(node) {
       const area = document.getElementById("content-area");
+      if (node._isRoot) {
+        renderRootPanel();
+        return;
+      }
       const outgoing = graphData.edges.filter(e => e.src === node.id);
       const incoming = graphData.edges.filter(e => e.dst === node.id);
       const dedup = (edges) => {
@@ -2768,13 +3656,21 @@
     }
 
     function selectNode(node) {
+      // Push to nav history (unless navigating back/forward)
+      if (!navigating) {
+        navHistory = navHistory.slice(0, navHistoryIdx + 1);
+        navHistory.push(node.id);
+        navHistoryIdx = navHistory.length - 1;
+      }
+      visitedNodes.add(node.id);
+      updateNavButtons();
+
       selectedNode = node;
       renderHeader(node);
-      buildBreadcrumb(node);
+      buildBreadcrumb();
       showTab(activeTab);
-      d3.selectAll("#svg circle")
-        .attr("stroke", d => d && d.id === node.id ? "#f8f6f2" : "none")
-        .attr("stroke-width", d => d && d.id === node.id ? 2.5 : 0);
+      highlightPath();
+      zoomToNode(node);
       if (activeView === "radar") renderRadarView(node);
     }
 
@@ -2825,6 +3721,10 @@
 
     document.addEventListener("keydown", function(ev) {
       // Cmd/Ctrl+K for command palette (works everywhere)
+      // Alt+Left / Alt+Right for back / forward
+      if (ev.altKey && ev.key === "ArrowLeft") { ev.preventDefault(); navBack(); return; }
+      if (ev.altKey && ev.key === "ArrowRight") { ev.preventDefault(); navForward(); return; }
+
       if ((ev.metaKey || ev.ctrlKey) && ev.key === "k") {
         ev.preventDefault();
         const overlay = document.getElementById("cmd-overlay");
@@ -2852,6 +3752,8 @@
         if (ev.key === "j") next = (idx + 1) % allNodes.length;
         else next = (idx - 1 + allNodes.length) % allNodes.length;
         selectNode(allNodes[next]);
+      } else if (ev.key === "o") {
+        switchView("overview");
       } else if (ev.key === "r") {
         switchView("radar");
       } else if (ev.key === "c") {
@@ -2877,7 +3779,8 @@
 
     function render(graph) {
       graphData = graph;
-      const svg = d3.select("#svg");
+      svgRef = d3.select("#svg");
+      const svg = svgRef;
       const width = svg.node().clientWidth;
       const height = svg.node().clientHeight;
       svg.selectAll("*").remove();
@@ -2888,11 +3791,26 @@
         connectivity[e.src] = (connectivity[e.src] || 0) + 1;
         connectivity[e.dst] = (connectivity[e.dst] || 0) + 1;
       });
+
+      // Inject synthetic project root node
+      const components = graph.nodes.filter(n => n.type === "component");
+      const rootNodeObj = {
+        id: '__ROOT__', type: 'project', title: 'Project Root', _isRoot: true,
+        path: null, body_summary: null,
+        _conn: components.length
+      };
+      // Components get extra connectivity from root edges
+      components.forEach(c => { connectivity[c.id] = (connectivity[c.id] || 0) + 1; });
+      connectivity['__ROOT__'] = components.length;
+
       const maxConn = Math.max(...Object.values(connectivity), 1);
 
-      const nodes = graph.nodes.map(d => ({...d, _conn: connectivity[d.id] || 0}));
+      const nodes = [rootNodeObj, ...graph.nodes.map(d => ({...d, _conn: connectivity[d.id] || 0}))];
+      rootNodeObj._conn = components.length;
       allNodes = nodes;
-      const links = graph.edges.map(e => ({ source: e.src, target: e.dst, type: e.type }));
+
+      const rootLinks = components.map(c => ({ source: '__ROOT__', target: c.id, type: 'project_root' }));
+      const links = [...rootLinks, ...graph.edges.map(e => ({ source: e.src, target: e.dst, type: e.type }))];
 
       const linkKey = l => `${typeof l.source === 'object' ? l.source.id : l.source}-${typeof l.target === 'object' ? l.target.id : l.target}`;
       const seenLinks = new Set();
@@ -2908,7 +3826,7 @@
       glowFilter.append("feGaussianBlur").attr("stdDeviation", "3").attr("result", "blur");
       glowFilter.append("feMerge").selectAll("feMergeNode").data(["blur", "SourceGraphic"]).join("feMergeNode").attr("in", d => d);
 
-      // Arrow markers for directed edges
+      // Arrow markers for directed edges (not project_root)
       ["belongs_to","decided_by","depends_on","gated_by","provides","consumes","relates_to","supersedes"].forEach(t => {
         defs.append("marker")
           .attr("id", "arrow-" + t).attr("viewBox", "0 0 10 6").attr("refX", 10).attr("refY", 3)
@@ -2916,13 +3834,15 @@
           .append("path").attr("d", "M0,0 L10,3 L0,6").attr("fill", edgeColors[t] || "var(--base02)");
       });
 
-      const g = svg.append("g");
-      svg.call(d3.zoom().scaleExtent([0.3, 4]).on("zoom", (ev) => {
+      gRef = svg.append("g");
+      const g = gRef;
+      zoomRef = d3.zoom().scaleExtent([0.3, 4]).on("zoom", (ev) => {
         g.attr("transform", ev.transform);
-      }));
+      });
+      svg.call(zoomRef);
 
       sim = d3.forceSimulation(nodes)
-        .force("link", d3.forceLink(uniqueLinks).id(d => d.id).distance(120))
+        .force("link", d3.forceLink(uniqueLinks).id(d => d.id).distance(d => d.type === 'project_root' ? 160 : 120))
         .force("charge", d3.forceManyBody().strength(-250))
         .force("center", d3.forceCenter(width / 2, height / 2))
         .force("collide", d3.forceCollide(30))
@@ -2933,13 +3853,14 @@
       const link = g.append("g")
         .selectAll("path").data(uniqueLinks).join("path")
         .attr("fill", "none")
-        .attr("stroke", d => edgeColors[d.type] || "var(--base02)")
-        .attr("stroke-width", 1.5)
-        .attr("stroke-opacity", 0.6)
-        .attr("marker-end", d => `url(#arrow-${d.type})`);
+        .attr("stroke", d => d.type === 'project_root' ? "rgba(187,255,0,0.2)" : (edgeColors[d.type] || "var(--base02)"))
+        .attr("stroke-width", d => d.type === 'project_root' ? 1 : 1.5)
+        .attr("stroke-opacity", d => d.type === 'project_root' ? 0.4 : 0.6)
+        .attr("stroke-dasharray", d => d.type === 'project_root' ? "4,4" : null)
+        .attr("marker-end", d => d.type === 'project_root' ? null : `url(#arrow-${d.type})`);
 
       const edgeLabel = g.append("g")
-        .selectAll("text").data(uniqueLinks).join("text")
+        .selectAll("text").data(uniqueLinks.filter(l => l.type !== 'project_root')).join("text")
         .attr("class", "edge-label")
         .text(d => d.type)
         .attr("text-anchor", "middle");
@@ -2948,23 +3869,27 @@
         d3.select(this).attr("stroke-opacity", 1).attr("stroke-width", 2.5);
         edgeLabel.filter(e => e === d).classed("visible", true);
       }).on("mouseleave", function() {
-        link.attr("stroke-opacity", 0.6).attr("stroke-width", 1.5);
+        link.attr("stroke-opacity", d => d.type === 'project_root' ? 0.4 : 0.6)
+            .attr("stroke-width", d => d.type === 'project_root' ? 1 : 1.5);
         edgeLabel.classed("visible", false);
       });
 
       function nodeRadius(d) {
+        if (d._isRoot) return 18;
         const base = d.type === "component" ? 14 : 8;
         const scale = 1 + (d._conn / maxConn) * 0.6;
         return Math.round(base * scale);
       }
 
-      // Glow circles for high-connectivity nodes
+      // Glow circles for high-connectivity nodes and root
       const glowThreshold = maxConn * 0.5;
-      const nodeGlow = g.append("g").selectAll("circle").data(nodes.filter(d => d._conn >= glowThreshold)).join("circle")
-        .attr("r", d => nodeRadius(d) + 6)
+      const glowNodes = nodes.filter(d => d._conn >= glowThreshold || d._isRoot);
+      const nodeGlow = g.append("g").selectAll("circle").data(glowNodes).join("circle")
+        .attr("r", d => nodeRadius(d) + (d._isRoot ? 10 : 6))
         .attr("fill", d => nodeColors[d.type] || "#5a5d62")
-        .attr("opacity", 0.15)
+        .attr("opacity", d => d._isRoot ? 0.25 : 0.15)
         .attr("filter", "url(#glow)");
+      nodeGlowRef = nodeGlow;
 
       const node = g.append("g").selectAll("circle").data(nodes).join("circle")
         .attr("r", nodeRadius)
@@ -2975,21 +3900,24 @@
           .on("drag", (ev, d) => { d.fx = ev.x; d.fy = ev.y; })
           .on("end", (ev, d) => { if (!ev.active) sim.alphaTarget(0); d.fx = null; d.fy = null; })
         );
+      nodesRef = node;
 
-      node.append("title").text(d => `${d.id}: ${d.title || ""}`);
+      node.append("title").text(d => d._isRoot ? "Project Root — click to see all intents" : `${d.id}: ${d.title || ""}`);
 
       const label = g.append("g").selectAll("text").data(nodes).join("text")
-        .text(d => d.id)
-        .attr("font-size", 10)
-        .attr("fill", "#828079")
+        .text(d => d._isRoot ? "ROOT" : d.id)
+        .attr("font-size", d => d._isRoot ? 11 : 10)
+        .attr("fill", d => d._isRoot ? "#bbff00" : "#828079")
+        .attr("font-weight", d => d._isRoot ? "700" : "normal")
         .attr("dx", d => nodeRadius(d) + 4).attr("dy", 3)
         .attr("pointer-events", "none");
+      labelsRef = label;
 
       node.on("click", (ev, d) => selectNode(d));
 
       node.on("mouseenter", function(ev, d) {
         link.attr("stroke-opacity", l =>
-          (l.source.id === d.id || l.target.id === d.id) ? 1 : 0.15
+          (l.source.id === d.id || l.target.id === d.id) ? 1 : 0.1
         ).attr("stroke-width", l =>
           (l.source.id === d.id || l.target.id === d.id) ? 2.5 : 1
         );
@@ -3008,10 +3936,10 @@
       }).on("mousemove", function(ev, d) {
         moveTooltip(ev);
       }).on("mouseleave", function() {
-        link.attr("stroke-opacity", 0.6).attr("stroke-width", 1.5);
+        link.attr("stroke-opacity", d => d.type === 'project_root' ? 0.4 : 0.6)
+            .attr("stroke-width", d => d.type === 'project_root' ? 1 : 1.5);
         edgeLabel.classed("visible", false);
-        node.attr("opacity", 1);
-        label.attr("opacity", 1);
+        highlightPath(); // restore path highlight on mouseleave
         hideTooltip();
       });
 
@@ -3061,9 +3989,8 @@
       renderHealthBadge(cov);
       buildLegend();
 
-      // Select first spec
-      const first = nodes.find(n => n.type === "spec") || nodes[0];
-      if (first) selectNode(first);
+      // Show overview landing by default
+      switchView('overview');
     }
 
     // ---- New Doc Modal ----
@@ -3146,6 +4073,7 @@
 
       // Views
       const views = [
+        { label: "Overview", action: () => switchView("overview"), type: "view", hint: "o" },
         { label: "Graph View", action: () => switchView("graph"), type: "view", hint: "g" },
         { label: "Impact Radar", action: () => switchView("radar"), type: "view", hint: "r" },
         { label: "Hierarchy", action: () => switchView("hierarchy"), type: "view", hint: "h" },
