@@ -520,7 +520,8 @@
   <div id="topbar">
     <div id="topbar-left">
       <h1>Sigil</h1>
-      <button class="view-btn active" data-view="graph" onclick="switchView('graph')">Graph</button>
+      <button class="view-btn active" data-view="overview" onclick="switchView('overview')">Overview</button>
+      <button class="view-btn" data-view="graph" onclick="switchView('graph')">Graph</button>
       <button class="view-btn" data-view="radar" onclick="switchView('radar')">Impact Radar</button>
       <button class="view-btn" data-view="hierarchy" onclick="switchView('hierarchy')">Hierarchy</button>
       <button class="view-btn" data-view="coverage" onclick="switchView('coverage')">Coverage</button>
@@ -1634,6 +1635,130 @@
       if (tt) tt.classList.remove("show");
     }
 
+    // ---- Overview (Landing) View ----
+
+    async function renderOverview() {
+      const area = document.getElementById("content-area");
+      const headerEl = document.getElementById("node-header");
+      const breadcrumb = document.getElementById("breadcrumb");
+      breadcrumb.innerHTML = '';
+      document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+
+      const nodes = graphData.nodes;
+      const edges = graphData.edges;
+      const components = nodes.filter(n => n.type === "component");
+      const specs = nodes.filter(n => n.type === "spec");
+      const adrs = nodes.filter(n => n.type === "adr");
+      const gates = nodes.filter(n => n.type === "gate");
+      const cov = computeCoverage(graphData);
+
+      // Find root specs: specs that govern components via belongs_to edges
+      const specGovernance = {};
+      edges.filter(e => e.type === "belongs_to").forEach(e => {
+        const srcNode = nodes.find(n => n.id === e.src);
+        if (srcNode && srcNode.type === "component") {
+          if (!specGovernance[e.dst]) specGovernance[e.dst] = 0;
+          specGovernance[e.dst]++;
+        }
+      });
+
+      // Connectivity count for tie-breaking
+      const connectivity = {};
+      edges.forEach(e => {
+        connectivity[e.src] = (connectivity[e.src] || 0) + 1;
+        connectivity[e.dst] = (connectivity[e.dst] || 0) + 1;
+      });
+
+      const rootSpecs = specs
+        .map(s => ({ ...s, governed: specGovernance[s.id] || 0, conn: connectivity[s.id] || 0 }))
+        .sort((a, b) => b.governed !== a.governed ? b.governed - a.governed : b.conn - a.conn)
+        .slice(0, 8);
+
+      // Try to load project name + one-liner from README.md
+      let projectName = "Intent Graph";
+      let projectDesc = "";
+      try {
+        const res = await fetch("../../README.md");
+        if (res.ok) {
+          const text = await res.text();
+          const titleMatch = text.match(/^#\s+(.+)$/m);
+          if (titleMatch) projectName = titleMatch[1].trim();
+          const lines = text.split('\n');
+          let foundTitle = false;
+          for (const line of lines) {
+            if (!foundTitle && line.trim().startsWith('#')) { foundTitle = true; continue; }
+            if (foundTitle && line.trim() && !line.trim().startsWith('#') && !line.trim().startsWith('!')) {
+              projectDesc = line.trim().replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+              break;
+            }
+          }
+        }
+      } catch (_) {}
+
+      headerEl.innerHTML = `
+        <h2>${esc(projectName)}</h2>
+        <div>
+          <span class="pill pill-type">${components.length} components</span>
+          <span class="pill pill-type">${specs.length} specs</span>
+          <span class="pill pill-type">${adrs.length} ADRs</span>
+          <span class="pill pill-type">${gates.length} gates</span>
+        </div>`;
+
+      const barColor = cov.score >= 80 ? "var(--base0B)" : cov.score >= 60 ? "var(--base0D)" : cov.score >= 40 ? "var(--base0A)" : "var(--base08)";
+
+      let specsHtml = "";
+      if (rootSpecs.length) {
+        specsHtml = rootSpecs.map(s => {
+          const raw = s.body_summary || '';
+          // Strip markdown headings from the summary for a clean one-liner
+          const summary = raw.replace(/^#+\s+[^\n]+\n?/gm, '').trim().substring(0, 180);
+          const fm = s.frontmatter || {};
+          const statusPill = fm.status
+            ? `<span class="pill pill-status" data-status="${fm.status}" style="font-size:10px;padding:1px 6px">${fm.status}</span>`
+            : '';
+          const govText = s.governed > 0
+            ? `<span style="color:var(--base03);font-size:11px">&nbsp;·&nbsp;${s.governed} component${s.governed !== 1 ? 's' : ''}</span>`
+            : '';
+          return `<div style="padding:12px 14px;border:1px solid var(--base02);border-radius:8px;margin-bottom:8px;cursor:pointer;background:var(--base00);transition:border-color 0.15s"
+            onclick="switchView('graph');selectNodeById('${s.id}')"
+            onmouseenter="this.style.borderColor='var(--base0D)'"
+            onmouseleave="this.style.borderColor='var(--base02)'">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+              <span style="color:var(--base0B);font-weight:600;font-size:13px">${esc(s.title || s.id)}</span>
+              ${statusPill}${govText}
+            </div>
+            <div style="color:var(--base04);font-size:12px;line-height:1.5">${summary ? esc(summary) + (summary.length < raw.replace(/^#+\s+[^\n]+\n?/gm, '').trim().length ? '...' : '') : '<em style="color:var(--base03)">No description yet.</em>'}</div>
+            <div style="color:var(--base03);font-size:11px;margin-top:6px">${s.id}</div>
+          </div>`;
+        }).join("");
+      } else if (specs.length === 0) {
+        specsHtml = `<div style="color:var(--base03);font-size:13px;padding:8px 0">No specs found. Add intent documents to your <code>.intent/</code> directory.</div>`;
+      }
+
+      area.innerHTML = `
+        ${projectDesc ? `<div style="color:var(--base04);font-size:13px;line-height:1.6;margin-bottom:16px;padding:10px 12px;background:var(--base00);border-radius:6px;border-left:3px solid var(--base0D)">${esc(projectDesc)}</div>` : ''}
+        <div class="cov-grid" style="margin-bottom:16px">
+          <div class="cov-card">
+            <div class="cov-card-title">Intent Health</div>
+            <div class="cov-card-value" style="color:${barColor}">${cov.score}%</div>
+            <div class="cov-bar-track"><div class="cov-bar-fill" style="width:${cov.score}%;background:${barColor}"></div></div>
+          </div>
+          <div class="cov-card">
+            <div class="cov-card-title">Graph Size</div>
+            <div class="cov-card-value" style="color:var(--base06)">${nodes.length}</div>
+            <div class="cov-card-sub">${edges.length} relationships</div>
+          </div>
+        </div>
+        <h3 style="color:var(--base06);font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px">Start here — key design intents</h3>
+        ${specsHtml}
+        <div style="margin-top:12px;padding:8px 10px;background:var(--base00);border:1px solid var(--base02);border-radius:6px;font-size:11px;color:var(--base03)">
+          Click a card to explore on the graph &nbsp;·&nbsp;
+          <kbd style="background:var(--base02);color:var(--base04);padding:1px 4px;border-radius:3px;font-size:10px">⌘K</kbd> search &nbsp;·&nbsp;
+          <kbd style="background:var(--base02);color:var(--base04);padding:1px 4px;border-radius:3px;font-size:10px">c</kbd> coverage &nbsp;·&nbsp;
+          <kbd style="background:var(--base02);color:var(--base04);padding:1px 4px;border-radius:3px;font-size:10px">h</kbd> hierarchy
+        </div>`;
+    }
+
     // ---- View Switching ----
 
     function switchView(view) {
@@ -1655,7 +1780,11 @@
       mtxEl.style.display = "none";
       legend.style.display = "none";
 
-      if (view === "graph") {
+      if (view === "overview") {
+        svgEl.style.display = "block";
+        legend.style.display = "block";
+        renderOverview();
+      } else if (view === "graph") {
         svgEl.style.display = "block";
         legend.style.display = "block";
         if (selectedNode) showTab(activeTab);
@@ -1955,6 +2084,8 @@
         if (ev.key === "j") next = (idx + 1) % allNodes.length;
         else next = (idx - 1 + allNodes.length) % allNodes.length;
         selectNode(allNodes[next]);
+      } else if (ev.key === "o") {
+        switchView("overview");
       } else if (ev.key === "r") {
         switchView("radar");
       } else if (ev.key === "c") {
@@ -2164,9 +2295,8 @@
       renderHealthBadge(cov);
       buildLegend();
 
-      // Select first spec
-      const first = nodes.find(n => n.type === "spec") || nodes[0];
-      if (first) selectNode(first);
+      // Show overview landing by default
+      switchView('overview');
     }
 
     // ---- New Doc Modal ----
@@ -2249,6 +2379,7 @@
 
       // Views
       const views = [
+        { label: "Overview", action: () => switchView("overview"), type: "view", hint: "o" },
         { label: "Graph View", action: () => switchView("graph"), type: "view", hint: "g" },
         { label: "Impact Radar", action: () => switchView("radar"), type: "view", hint: "r" },
         { label: "Hierarchy", action: () => switchView("hierarchy"), type: "view", hint: "h" },
