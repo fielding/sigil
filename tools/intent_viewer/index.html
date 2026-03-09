@@ -2356,13 +2356,64 @@
 
     // ---- Main Graph Render ----
 
+    function renderEmptyState() {
+      // Show a helpful empty state when no components/nodes exist yet
+      const existing = document.getElementById("sigil-empty-state");
+      if (existing) existing.remove();
+      const el = document.createElement("div");
+      el.id = "sigil-empty-state";
+      el.style.cssText = `
+        position:fixed; inset:0; z-index:100;
+        display:flex; align-items:center; justify-content:center;
+        pointer-events:none;
+      `;
+      el.innerHTML = `
+        <div style="
+          max-width:440px; width:90%;
+          border:1px solid #282b31; border-radius:8px;
+          padding:32px 36px;
+          background:#1a1c22;
+          font-family:'SF Mono','Fira Code','JetBrains Mono',monospace;
+          pointer-events:auto;
+          text-align:left;
+        ">
+          <div style="font-size:10px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#bbff00;margin-bottom:16px;">SIGIL</div>
+          <div style="font-size:16px;font-weight:700;color:#f8f6f2;margin-bottom:10px;">Your graph is empty.</div>
+          <p style="font-size:12px;color:#9a9690;line-height:1.7;margin-bottom:20px;">
+            No components detected yet. A <em style="color:#dbd6cc;">component</em> is a service or module in your system — the building block Sigil maps everything to.
+          </p>
+          <div style="font-size:10px;font-weight:700;letter-spacing:2px;color:#5a5d62;text-transform:uppercase;margin-bottom:10px;">Create your first component</div>
+          <div style="background:#0f1014;border:1px solid #282b31;border-radius:5px;padding:12px 14px;margin-bottom:20px;">
+            <div style="font-size:11px;color:#bbff00;margin-bottom:4px;">$ sigil new component my-service</div>
+            <div style="font-size:11px;color:#bbff00;margin-bottom:4px;">$ sigil new spec my-service "What it does"</div>
+            <div style="font-size:11px;color:#5a5d62;">$ sigil index &amp;&amp; sigil serve</div>
+          </div>
+          <div style="font-size:11px;color:#5a5d62;line-height:1.6;">
+            Or explore a full demo first:<br>
+            <a href="https://fielding.github.io/sigil/" target="_blank" style="color:#828079;text-decoration:none;">fielding.github.io/sigil ↗</a>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(el);
+    }
+
     function render(graph) {
       graphData = graph;
+      // Remove any existing empty state
+      const emptyEl = document.getElementById("sigil-empty-state");
+      if (emptyEl) emptyEl.remove();
+
       svgRef = d3.select("#svg");
       const svg = svgRef;
       const width = svg.node().clientWidth;
       const height = svg.node().clientHeight;
       svg.selectAll("*").remove();
+
+      // Show empty state if no real nodes exist
+      if (!graph.nodes || graph.nodes.length === 0) {
+        renderEmptyState();
+        return;
+      }
 
       // Compute connectivity for node sizing
       const connectivity = {};

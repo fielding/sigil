@@ -1603,11 +1603,12 @@ def cmd_init(args) -> int:
         new_comps += 1
 
     all_comps = list(comp_dir.glob("*.yaml")) if comp_dir.is_dir() else []
+    _blank_repo = len(all_comps) == 0
     if all_comps:
         extra = f" ({new_comps} auto-detected)" if new_comps else ""
         print(f"  [3/6] {len(all_comps)} component(s) bootstrapped{extra}")
     else:
-        print(f"  [3/6] No components detected (add YAML to components/)")
+        print(f"  [3/6] No components detected — you'll add them after init")
 
     # Generate .gitignore entry if missing
     gitignore = repo / ".gitignore"
@@ -1683,12 +1684,29 @@ def cmd_init(args) -> int:
         print(f"  [6/6] Viewer ready")
         print()
         print(f"  Viewer:   {url}")
-        print(f"  Palette:  Cmd+K")
-        print(f"  New doc:  sigil new spec <component> <title>")
-        print(f"  Map:      sigil map")
-        print(f"  Suggest:  sigil suggest <filepath>")
-        print(f"  Status:   sigil status")
-        print(f"  Hook:     sigil hook install  (enable intent review on commit)")
+        print()
+        if _blank_repo:
+            print(f"  ── First steps ─────────────────────────────────────────────────")
+            print(f"  A component is a service or module in your system.")
+            print(f"  Start by naming one:")
+            print()
+            print(f"    sigil new component <your-service>")
+            print(f"    sigil new spec <your-service> \"What it does and why\"")
+            print(f"    sigil new adr  <your-service> \"A key decision you made\"")
+            print()
+            print(f"  Then re-index to see it in the graph:")
+            print(f"    sigil index && open {url}")
+            print()
+            print(f"  Want to see a full graph first? Try the live demo:")
+            print(f"    https://fielding.github.io/sigil/")
+            print(f"  ────────────────────────────────────────────────────────────────")
+        else:
+            print(f"  Palette:  Cmd+K")
+            print(f"  New doc:  sigil new spec <component> <title>")
+            print(f"  Map:      sigil map")
+            print(f"  Suggest:  sigil suggest <filepath>")
+            print(f"  Status:   sigil status")
+            print(f"  Hook:     sigil hook install  (enable intent review on commit)")
         print()
         print(f"  Press Ctrl+C to stop.")
         print()
