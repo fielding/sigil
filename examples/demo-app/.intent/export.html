@@ -1,0 +1,3987 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Sigil — Intent Graph Export (36 nodes)</title>
+  <link rel="icon" type="image/x-icon" href="../../branding/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="32x32" href="../../branding/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="../../branding/favicon-16x16.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="../../branding/apple-touch-icon.png" />
+  <meta property="og:image" content="../../branding/social-card.png" />
+  <meta property="og:title" content="Sigil — Intent-first engineering" />
+  <meta property="og:description" content="Version control for architectural decisions. Specs, ADRs, gates, and components as a connected graph." />
+  <meta name="twitter:card" content="summary_large_image" />
+  <style>
+    :root {
+      --base00: #1a1c22; --base01: #282b31; --base02: #3a3d42; --base03: #5a5d62;
+      --base04: #828079; --base05: #dbd6cc; --base06: #eeeae2; --base07: #f8f6f2;
+      --base08: #e7349c; --base09: #f26c33; --base0A: #f2a633; --base0B: #04b372;
+      --base0C: #1ad0d6; --base0D: #458ae2; --base0E: #9871fe; --base0F: #bbff00;
+      --base10: #c8518f; --base11: #d68c6f; --base12: #dfb683; --base13: #61b186;
+      --base14: #91cbcd; --base15: #5e84b6; --base16: #8f72e3; --base17: #d2fc91;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+      background: var(--base00); color: var(--base05);
+      display: flex; flex-direction: column; height: 100vh; overflow: hidden;
+    }
+
+    /* Top bar */
+    #topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 16px; background: var(--base00);
+      border-bottom: 1px solid var(--base02); flex-shrink: 0;
+    }
+    #topbar-left { display: flex; align-items: center; gap: 12px; }
+    #topbar h1 {
+      font-size: 14px; font-weight: 700; color: var(--base0F);
+      letter-spacing: 2px; text-transform: uppercase;
+    }
+    .view-btn {
+      padding: 4px 10px; font-size: 11px; font-weight: 600;
+      color: var(--base04); background: transparent;
+      border: 1px solid var(--base02); border-radius: 4px;
+      cursor: pointer; font-family: inherit;
+      transition: all 0.15s;
+    }
+    .view-btn:hover { color: var(--base05); border-color: var(--base03); }
+    .view-btn.active { color: var(--base0F); border-color: var(--base0F); background: rgba(187,255,0,0.08); }
+
+    /* Health badge */
+    #health-badge {
+      display: flex; align-items: center; gap: 8px;
+      padding: 4px 12px; border-radius: 999px;
+      font-size: 12px; font-weight: 700;
+    }
+    .health-excellent { background: rgba(4,179,114,0.15); color: var(--base0B); }
+    .health-good { background: rgba(69,138,226,0.15); color: var(--base0D); }
+    .health-fair { background: rgba(242,166,51,0.15); color: var(--base0A); }
+    .health-poor { background: rgba(231,52,156,0.15); color: var(--base08); }
+
+    /* Main layout */
+    #main { display: flex; flex: 1; overflow: hidden; }
+
+    /* Graph panel */
+    #left {
+      width: 55%; border-right: 1px solid var(--base02);
+      position: relative; background: var(--base00);
+    }
+    #svg { width: 100%; height: 100%; }
+    #radar-svg { width: 100%; height: 100%; display: none; }
+    #hierarchy-svg { width: 100%; height: 100%; display: none; }
+
+    /* Detail panel */
+    #right {
+      width: 45%; display: flex; flex-direction: column;
+      background: var(--base01); overflow: hidden;
+    }
+    #search-bar {
+      padding: 10px 14px; border-bottom: 1px solid var(--base02);
+      background: var(--base00);
+    }
+    #search {
+      width: 100%; padding: 8px 12px;
+      background: var(--base01); color: var(--base05);
+      border: 1px solid var(--base02); border-radius: 6px;
+      font-family: inherit; font-size: 13px; outline: none;
+    }
+    #search:focus { border-color: var(--base0D); }
+    #search::placeholder { color: var(--base03); }
+
+    /* Breadcrumb */
+    #breadcrumb {
+      padding: 8px 14px; font-size: 12px; color: var(--base04);
+      border-bottom: 1px solid var(--base02); background: var(--base00);
+      white-space: nowrap; overflow-x: auto;
+    }
+    #breadcrumb span { cursor: pointer; }
+    #breadcrumb span:hover { color: var(--base0D); }
+    #breadcrumb .sep { color: var(--base03); margin: 0 6px; cursor: default; }
+
+    /* Nav bar (back / forward / home) */
+    #nav-bar {
+      display: flex; align-items: center; gap: 6px;
+      padding: 6px 14px; border-bottom: 1px solid var(--base02);
+      background: var(--base00); flex-shrink: 0;
+    }
+    .nav-btn {
+      padding: 2px 8px; font-size: 12px; font-weight: 600;
+      background: transparent; border: 1px solid var(--base02);
+      color: var(--base04); border-radius: 4px; cursor: pointer;
+      font-family: inherit; transition: all 0.15s;
+    }
+    .nav-btn:hover:not([disabled]) { color: var(--base05); border-color: var(--base03); }
+    .nav-btn[disabled] { opacity: 0.3; cursor: default; }
+    #nav-home {
+      color: var(--base0F); border-color: var(--base0F);
+      background: rgba(187,255,0,0.06);
+    }
+    #nav-home:hover { background: rgba(187,255,0,0.14); }
+
+    /* Node header */
+    #node-header {
+      padding: 14px; border-bottom: 1px solid var(--base02);
+      background: var(--base01);
+    }
+    #node-header h2 {
+      font-size: 16px; font-weight: 600; color: var(--base06);
+      margin-bottom: 6px;
+    }
+    .pill {
+      display: inline-block; padding: 2px 8px;
+      border-radius: 999px; font-size: 11px; font-weight: 600;
+      margin-right: 6px;
+    }
+    .pill-type { background: var(--base02); color: var(--base05); }
+    .pill-id { background: transparent; border: 1px solid var(--base03); color: var(--base04); }
+    .pill-status { color: var(--base00); font-weight: 700; }
+    .pill-status[data-status="accepted"] { background: var(--base0B); }
+    .pill-status[data-status="draft"] { background: var(--base0A); }
+    .pill-status[data-status="proposed"] { background: var(--base0E); }
+    .pill-status[data-status="rejected"] { background: var(--base08); }
+    .pill-status[data-status="superseded"] { background: var(--base03); }
+    .pill-status[data-status="active"] { background: var(--base0B); }
+
+    /* Tabs */
+    #tabs {
+      display: flex; border-bottom: 1px solid var(--base02);
+      background: var(--base01);
+    }
+    .tab {
+      padding: 8px 16px; font-size: 12px; font-weight: 600;
+      color: var(--base04); cursor: pointer; border-bottom: 2px solid transparent;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .tab:hover { color: var(--base05); }
+    .tab.active { color: var(--base0D); border-bottom-color: var(--base0D); }
+
+    /* Content area */
+    #content-area {
+      flex: 1; overflow-y: auto; padding: 16px 20px;
+    }
+
+    /* Markdown styles -- human++ */
+    .md-body h1 { font-size: 20px; color: var(--base07); margin: 20px 0 10px; font-weight: 700; }
+    .md-body h1:first-child { margin-top: 0; }
+    .md-body h2 { font-size: 16px; color: var(--base06); margin: 18px 0 8px; font-weight: 600; border-bottom: 1px solid var(--base02); padding-bottom: 4px; }
+    .md-body h3 { font-size: 14px; color: var(--base14); margin: 14px 0 6px; font-weight: 600; }
+    .md-body h4 { font-size: 13px; color: var(--base04); margin: 12px 0 4px; font-weight: 600; }
+    .md-body p { margin: 8px 0; line-height: 1.6; }
+    .md-body a { color: var(--base0D); text-decoration: none; }
+    .md-body a:hover { text-decoration: underline; }
+    .md-body strong { color: var(--base06); font-weight: 600; }
+    .md-body em { color: var(--base03); font-style: italic; }
+    .md-body code {
+      background: var(--base02); color: var(--base12);
+      padding: 2px 5px; border-radius: 3px; font-size: 12px;
+    }
+    .md-body pre {
+      background: var(--base00); border: 1px solid var(--base02);
+      padding: 12px; border-radius: 6px; overflow-x: auto;
+      margin: 10px 0; font-size: 12px; line-height: 1.5;
+    }
+    .md-body pre code { background: none; padding: 0; color: var(--base05); }
+    .md-body ul, .md-body ol { margin: 8px 0; padding-left: 22px; }
+    .md-body li { margin: 4px 0; line-height: 1.5; }
+    .md-body li code { font-size: 11px; }
+    .md-body blockquote {
+      border-left: 3px solid var(--base0E);
+      padding: 4px 12px; margin: 10px 0;
+      color: var(--base04); background: var(--base00);
+      border-radius: 0 4px 4px 0;
+    }
+    .md-body hr { border: none; border-top: 1px solid var(--base02); margin: 16px 0; }
+    .md-body table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 13px; }
+    .md-body th { background: var(--base02); color: var(--base06); text-align: left; padding: 6px 10px; font-weight: 600; }
+    .md-body td { border-top: 1px solid var(--base02); padding: 6px 10px; }
+    .md-body input[type="checkbox"] { margin-right: 6px; accent-color: var(--base0B); }
+
+    /* Human++ annotation markers */
+    .marker-attention {
+      background: var(--base0F); color: var(--base00);
+      padding: 2px 6px; border-radius: 4px; font-weight: bold; font-style: normal;
+    }
+    .marker-uncertainty {
+      background: var(--base0E); color: var(--base07);
+      padding: 2px 6px; border-radius: 4px; font-weight: bold; font-style: normal;
+    }
+    .marker-reference {
+      background: var(--base0C); color: var(--base00);
+      padding: 2px 6px; border-radius: 4px; font-weight: bold; font-style: normal;
+    }
+
+    /* Wikilinks */
+    .wikilink {
+      color: var(--base0D); cursor: pointer; text-decoration: none;
+      border-bottom: 1px dashed var(--base0D);
+    }
+    .wikilink:hover { color: var(--base0C); border-color: var(--base0C); }
+
+    /* Graph tab */
+    .edge-list { list-style: none; padding: 0; }
+    .edge-list li {
+      padding: 6px 0; border-bottom: 1px solid var(--base02);
+      font-size: 13px; display: flex; align-items: center; gap: 8px;
+    }
+    .edge-list li:last-child { border-bottom: none; }
+    .edge-type {
+      font-size: 11px; color: var(--base0E); background: var(--base02);
+      padding: 2px 6px; border-radius: 3px; font-weight: 600;
+    }
+    .edge-target { color: var(--base0D); cursor: pointer; }
+    .edge-target:hover { text-decoration: underline; }
+    .edge-dir { color: var(--base03); font-size: 12px; }
+
+    /* Edge labels on graph */
+    .edge-label {
+      font-size: 9px; fill: var(--base03);
+      pointer-events: none; opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .edge-label.visible { opacity: 1; }
+
+    /* Node glow for high-connectivity */
+    .node-glow {
+      filter: url(#glow);
+    }
+
+    /* Loading state */
+    .loading { color: var(--base03); font-style: italic; padding: 20px; }
+
+    /* Welcome panel */
+    .welcome { padding: 24px; line-height: 1.6; }
+    .welcome h2 { color: var(--base0F); font-size: 16px; font-weight: 700; margin-bottom: 12px; letter-spacing: 1px; }
+    .welcome p { color: var(--base04); font-size: 13px; margin-bottom: 16px; }
+    .welcome p strong { color: var(--base05); }
+    .welcome .welcome-legend { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+    .welcome .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--base04); }
+    .welcome .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .welcome .welcome-hint { font-size: 12px; color: var(--base03); border-top: 1px solid var(--base02); padding-top: 12px; }
+    .welcome .welcome-hint kbd { background: var(--base02); color: var(--base05); padding: 2px 6px; border-radius: 3px; font-size: 11px; font-family: inherit; }
+
+    /* Legend */
+    #legend {
+      position: absolute; bottom: 12px; left: 12px;
+      background: var(--base01); border: 1px solid var(--base02);
+      border-radius: 6px; padding: 8px 12px; font-size: 11px;
+    }
+    .legend-item { display: flex; align-items: center; gap: 6px; margin: 3px 0; }
+    .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+
+    /* Coverage dashboard */
+    .cov-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+      margin-bottom: 20px;
+    }
+    .cov-card {
+      background: var(--base00); border: 1px solid var(--base02);
+      border-radius: 8px; padding: 14px;
+    }
+    .cov-card-title { font-size: 11px; color: var(--base04); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+    .cov-card-value { font-size: 28px; font-weight: 700; }
+    .cov-card-sub { font-size: 12px; color: var(--base03); margin-top: 4px; }
+
+    .cov-bar-track {
+      width: 100%; height: 8px; background: var(--base02);
+      border-radius: 4px; margin-top: 8px; overflow: hidden;
+    }
+    .cov-bar-fill {
+      height: 100%; border-radius: 4px;
+      transition: width 0.5s ease;
+    }
+
+    .cov-finding {
+      display: flex; align-items: flex-start; gap: 8px;
+      padding: 8px 0; border-bottom: 1px solid var(--base02);
+      font-size: 13px;
+    }
+    .cov-finding:last-child { border-bottom: none; }
+    .cov-sev {
+      font-size: 10px; font-weight: 700; padding: 2px 6px;
+      border-radius: 3px; flex-shrink: 0;
+    }
+    .cov-sev-warn { background: var(--base0A); color: var(--base00); }
+    .cov-sev-info { background: var(--base0C); color: var(--base00); }
+    .cov-sev-ok { background: var(--base0B); color: var(--base00); }
+    .cov-finding-text { color: var(--base05); }
+    .cov-finding-text .cov-link { color: var(--base0D); cursor: pointer; }
+    .cov-finding-text .cov-link:hover { text-decoration: underline; }
+
+    /* Radar view */
+    .radar-ring-label {
+      font-size: 10px; fill: var(--base03);
+      text-anchor: middle; dominant-baseline: middle;
+    }
+    .radar-node { cursor: pointer; }
+    .radar-node text {
+      font-size: 9px; fill: var(--base04);
+      text-anchor: middle; dominant-baseline: hanging;
+    }
+    .radar-center-label {
+      font-size: 13px; fill: var(--base07); font-weight: 700;
+      text-anchor: middle; dominant-baseline: central;
+    }
+    .radar-edge { stroke: var(--base02); stroke-width: 1; }
+
+    /* Node tooltip */
+    #tooltip {
+      position: absolute; pointer-events: none;
+      background: var(--base01); border: 1px solid var(--base02);
+      border-radius: 8px; padding: 10px 14px;
+      max-width: 320px; font-size: 12px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+      opacity: 0; transition: opacity 0.15s;
+      z-index: 100;
+    }
+    #tooltip.show { opacity: 1; }
+    #tooltip .tt-id { color: var(--base0D); font-weight: 600; }
+    #tooltip .tt-type { color: var(--base04); font-size: 11px; margin-left: 6px; }
+    #tooltip .tt-title { color: var(--base06); margin: 4px 0; font-weight: 500; }
+    #tooltip .tt-summary { color: var(--base04); font-size: 11px; line-height: 1.4; margin-top: 4px; }
+    #tooltip .tt-status {
+      display: inline-block; font-size: 10px; font-weight: 700;
+      padding: 1px 6px; border-radius: 3px; margin-left: 6px;
+    }
+
+    /* Keyboard hint */
+    #keyhint {
+      position: absolute; bottom: 12px; right: 12px;
+      background: var(--base01); border: 1px solid var(--base02);
+      border-radius: 6px; padding: 6px 10px; font-size: 10px;
+      color: var(--base03);
+    }
+    .keyhint-key {
+      display: inline-block; background: var(--base02); color: var(--base04);
+      padding: 1px 5px; border-radius: 3px; font-weight: 600;
+      margin: 0 2px;
+    }
+
+    /* New doc modal */
+    #new-btn {
+      padding: 4px 10px; font-size: 11px; font-weight: 600;
+      color: var(--base0B); background: rgba(4,179,114,0.1);
+      border: 1px solid var(--base0B); border-radius: 4px;
+      cursor: pointer; font-family: inherit;
+      transition: all 0.15s; margin-left: 4px;
+    }
+    #new-btn:hover { background: rgba(4,179,114,0.2); }
+    #modal-overlay {
+      display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.6); z-index: 500;
+      align-items: center; justify-content: center;
+    }
+    #modal-overlay.show { display: flex; }
+    #modal {
+      background: var(--base01); border: 1px solid var(--base02);
+      border-radius: 10px; padding: 24px; width: 400px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    }
+    #modal h3 { color: var(--base06); font-size: 16px; margin-bottom: 16px; }
+    .modal-field { margin-bottom: 12px; }
+    .modal-field label {
+      display: block; font-size: 11px; font-weight: 600;
+      color: var(--base04); text-transform: uppercase;
+      letter-spacing: 0.5px; margin-bottom: 4px;
+    }
+    .modal-field input, .modal-field select {
+      width: 100%; padding: 8px 12px;
+      background: var(--base00); color: var(--base05);
+      border: 1px solid var(--base02); border-radius: 6px;
+      font-family: inherit; font-size: 13px; outline: none;
+    }
+    .modal-field input:focus, .modal-field select:focus { border-color: var(--base0D); }
+    .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+    .modal-actions button {
+      padding: 6px 16px; border-radius: 6px; font-family: inherit;
+      font-size: 12px; font-weight: 600; cursor: pointer; border: none;
+    }
+    .modal-cancel { background: var(--base02); color: var(--base05); }
+    .modal-cancel:hover { background: var(--base03); }
+    .modal-create { background: var(--base0B); color: var(--base00); }
+    .modal-create:hover { opacity: 0.9; }
+    .modal-error { color: var(--base08); font-size: 12px; margin-top: 8px; }
+    .modal-success { color: var(--base0B); font-size: 12px; margin-top: 8px; }
+
+    /* Timeline view */
+    #timeline-container {
+      width: 100%; height: 100%; display: none; overflow: auto;
+      background: var(--base00); padding: 20px;
+    }
+    .tl-header {
+      font-size: 14px; font-weight: 700; color: var(--base06);
+      margin-bottom: 16px;
+    }
+    .tl-header span { color: var(--base03); font-weight: 400; font-size: 12px; margin-left: 8px; }
+    .tl-swimlane {
+      position: relative; margin-bottom: 2px;
+      border-bottom: 1px solid var(--base02);
+      min-height: 36px; display: flex; align-items: center;
+    }
+    .tl-lane-label {
+      width: 100px; flex-shrink: 0; font-size: 11px; font-weight: 600;
+      color: var(--base04); text-transform: uppercase; letter-spacing: 0.5px;
+      padding: 0 8px;
+    }
+    .tl-lane-track {
+      flex: 1; position: relative; height: 36px; overflow: visible;
+    }
+    .tl-event {
+      position: absolute; top: 6px;
+      width: 24px; height: 24px; border-radius: 50%;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      font-size: 9px; font-weight: 700; color: var(--base00);
+      transition: transform 0.15s, box-shadow 0.15s;
+      z-index: 1;
+    }
+    .tl-event:hover {
+      transform: scale(1.4); z-index: 10;
+      box-shadow: 0 0 12px rgba(187,255,0,0.3);
+    }
+    .tl-event[data-action="added"] { }
+    .tl-event[data-action="modified"] { opacity: 0.7; }
+    .tl-event[data-action="removed"] { opacity: 0.5; border: 2px solid var(--base08); }
+    .tl-axis {
+      display: flex; align-items: center; padding: 8px 0 4px 100px;
+      border-top: 1px solid var(--base02); margin-top: 8px;
+    }
+    .tl-axis-label {
+      position: absolute; font-size: 10px; color: var(--base03);
+      transform: translateX(-50%); white-space: nowrap;
+    }
+    .tl-event-tooltip {
+      position: fixed; pointer-events: none;
+      background: var(--base01); border: 1px solid var(--base02);
+      border-radius: 6px; padding: 8px 12px; font-size: 12px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+      opacity: 0; transition: opacity 0.15s; z-index: 200;
+      max-width: 300px;
+    }
+    .tl-event-tooltip.show { opacity: 1; }
+    .tl-empty {
+      color: var(--base03); font-size: 13px; padding: 20px;
+      text-align: center;
+    }
+
+    /* Matrix view */
+    #matrix-container {
+      width: 100%; height: 100%; display: none; overflow: auto;
+      background: var(--base00); padding: 16px;
+    }
+    .matrix-table { border-collapse: collapse; font-size: 10px; }
+    .matrix-table th {
+      padding: 2px 4px; font-weight: 600; color: var(--base04);
+      max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .matrix-table th.row-header { text-align: right; padding-right: 8px; }
+    .matrix-table th.col-header {
+      writing-mode: vertical-rl; text-orientation: mixed;
+      transform: rotate(180deg); height: 80px; vertical-align: bottom; padding-bottom: 6px;
+    }
+    .matrix-cell {
+      width: 24px; height: 24px; cursor: pointer;
+      border: 1px solid var(--base01); transition: transform 0.1s;
+    }
+    .matrix-cell:hover { transform: scale(1.3); z-index: 10; position: relative; }
+    .matrix-diag { background: var(--base02); }
+
+    /* Command palette */
+    #cmd-overlay {
+      display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5); z-index: 600;
+      justify-content: center; padding-top: 15vh;
+    }
+    #cmd-overlay.show { display: flex; }
+    #cmd-palette {
+      background: var(--base01); border: 1px solid var(--base02);
+      border-radius: 10px; width: 480px; max-height: 400px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5); overflow: hidden;
+      align-self: flex-start;
+    }
+    #cmd-input {
+      width: 100%; padding: 14px 16px;
+      background: var(--base00); color: var(--base05);
+      border: none; border-bottom: 1px solid var(--base02);
+      font-family: inherit; font-size: 14px; outline: none;
+    }
+    #cmd-input::placeholder { color: var(--base03); }
+    #cmd-results {
+      max-height: 300px; overflow-y: auto; padding: 4px;
+    }
+    .cmd-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 12px; border-radius: 6px; cursor: pointer;
+      font-size: 13px; color: var(--base05);
+    }
+    .cmd-item:hover, .cmd-item.selected { background: var(--base02); }
+    .cmd-item-icon {
+      width: 20px; height: 20px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 700; color: var(--base00); flex-shrink: 0;
+    }
+    .cmd-item-text { flex: 1; }
+    .cmd-item-hint { font-size: 11px; color: var(--base03); }
+    .cmd-item-type { font-size: 10px; color: var(--base04); }
+
+    /* View badges */
+    .view-badge {
+      font-size: 9px; background: var(--base02); color: var(--base04);
+      padding: 1px 5px; border-radius: 8px; margin-left: 4px;
+    }
+
+    /* Scrollbar */
+    #content-area::-webkit-scrollbar { width: 6px; }
+    #content-area::-webkit-scrollbar-track { background: var(--base01); }
+    #content-area::-webkit-scrollbar-thumb { background: var(--base02); border-radius: 3px; }
+    #content-area::-webkit-scrollbar-thumb:hover { background: var(--base03); }
+  </style>
+
+    <script>
+    // Injected by sigil export — no server needed
+    window.__SIGIL_GRAPH__ = {
+  "version": "1.0",
+  "generated_at": "2026-03-09T02:09:13Z",
+  "nodes": [
+    {
+      "id": "COMP-search-service",
+      "type": "component",
+      "title": "Search Service",
+      "path": "components/search-service.yaml",
+      "body_summary": ""
+    },
+    {
+      "id": "COMP-auth-service",
+      "type": "component",
+      "title": "Auth Service",
+      "path": "components/auth-service.yaml",
+      "body_summary": ""
+    },
+    {
+      "id": "COMP-payment-gateway",
+      "type": "component",
+      "title": "Payment Gateway",
+      "path": "components/payment-gateway.yaml",
+      "body_summary": ""
+    },
+    {
+      "id": "COMP-cart-service",
+      "type": "component",
+      "title": "Cart Service",
+      "path": "components/cart-service.yaml",
+      "body_summary": ""
+    },
+    {
+      "id": "COMP-catalog-service",
+      "type": "component",
+      "title": "Catalog Service",
+      "path": "components/catalog-service.yaml",
+      "body_summary": ""
+    },
+    {
+      "id": "COMP-order-service",
+      "type": "component",
+      "title": "Order Service",
+      "path": "components/order-service.yaml",
+      "body_summary": ""
+    },
+    {
+      "id": "COMP-notification-service",
+      "type": "component",
+      "title": "Notification Service",
+      "path": "components/notification-service.yaml",
+      "body_summary": ""
+    },
+    {
+      "id": "COMP-admin-dashboard",
+      "type": "component",
+      "title": "Admin Dashboard",
+      "path": "components/admin-dashboard.yaml",
+      "body_summary": ""
+    },
+    {
+      "id": "COMP-web-app",
+      "type": "component",
+      "title": "Web App",
+      "path": "components/web-app.yaml",
+      "body_summary": ""
+    },
+    {
+      "id": "API-CATALOG-V1",
+      "type": "interface",
+      "title": "Catalog API",
+      "path": "interfaces/API-CATALOG-V1/README.md",
+      "body_summary": ""
+    },
+    {
+      "id": "API-PAYMENTS-V1",
+      "type": "interface",
+      "title": "Payments API",
+      "path": "interfaces/API-PAYMENTS-V1/README.md",
+      "body_summary": ""
+    },
+    {
+      "id": "API-CART-V1",
+      "type": "interface",
+      "title": "Cart API",
+      "path": "interfaces/API-CART-V1/README.md",
+      "body_summary": ""
+    },
+    {
+      "id": "API-ORDERS-V1",
+      "type": "interface",
+      "title": "Orders API",
+      "path": "interfaces/API-ORDERS-V1/README.md",
+      "body_summary": ""
+    },
+    {
+      "id": "API-AUTH-V1",
+      "type": "interface",
+      "title": "Auth API",
+      "path": "interfaces/API-AUTH-V1/README.md",
+      "body_summary": ""
+    },
+    {
+      "id": "SPEC-0002",
+      "type": "spec",
+      "title": "JWT Authentication",
+      "path": "intent/auth-service/specs/SPEC-0002-jwt-authentication.md",
+      "body_summary": "## Intent\n\nGive users a way to sign up, log in, and prove their identity to other services. We're using stateless JWT tokens so that services can verify requests without calling back to auth on every request.\n\n## Context\n\nThe cart and order services need to know who the user is. We could use sessions, but JWTs let us keep services stateless and avoid a shared session store. This is a small app, so we're not building a full identity provider \u2014 just enough auth to demonstrate the flow.\n\n##...",
+      "frontmatter": {
+        "id": "SPEC-0002",
+        "status": "accepted"
+      }
+    },
+    {
+      "id": "ADR-0002",
+      "type": "adr",
+      "title": "Use JWT tokens instead of server-side sessions",
+      "path": "intent/auth-service/adrs/ADR-0002-jwt-over-sessions.md",
+      "body_summary": "## Context\n\nWe need authentication across multiple services. The question is whether to use stateful sessions (requiring a shared session store) or stateless tokens (requiring nothing shared).\n\n## Decision\n\nUse JWT-style tokens signed with HMAC-SHA256. Each service can verify tokens independently without calling back to the auth service or sharing a database.\n\n## Alternatives\n\n- **Server-side sessions with Redis**: More traditional, but adds a shared dependency. Every service would need Redis...",
+      "frontmatter": {
+        "id": "ADR-0002",
+        "status": "accepted"
+      }
+    },
+    {
+      "id": "SPEC-0001",
+      "type": "spec",
+      "title": "Book Catalog API",
+      "path": "intent/catalog-service/specs/SPEC-0001-book-catalog-api.md",
+      "body_summary": "## Intent\n\nProvide a read-only API for browsing and searching the book inventory. This is the foundational data service \u2014 everything else (cart, orders, search) depends on being able to look up books by ID and list what's available.\n\n## Context\n\nWe need a single source of truth for book data. The web app needs it for product pages, the cart service needs it to validate items, and the order service needs it to lock in prices at checkout time. Without a clean catalog API, every service would...",
+      "frontmatter": {
+        "id": "SPEC-0001",
+        "status": "accepted"
+      }
+    },
+    {
+      "id": "SPEC-0007",
+      "type": "spec",
+      "title": "Catalog Search Improvements",
+      "path": "intent/catalog-service/specs/SPEC-0007-catalog-search.md",
+      "body_summary": "## Intent\n\nUpgrade the catalog search from basic substring matching to something that handles typos, partial words, and relevance ranking. This makes the storefront usable for real browsing, not just exact-match lookups.\n\n## Context\n\nThe current search (SPEC-0001) does case-insensitive substring matching on title and author. That's fine for 3 books, but falls apart with a real catalog. Users expect search to be forgiving \u2014 \"pragmatc progrmmr\" should still find the right book.\n\nThis spec...",
+      "frontmatter": {
+        "id": "SPEC-0007",
+        "status": "proposed"
+      }
+    },
+    {
+      "id": "ADR-0001",
+      "type": "adr",
+      "title": "Use in-memory store for the book catalog",
+      "path": "intent/catalog-service/adrs/ADR-0001-in-memory-catalog-store.md",
+      "body_summary": "## Context\n\nThe catalog service needs a data store. Options range from a real database (Postgres, SQLite) to a flat file to an in-memory dict. This is a demo app with a handful of books, not a production bookstore.\n\n## Decision\n\nUse a Python dictionary as the data store. Books are defined as dataclass instances in the source code.\n\n## Alternatives\n\n- **SQLite**: Would add realism but also adds setup steps, migrations, and a dependency. Not worth it for a demo that's showing off the intent...",
+      "frontmatter": {
+        "id": "ADR-0001",
+        "status": "accepted"
+      }
+    },
+    {
+      "id": "SPEC-0003",
+      "type": "spec",
+      "title": "Shopping Cart",
+      "path": "intent/cart-service/specs/SPEC-0003-shopping-cart.md",
+      "body_summary": "## Intent\n\nLet users collect books they want to buy before checking out. The cart is per-user, lives in memory, and acts as a staging area between browsing and ordering.\n\n## Context\n\nWithout a cart, users would have to buy one book at a time. The cart service is intentionally simple \u2014 in-memory, no persistence across restarts. If we need durability later, we'd swap in Redis or a database behind the same API.\n\n## Goals\n\n- Add books to cart with quantity\n- Remove individual books\n- Clear entire...",
+      "frontmatter": {
+        "id": "SPEC-0003",
+        "status": "accepted"
+      }
+    },
+    {
+      "id": "ADR-0003",
+      "type": "adr",
+      "title": "Session-scoped in-memory carts",
+      "path": "intent/cart-service/adrs/ADR-0003-session-scoped-cart.md",
+      "body_summary": "## Context\n\nCarts need to be per-user and available across requests within a session. We could persist them to a database or keep them in memory.\n\n## Decision\n\nStore carts in a Python dict keyed by user ID. Carts exist only as long as the server process is running.\n\n## Alternatives\n\n- **Redis**: The standard choice for session data. Fast, persistent enough, supports TTL. But adds infrastructure for a demo app.\n- **Database**: Durable but slow for the frequent read-modify-write pattern of cart...",
+      "frontmatter": {
+        "id": "ADR-0003",
+        "status": "accepted"
+      }
+    },
+    {
+      "id": "SPEC-0008",
+      "type": "spec",
+      "title": "Order Status Tracking",
+      "path": "intent/order-service/specs/SPEC-0008-order-status-tracking.md",
+      "body_summary": "## Intent\n\nLet users and internal systems track an order through its lifecycle: pending, confirmed, shipped, delivered, cancelled. Right now orders are created and that's it \u2014 there's no state machine.\n\n## Context\n\n[[SPEC-0004]] handles checkout but leaves orders in a permanent \"pending\" state. For a real system, we need status transitions so the UI can show \"your order shipped\" and internal tools can manage fulfillment.\n\n## Goals\n\n- Define a clear order status state machine\n- Add a PATCH...",
+      "frontmatter": {
+        "id": "SPEC-0008",
+        "status": "proposed"
+      }
+    },
+    {
+      "id": "SPEC-0004",
+      "type": "spec",
+      "title": "Checkout Flow",
+      "path": "intent/order-service/specs/SPEC-0004-checkout-flow.md",
+      "body_summary": "## Intent\n\nTurn a user's cart into a confirmed order. This is the critical path \u2014 it touches every other service and is where money changes hands (conceptually). Getting this right means prices are locked, inventory is checked, and the user gets confirmation.\n\n## Context\n\nThe checkout flow is the most complex interaction in the app. It needs to:\n1. Read the user's cart\n2. Look up current prices from the catalog\n3. Create an order record\n4. Clear the cart\n5. Send a confirmation...",
+      "frontmatter": {
+        "id": "SPEC-0004",
+        "status": "accepted"
+      }
+    },
+    {
+      "id": "ADR-0004",
+      "type": "adr",
+      "title": "Synchronous checkout orchestration",
+      "path": "intent/order-service/adrs/ADR-0004-synchronous-checkout.md",
+      "body_summary": "## Context\n\nThe checkout flow crosses 4 service boundaries: auth, cart, catalog, and notifications. We need to decide whether this orchestration is synchronous (single request, all steps in sequence) or asynchronous (event-driven, saga pattern).\n\n## Decision\n\nKeep it synchronous. The checkout endpoint makes sequential calls to each service and returns the complete order in a single response.\n\n## Alternatives\n\n- **Saga pattern with events**: Each step publishes an event, the next service picks...",
+      "frontmatter": {
+        "id": "ADR-0004",
+        "status": "accepted"
+      }
+    },
+    {
+      "id": "ROLLOUT-0001",
+      "type": "rollout",
+      "title": "Checkout Flow v1 Rollout",
+      "path": "intent/order-service/rollouts/ROLLOUT-0001-checkout-v1.md",
+      "body_summary": "## Overview\n\nRolling out the synchronous checkout flow described in [[SPEC-0004]]. This is the first version of the order pipeline \u2014 all services need to be deployed and healthy before we can enable checkout.\n\n## Prerequisites\n\n- [x] Catalog service deployed with [[API-CATALOG-V1]] operational\n- [x] Auth service deployed with [[API-AUTH-V1]] operational\n- [x] Cart service deployed with [[API-CART-V1]] operational\n- [ ] Order service deployed with [[API-ORDERS-V1]] operational\n- [ ] Notification...",
+      "frontmatter": {
+        "id": "ROLLOUT-0001",
+        "status": "in-progress"
+      }
+    },
+    {
+      "id": "ADR-0007",
+      "type": "adr",
+      "title": "Dedicated search service instead of in-catalog search",
+      "path": "intent/search-service/adrs/ADR-0007-dedicated-search-service.md",
+      "body_summary": "## Context\n\nSearch is currently handled inside the catalog service (see [[SPEC-0007]]). As the catalog grows, search needs its own index, ranking logic, and potentially a different data store (e.g., Elasticsearch). Running search queries against the primary catalog store creates contention.\n\nThe question is whether to extract search into its own service now or keep it coupled to the catalog.\n\n## Decision\n\nExtract search into a dedicated service that maintains its own index built from catalog...",
+      "frontmatter": {
+        "id": "ADR-0007",
+        "status": "proposed"
+      }
+    },
+    {
+      "id": "SPEC-0009",
+      "type": "spec",
+      "title": "Payment Processing",
+      "path": "intent/payment-gateway/specs/SPEC-0009-payment-processing.md",
+      "body_summary": "## Intent\n\nAccept payments for confirmed orders through a pluggable payment provider. The demo uses a stub that always succeeds; production would swap in Stripe or similar. This keeps the order service from knowing anything about payment internals.\n\n## Context\n\nCurrently the checkout flow in [[SPEC-0004]] creates orders but doesn't actually charge anyone. Adding payment processing closes the loop \u2014 orders aren't truly \"confirmed\" until payment succeeds.\n\nThe payment gateway is a separate...",
+      "frontmatter": {
+        "id": "SPEC-0009",
+        "status": "proposed"
+      }
+    },
+    {
+      "id": "SPEC-0005",
+      "type": "spec",
+      "title": "Order Notifications",
+      "path": "intent/notification-service/specs/SPEC-0005-order-notifications.md",
+      "body_summary": "## Intent\n\nSend confirmation emails when orders are placed. Users need to know their order went through, and we need a notification abstraction that can grow to support more channels later.\n\n## Context\n\nRight now we only send order confirmations via email. But the notification service is designed as a standalone component so we can add push notifications, SMS, or webhook integrations later without changing the order service.\n\n## Goals\n\n- Send email notification on order confirmation\n- Abstract...",
+      "frontmatter": {
+        "id": "SPEC-0005",
+        "status": "accepted"
+      }
+    },
+    {
+      "id": "ADR-0005",
+      "type": "adr",
+      "title": "Fire-and-forget notification delivery",
+      "path": "intent/notification-service/adrs/ADR-0005-fire-and-forget-notifications.md",
+      "body_summary": "## Context\n\nThe order service triggers notifications after checkout. We need to decide whether notification delivery blocks the checkout response or happens best-effort in the background.\n\n## Decision\n\nNotifications are fire-and-forget. The order service calls the notification function, logs any errors, and continues. Checkout success doesn't depend on notification success.\n\n## Alternatives\n\n- **Guaranteed delivery with a queue**: Publish to a message queue, have a worker consume and retry....",
+      "frontmatter": {
+        "id": "ADR-0005",
+        "status": "accepted"
+      }
+    },
+    {
+      "id": "SPEC-0006",
+      "type": "spec",
+      "title": "Storefront UI",
+      "path": "intent/web-app/specs/SPEC-0006-storefront-ui.md",
+      "body_summary": "## Intent\n\nGive users a web interface to browse books, manage their cart, and check out. The frontend is a thin layer over the backend APIs \u2014 it shouldn't contain business logic.\n\n## Context\n\nWe need a frontend. Next.js gives us server-side rendering for the catalog pages (good for SEO and initial load) and client-side interactivity for the cart. The UI is deliberately minimal \u2014 this is a Sigil demo, not a design showcase.\n\n## Goals\n\n- Product listing page showing all books\n- Individual book...",
+      "frontmatter": {
+        "id": "SPEC-0006",
+        "status": "accepted"
+      }
+    },
+    {
+      "id": "ADR-0006",
+      "type": "adr",
+      "title": "Use Next.js for the storefront frontend",
+      "path": "intent/web-app/adrs/ADR-0006-nextjs-for-frontend.md",
+      "body_summary": "## Context\n\nWe need a web frontend for the bookstore. The catalog pages benefit from server-side rendering (fast first paint, SEO), while the cart needs client-side interactivity. We want a framework that handles both without a complex build setup.\n\n## Decision\n\nUse Next.js with the App Router. Server components for catalog pages, client components for cart interactions.\n\n## Alternatives\n\n- **Plain React (Create React App / Vite)**: Simpler, but no SSR. Catalog pages would show a loading...",
+      "frontmatter": {
+        "id": "ADR-0006",
+        "status": "accepted"
+      }
+    },
+    {
+      "id": "GATE-0003",
+      "type": "gate",
+      "title": "Order service can only depend on catalog, cart, auth, and notification. Prevents uncontrolled coupling.",
+      "path": "gates/GATE-0003-order-service-deps.yaml",
+      "body_summary": ""
+    },
+    {
+      "id": "GATE-0005",
+      "type": "gate",
+      "title": "Payment gateway must never handle raw card numbers \u2014 only tokenized payment methods. Prevents accidental PCI scope expansion.",
+      "path": "gates/GATE-0005-payment-no-raw-card-numbers.yaml",
+      "body_summary": ""
+    },
+    {
+      "id": "GATE-0004",
+      "type": "gate",
+      "title": "All specs must have Intent, Goals, Non-goals, Design, Acceptance Criteria, and Links sections. Every spec must declare which component it belongs to.",
+      "path": "gates/GATE-0004-spec-quality.yaml",
+      "body_summary": ""
+    },
+    {
+      "id": "GATE-0001",
+      "type": "gate",
+      "title": "Prevents breaking changes to the Catalog API: required endpoints must exist, prices must be integer cents",
+      "path": "gates/GATE-0001-catalog-api-compat.yaml",
+      "body_summary": ""
+    },
+    {
+      "id": "GATE-0002",
+      "type": "gate",
+      "title": "Ensures auth service hashes passwords and never returns them in plaintext",
+      "path": "gates/GATE-0002-auth-no-plaintext-passwords.yaml",
+      "body_summary": ""
+    }
+  ],
+  "edges": [
+    {
+      "type": "belongs_to",
+      "src": "SPEC-0002",
+      "dst": "COMP-auth-service",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "provides",
+      "src": "SPEC-0002",
+      "dst": "API-AUTH-V1",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "decided_by",
+      "src": "SPEC-0002",
+      "dst": "ADR-0002",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "gated_by",
+      "src": "SPEC-0002",
+      "dst": "GATE-0002",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "decided_by",
+      "src": "ADR-0002",
+      "dst": "SPEC-0002",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "belongs_to",
+      "src": "SPEC-0001",
+      "dst": "COMP-catalog-service",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "provides",
+      "src": "SPEC-0001",
+      "dst": "API-CATALOG-V1",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "decided_by",
+      "src": "SPEC-0001",
+      "dst": "ADR-0001",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "gated_by",
+      "src": "SPEC-0001",
+      "dst": "GATE-0001",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "belongs_to",
+      "src": "SPEC-0007",
+      "dst": "COMP-catalog-service",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "provides",
+      "src": "SPEC-0007",
+      "dst": "API-CATALOG-V1",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "supersedes",
+      "src": "SPEC-0007",
+      "dst": "SPEC-0001",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "gated_by",
+      "src": "SPEC-0007",
+      "dst": "GATE-0001",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "decided_by",
+      "src": "ADR-0001",
+      "dst": "SPEC-0001",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "belongs_to",
+      "src": "SPEC-0003",
+      "dst": "COMP-cart-service",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "provides",
+      "src": "SPEC-0003",
+      "dst": "API-CART-V1",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "consumes",
+      "src": "SPEC-0003",
+      "dst": "API-CATALOG-V1",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "decided_by",
+      "src": "SPEC-0003",
+      "dst": "ADR-0003",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "depends_on",
+      "src": "SPEC-0003",
+      "dst": "COMP-catalog-service",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "decided_by",
+      "src": "ADR-0003",
+      "dst": "SPEC-0003",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "belongs_to",
+      "src": "SPEC-0008",
+      "dst": "COMP-order-service",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "provides",
+      "src": "SPEC-0008",
+      "dst": "API-ORDERS-V1",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "depends_on",
+      "src": "SPEC-0008",
+      "dst": "SPEC-0004",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "belongs_to",
+      "src": "SPEC-0004",
+      "dst": "COMP-order-service",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "provides",
+      "src": "SPEC-0004",
+      "dst": "API-ORDERS-V1",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "consumes",
+      "src": "SPEC-0004",
+      "dst": "API-CATALOG-V1",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "consumes",
+      "src": "SPEC-0004",
+      "dst": "API-CART-V1",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "consumes",
+      "src": "SPEC-0004",
+      "dst": "API-AUTH-V1",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "depends_on",
+      "src": "SPEC-0004",
+      "dst": "COMP-catalog-service",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "depends_on",
+      "src": "SPEC-0004",
+      "dst": "COMP-cart-service",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "depends_on",
+      "src": "SPEC-0004",
+      "dst": "COMP-auth-service",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "depends_on",
+      "src": "SPEC-0004",
+      "dst": "COMP-notification-service",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "decided_by",
+      "src": "SPEC-0004",
+      "dst": "ADR-0004",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "gated_by",
+      "src": "SPEC-0004",
+      "dst": "GATE-0003",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "decided_by",
+      "src": "ADR-0004",
+      "dst": "SPEC-0004",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "decided_by",
+      "src": "ROLLOUT-0001",
+      "dst": "SPEC-0004",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "depends_on",
+      "src": "ROLLOUT-0001",
+      "dst": "SPEC-0001",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "depends_on",
+      "src": "ROLLOUT-0001",
+      "dst": "SPEC-0002",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "depends_on",
+      "src": "ROLLOUT-0001",
+      "dst": "SPEC-0003",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "gated_by",
+      "src": "ROLLOUT-0001",
+      "dst": "GATE-0001",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "gated_by",
+      "src": "ROLLOUT-0001",
+      "dst": "GATE-0002",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "gated_by",
+      "src": "ROLLOUT-0001",
+      "dst": "GATE-0003",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "decided_by",
+      "src": "ADR-0007",
+      "dst": "COMP-search-service",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "relates_to",
+      "src": "ADR-0007",
+      "dst": "SPEC-0007",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "relates_to",
+      "src": "ADR-0007",
+      "dst": "COMP-catalog-service",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "belongs_to",
+      "src": "SPEC-0009",
+      "dst": "COMP-payment-gateway",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "depends_on",
+      "src": "SPEC-0009",
+      "dst": "SPEC-0004",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "depends_on",
+      "src": "SPEC-0009",
+      "dst": "COMP-order-service",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "consumes",
+      "src": "SPEC-0009",
+      "dst": "API-AUTH-V1",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "provides",
+      "src": "SPEC-0009",
+      "dst": "API-PAYMENTS-V1",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "gated_by",
+      "src": "SPEC-0009",
+      "dst": "GATE-0005",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "belongs_to",
+      "src": "SPEC-0005",
+      "dst": "COMP-notification-service",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "consumes",
+      "src": "SPEC-0005",
+      "dst": "API-AUTH-V1",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "depends_on",
+      "src": "SPEC-0005",
+      "dst": "COMP-auth-service",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "decided_by",
+      "src": "SPEC-0005",
+      "dst": "ADR-0005",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "decided_by",
+      "src": "ADR-0005",
+      "dst": "SPEC-0005",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "belongs_to",
+      "src": "SPEC-0006",
+      "dst": "COMP-web-app",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "consumes",
+      "src": "SPEC-0006",
+      "dst": "API-CATALOG-V1",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "consumes",
+      "src": "SPEC-0006",
+      "dst": "API-AUTH-V1",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "consumes",
+      "src": "SPEC-0006",
+      "dst": "API-CART-V1",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "consumes",
+      "src": "SPEC-0006",
+      "dst": "API-ORDERS-V1",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "depends_on",
+      "src": "SPEC-0006",
+      "dst": "COMP-catalog-service",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "depends_on",
+      "src": "SPEC-0006",
+      "dst": "COMP-auth-service",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "depends_on",
+      "src": "SPEC-0006",
+      "dst": "COMP-cart-service",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "depends_on",
+      "src": "SPEC-0006",
+      "dst": "COMP-order-service",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "decided_by",
+      "src": "SPEC-0006",
+      "dst": "ADR-0006",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "decided_by",
+      "src": "ADR-0006",
+      "dst": "SPEC-0006",
+      "confidence": 1.0,
+      "evidence": [
+        "Links block"
+      ]
+    },
+    {
+      "type": "belongs_to",
+      "src": "ADR-0002",
+      "dst": "COMP-auth-service",
+      "confidence": 0.95,
+      "evidence": [
+        "path inference"
+      ]
+    },
+    {
+      "type": "belongs_to",
+      "src": "ADR-0001",
+      "dst": "COMP-catalog-service",
+      "confidence": 0.95,
+      "evidence": [
+        "path inference"
+      ]
+    },
+    {
+      "type": "belongs_to",
+      "src": "ADR-0003",
+      "dst": "COMP-cart-service",
+      "confidence": 0.95,
+      "evidence": [
+        "path inference"
+      ]
+    },
+    {
+      "type": "belongs_to",
+      "src": "ADR-0004",
+      "dst": "COMP-order-service",
+      "confidence": 0.95,
+      "evidence": [
+        "path inference"
+      ]
+    },
+    {
+      "type": "belongs_to",
+      "src": "ROLLOUT-0001",
+      "dst": "COMP-order-service",
+      "confidence": 0.95,
+      "evidence": [
+        "path inference"
+      ]
+    },
+    {
+      "type": "belongs_to",
+      "src": "ADR-0007",
+      "dst": "COMP-search-service",
+      "confidence": 0.95,
+      "evidence": [
+        "path inference"
+      ]
+    },
+    {
+      "type": "belongs_to",
+      "src": "ADR-0005",
+      "dst": "COMP-notification-service",
+      "confidence": 0.95,
+      "evidence": [
+        "path inference"
+      ]
+    },
+    {
+      "type": "belongs_to",
+      "src": "ADR-0006",
+      "dst": "COMP-web-app",
+      "confidence": 0.95,
+      "evidence": [
+        "path inference"
+      ]
+    },
+    {
+      "type": "relates_to",
+      "src": "SPEC-0004",
+      "dst": "ROLLOUT-0001",
+      "confidence": 0.5,
+      "evidence": [
+        "wikilink"
+      ]
+    },
+    {
+      "type": "relates_to",
+      "src": "ROLLOUT-0001",
+      "dst": "API-AUTH-V1",
+      "confidence": 0.5,
+      "evidence": [
+        "wikilink"
+      ]
+    },
+    {
+      "type": "relates_to",
+      "src": "ROLLOUT-0001",
+      "dst": "API-CART-V1",
+      "confidence": 0.5,
+      "evidence": [
+        "wikilink"
+      ]
+    },
+    {
+      "type": "relates_to",
+      "src": "ROLLOUT-0001",
+      "dst": "API-CATALOG-V1",
+      "confidence": 0.5,
+      "evidence": [
+        "wikilink"
+      ]
+    },
+    {
+      "type": "relates_to",
+      "src": "ROLLOUT-0001",
+      "dst": "API-ORDERS-V1",
+      "confidence": 0.5,
+      "evidence": [
+        "wikilink"
+      ]
+    },
+    {
+      "type": "gated_by",
+      "src": "COMP-order-service",
+      "dst": "GATE-0003",
+      "confidence": 1.0,
+      "evidence": [
+        "gate applies_to"
+      ]
+    },
+    {
+      "type": "gated_by",
+      "src": "API-ORDERS-V1",
+      "dst": "GATE-0003",
+      "confidence": 1.0,
+      "evidence": [
+        "gate applies_to"
+      ]
+    },
+    {
+      "type": "gated_by",
+      "src": "COMP-payment-gateway",
+      "dst": "GATE-0005",
+      "confidence": 1.0,
+      "evidence": [
+        "gate applies_to"
+      ]
+    },
+    {
+      "type": "gated_by",
+      "src": "API-PAYMENTS-V1",
+      "dst": "GATE-0005",
+      "confidence": 1.0,
+      "evidence": [
+        "gate applies_to"
+      ]
+    },
+    {
+      "type": "gated_by",
+      "src": "API-CATALOG-V1",
+      "dst": "GATE-0001",
+      "confidence": 1.0,
+      "evidence": [
+        "gate applies_to"
+      ]
+    },
+    {
+      "type": "gated_by",
+      "src": "API-AUTH-V1",
+      "dst": "GATE-0002",
+      "confidence": 1.0,
+      "evidence": [
+        "gate applies_to"
+      ]
+    },
+    {
+      "type": "gated_by",
+      "src": "COMP-auth-service",
+      "dst": "GATE-0002",
+      "confidence": 1.0,
+      "evidence": [
+        "gate applies_to"
+      ]
+    }
+  ],
+  "gates": [
+    {
+      "id": "GATE-0001",
+      "summary": "Prevents breaking changes to the Catalog API: required endpoints must exist, prices must be integer cents",
+      "kind": "command",
+      "policy": "block",
+      "passed": true,
+      "scope": 1,
+      "findings": []
+    },
+    {
+      "id": "GATE-0002",
+      "summary": "Ensures auth service hashes passwords and never returns them in plaintext",
+      "kind": "command",
+      "policy": "block",
+      "passed": true,
+      "scope": 4,
+      "findings": []
+    },
+    {
+      "id": "GATE-0003",
+      "summary": "Order service can only depend on catalog, cart, auth, and notification. Prevents uncontrolled coupling.",
+      "kind": "builtin",
+      "policy": "block",
+      "passed": true,
+      "scope": 6,
+      "findings": []
+    },
+    {
+      "id": "GATE-0004",
+      "summary": "All specs must have Intent, Goals, Non-goals, Design, Acceptance Criteria, and Links sections. Every spec must declare which component it belongs to.",
+      "kind": "builtin",
+      "policy": "warn",
+      "passed": true,
+      "scope": 0,
+      "findings": []
+    },
+    {
+      "id": "GATE-0005",
+      "summary": "Payment gateway must never handle raw card numbers \u2014 only tokenized payment methods. Prevents accidental PCI scope expansion.",
+      "kind": "pattern",
+      "policy": "block",
+      "passed": true,
+      "scope": 3,
+      "findings": []
+    }
+  ]
+};
+    window.__SIGIL_FILES__ = {"components/search-service.yaml": "id: COMP-search-service\nname: Search Service\n\nowners:\n  - team-platform\n\npaths:\n  - services/search/**\n\ninterfaces:\n  provides: []\n  consumes:\n    - API-CATALOG-V1\n\ndependency_policy:\n  allowed_components:\n    - COMP-catalog-service\n\nattributes:\n  tier: 2\n  data: [search-index]\n  runtime: [docker]\n", "components/auth-service.yaml": "id: COMP-auth-service\nname: Auth Service\n\nowners:\n  - team-platform\n\npaths:\n  - services/auth/**\n\ninterfaces:\n  provides:\n    - API-AUTH-V1\n  consumes: []\n\ndependency_policy:\n  allowed_components: []\n\nattributes:\n  tier: 0\n  data: [credentials, pii]\n  runtime: [docker]\n", "components/payment-gateway.yaml": "id: COMP-payment-gateway\nname: Payment Gateway\n\nowners:\n  - team-payments\n\npaths:\n  - services/payments/**\n\ninterfaces:\n  provides:\n    - API-PAYMENTS-V1\n  consumes:\n    - API-AUTH-V1\n    - API-ORDERS-V1\n\ndependency_policy:\n  allowed_components:\n    - COMP-auth-service\n    - COMP-order-service\n\nattributes:\n  tier: 1\n  data: [payment-tokens, pii]\n  runtime: [docker]\n", "components/cart-service.yaml": "id: COMP-cart-service\nname: Cart Service\n\nowners:\n  - team-platform\n\npaths:\n  - services/cart/**\n\ninterfaces:\n  provides:\n    - API-CART-V1\n  consumes:\n    - API-CATALOG-V1\n\ndependency_policy:\n  allowed_components:\n    - COMP-catalog-service\n\nattributes:\n  tier: 2\n  data: [session]\n  runtime: [docker]\n", "components/catalog-service.yaml": "id: COMP-catalog-service\nname: Catalog Service\n\nowners:\n  - team-platform\n\npaths:\n  - services/catalog/**\n\ninterfaces:\n  provides:\n    - API-CATALOG-V1\n  consumes: []\n\ndependency_policy:\n  allowed_components: []\n\nattributes:\n  tier: 1\n  data: [book-inventory]\n  runtime: [docker]\n", "components/order-service.yaml": "id: COMP-order-service\nname: Order Service\n\nowners:\n  - team-platform\n\npaths:\n  - services/orders/**\n\ninterfaces:\n  provides:\n    - API-ORDERS-V1\n  consumes:\n    - API-CATALOG-V1\n    - API-CART-V1\n    - API-AUTH-V1\n    - API-PAYMENTS-V1\n\ndependency_policy:\n  allowed_components:\n    - COMP-catalog-service\n    - COMP-cart-service\n    - COMP-auth-service\n    - COMP-notification-service\n    - COMP-payment-gateway\n\nattributes:\n  tier: 1\n  data: [orders, pii]\n  runtime: [docker]\n", "components/notification-service.yaml": "id: COMP-notification-service\nname: Notification Service\n\nowners:\n  - team-platform\n\npaths:\n  - services/notifications/**\n\ninterfaces:\n  provides: []\n  consumes:\n    - API-AUTH-V1\n\ndependency_policy:\n  allowed_components:\n    - COMP-auth-service\n\nattributes:\n  tier: 2\n  data: [pii]\n  runtime: [docker]\n", "components/admin-dashboard.yaml": "id: COMP-admin-dashboard\nname: Admin Dashboard\n\nowners:\n  - team-internal-tools\n\npaths:\n  - app/admin/**\n\ninterfaces:\n  provides: []\n  consumes:\n    - API-CATALOG-V1\n    - API-ORDERS-V1\n    - API-AUTH-V1\n\ndependency_policy:\n  allowed_components:\n    - COMP-catalog-service\n    - COMP-order-service\n    - COMP-auth-service\n\nattributes:\n  tier: 3\n  data: []\n  runtime: [docker]\n", "components/web-app.yaml": "id: COMP-web-app\nname: Web App\n\nowners:\n  - team-frontend\n\npaths:\n  - app/**\n\ninterfaces:\n  provides: []\n  consumes:\n    - API-CATALOG-V1\n    - API-AUTH-V1\n    - API-CART-V1\n    - API-ORDERS-V1\n\ndependency_policy:\n  allowed_components:\n    - COMP-catalog-service\n    - COMP-auth-service\n    - COMP-cart-service\n    - COMP-order-service\n\nattributes:\n  tier: 1\n  data: []\n  runtime: [vercel]\n", "interfaces/API-CATALOG-V1/README.md": "---\nid: API-CATALOG-V1\ntype: api\nstatus: active\n---\n\n# Catalog API\n\n## Description\n\nREST API for browsing and searching the book catalog. Read-only. Used by the web app to render product pages and search results, and by the cart/order services to validate book IDs and look up prices.\n\n## Contract\n\n### `GET /api/catalog/books`\n\nReturns all in-stock books.\n\n```json\n[\n  {\n    \"id\": \"b-001\",\n    \"title\": \"Designing Data-Intensive Applications\",\n    \"author\": \"Martin Kleppmann\",\n    \"price_cents\": 4500,\n    \"isbn\": \"978-1449373320\",\n    \"in_stock\": true\n  }\n]\n```\n\n### `GET /api/catalog/books/:id`\n\nReturns a single book by ID. 404 if not found.\n\n### `GET /api/catalog/search?q=:query`\n\nFull-text search across title and author.\n\n## Links\n\n- Provided by: [[COMP-catalog-service]]\n- Consumed by: [[COMP-web-app]] [[COMP-cart-service]] [[COMP-order-service]]\n- Gates: [[GATE-0001]]\n", "interfaces/API-PAYMENTS-V1/README.md": "---\nid: API-PAYMENTS-V1\ntype: api\nstatus: active\n---\n\n# Payments API\n\n## Description\n\nHandles payment processing for confirmed orders. Wraps a third-party payment provider (Stripe in production, stub in demo) and provides a uniform interface for charging, refunding, and checking payment status.\n\n## Contract\n\n### `POST /api/payments/charge`\n\nCharges a payment method for a confirmed order. Requires auth token.\n\nRequest:\n\n```json\n{\n  \"order_id\": \"ord-a1b2c3d4\",\n  \"payment_method\": \"pm-tok-visa\",\n  \"amount_cents\": 9000,\n  \"currency\": \"usd\"\n}\n```\n\nReturns `201` with payment confirmation:\n\n```json\n{\n  \"id\": \"pay-x1y2z3\",\n  \"order_id\": \"ord-a1b2c3d4\",\n  \"amount_cents\": 9000,\n  \"status\": \"succeeded\"\n}\n```\n\n### `POST /api/payments/refund`\n\nRefunds a completed payment.\n\n### `GET /api/payments/:id`\n\nReturns a single payment by ID.\n\n## Links\n\n- Provided by: [[COMP-payment-gateway]]\n- Consumed by: [[COMP-order-service]], [[COMP-admin-dashboard]]\n- Gates: [[GATE-0005]]\n", "interfaces/API-CART-V1/README.md": "---\nid: API-CART-V1\ntype: api\nstatus: active\n---\n\n# Cart API\n\n## Description\n\nManages per-user shopping carts. Carts are session-scoped and backed by in-memory storage. The web app uses this to let users add/remove books before checkout. The order service reads the cart to create orders.\n\n## Contract\n\n### `GET /api/cart`\n\nReturns the current user's cart. Requires auth token.\n\n```json\n{\n  \"user_id\": \"u-001\",\n  \"items\": [\n    { \"book_id\": \"b-001\", \"quantity\": 2 }\n  ],\n  \"total_items\": 2\n}\n```\n\n### `POST /api/cart/add`\n\n```json\n{ \"book_id\": \"b-001\", \"quantity\": 1 }\n```\n\n### `DELETE /api/cart/:book_id`\n\nRemoves a book from the cart.\n\n### `POST /api/cart/clear`\n\nEmpties the cart (called after successful checkout).\n\n## Links\n\n- Provided by: [[COMP-cart-service]]\n- Consumed by: [[COMP-web-app]] [[COMP-order-service]]\n", "interfaces/API-ORDERS-V1/README.md": "---\nid: API-ORDERS-V1\ntype: api\nstatus: active\n---\n\n# Orders API\n\n## Description\n\nHandles the checkout flow: creates orders from cart contents, tracks order status, and triggers notifications. This is the most complex service because it orchestrates across catalog (price verification), cart (reading items), auth (user identity), and notifications (confirmation emails).\n\n## Contract\n\n### `POST /api/orders/checkout`\n\nCreates an order from the user's current cart. Requires auth token.\n\nReturns `201` with the new order:\n\n```json\n{\n  \"id\": \"ord-a1b2c3d4\",\n  \"user_id\": \"u-001\",\n  \"lines\": [\n    { \"book_id\": \"b-001\", \"quantity\": 2, \"price_cents\": 4500 }\n  ],\n  \"total_cents\": 9000,\n  \"status\": \"confirmed\"\n}\n```\n\n### `GET /api/orders`\n\nLists all orders for the authenticated user.\n\n### `GET /api/orders/:id`\n\nReturns a single order by ID.\n\n## Links\n\n- Provided by: [[COMP-order-service]]\n- Consumed by: [[COMP-web-app]]\n- Gates: [[GATE-0003]]\n", "interfaces/API-AUTH-V1/README.md": "---\nid: API-AUTH-V1\ntype: api\nstatus: active\n---\n\n# Auth API\n\n## Description\n\nHandles user registration, login, and token verification. Issues JWT tokens consumed by all other services for authentication. This is the security boundary \u2014 every authenticated request must carry a valid token issued by this service.\n\n## Contract\n\n### `POST /api/auth/register`\n\n```json\n{ \"email\": \"user@example.com\", \"password\": \"...\" }\n```\n\nReturns `201` with `{ \"token\": \"...\" }`.\n\n### `POST /api/auth/login`\n\n```json\n{ \"email\": \"user@example.com\", \"password\": \"...\" }\n```\n\nReturns `200` with `{ \"token\": \"...\" }` or `401`.\n\n### `GET /api/auth/verify`\n\nHeader: `Authorization: Bearer <token>`\n\nReturns `200` with `{ \"sub\": \"user-id\", \"email\": \"...\" }` or `401`.\n\n## Links\n\n- Provided by: [[COMP-auth-service]]\n- Consumed by: [[COMP-web-app]] [[COMP-order-service]] [[COMP-notification-service]]\n- Gates: [[GATE-0002]]\n", "intent/auth-service/specs/SPEC-0002-jwt-authentication.md": "---\nid: SPEC-0002\nstatus: accepted\n---\n\n# JWT Authentication\n\n## Intent\n\nGive users a way to sign up, log in, and prove their identity to other services. We're using stateless JWT tokens so that services can verify requests without calling back to auth on every request.\n\n## Context\n\nThe cart and order services need to know who the user is. We could use sessions, but JWTs let us keep services stateless and avoid a shared session store. This is a small app, so we're not building a full identity provider \u2014 just enough auth to demonstrate the flow.\n\n## Goals\n\n- Register with email + password\n- Login returns a JWT valid for 1 hour\n- Any service can verify a token without a database call\n- Passwords are hashed before storage\n\n## Non-goals\n\n- OAuth/social login\n- Refresh tokens (1-hour expiry is fine for a demo)\n- Role-based access control (all authenticated users have equal access)\n- Password reset flow\n\n## Design\n\nThe auth service exposes three endpoints through [[API-AUTH-V1]]:\n- `POST /register` \u2014 hash password, store user, return token\n- `POST /login` \u2014 verify password, return token\n- `GET /verify` \u2014 validate token from Authorization header\n\nTokens are HMAC-signed JSON payloads containing `sub` (user ID), `email`, and `exp` (expiry timestamp). We're not using a full JWT library for the demo \u2014 just a simplified encode/decode with HMAC-SHA256.\n\nPassword storage uses SHA-256 hashing. In production you'd use bcrypt, but this is a demo.\n\n## Links\n\n- Belongs to: [[COMP-auth-service]]\n- Provides: [[API-AUTH-V1]]\n- Decided by: [[ADR-0002]]\n- Gates: [[GATE-0002]]\n\n## Acceptance Criteria\n\n- [ ] Registration creates a user and returns a valid token\n- [ ] Login with correct credentials returns a token\n- [ ] Login with wrong credentials returns 401\n- [ ] Token verification rejects expired tokens\n- [ ] Passwords are never stored or returned in plaintext\n", "intent/auth-service/adrs/ADR-0002-jwt-over-sessions.md": "---\nid: ADR-0002\nstatus: accepted\n---\n\n# Use JWT tokens instead of server-side sessions\n\n## Context\n\nWe need authentication across multiple services. The question is whether to use stateful sessions (requiring a shared session store) or stateless tokens (requiring nothing shared).\n\n## Decision\n\nUse JWT-style tokens signed with HMAC-SHA256. Each service can verify tokens independently without calling back to the auth service or sharing a database.\n\n## Alternatives\n\n- **Server-side sessions with Redis**: More traditional, but adds a shared dependency. Every service would need Redis access or would need to call back to auth on every request. Adds latency and a single point of failure.\n- **OAuth2 / OpenID Connect**: The right choice for production, but enormously complex for a 6-service demo. We'd spend more time on auth configuration than on demonstrating intent-first engineering.\n- **API keys**: Simple but not user-facing. Works for service-to-service but doesn't help with user login.\n\n## Consequences\n\n- Services can verify tokens without network calls. Good for independence.\n- Token revocation is hard \u2014 we'd need a blocklist. Acceptable for a demo with 1-hour expiry.\n- The \"JWT\" implementation is simplified (not a real JWT library). Good enough to demonstrate the auth flow.\n- Secret management is trivial (hardcoded). In production, this would be a serious security concern.\n\n## Links\n\n- For: [[SPEC-0002]]\n", "intent/catalog-service/specs/SPEC-0001-book-catalog-api.md": "---\nid: SPEC-0001\nstatus: accepted\n---\n\n# Book Catalog API\n\n## Intent\n\nProvide a read-only API for browsing and searching the book inventory. This is the foundational data service \u2014 everything else (cart, orders, search) depends on being able to look up books by ID and list what's available.\n\n## Context\n\nWe need a single source of truth for book data. The web app needs it for product pages, the cart service needs it to validate items, and the order service needs it to lock in prices at checkout time. Without a clean catalog API, every service would either duplicate book data or reach directly into the database.\n\n## Goals\n\n- Expose book listing, lookup by ID, and text search\n- Keep it read-only (writes go through a separate admin flow, out of scope)\n- Sub-100ms response times for all endpoints\n- Return enough data for the frontend to render product cards without extra calls\n\n## Non-goals\n\n- Admin CRUD operations (will be a separate spec)\n- Full-text search with relevance ranking (basic substring match is fine for v1)\n- Pagination (catalog is small enough to return all results)\n\n## Design\n\nThree endpoints:\n- `GET /api/catalog/books` \u2014 list all in-stock books\n- `GET /api/catalog/books/:id` \u2014 single book by ID\n- `GET /api/catalog/search?q=` \u2014 substring search on title and author\n\nData lives in an in-memory store for now. The schema is flat: id, title, author, price_cents, isbn, in_stock.\n\nPrice is stored in cents to avoid floating point issues.\n\n## Links\n\n- Belongs to: [[COMP-catalog-service]]\n- Provides: [[API-CATALOG-V1]]\n- Decided by: [[ADR-0001]]\n- Gates: [[GATE-0001]]\n\n## Acceptance Criteria\n\n- [ ] GET /api/catalog/books returns all in-stock books as JSON\n- [ ] GET /api/catalog/books/:id returns 404 for unknown IDs\n- [ ] GET /api/catalog/search?q=design matches partial titles case-insensitively\n- [ ] All responses include price_cents as an integer, never a float\n- [ ] Response times under 100ms for a catalog of up to 1000 books\n", "intent/catalog-service/specs/SPEC-0007-catalog-search.md": "---\nid: SPEC-0007\nstatus: proposed\n---\n\n# Catalog Search Improvements\n\n## Intent\n\nUpgrade the catalog search from basic substring matching to something that handles typos, partial words, and relevance ranking. This makes the storefront usable for real browsing, not just exact-match lookups.\n\n## Context\n\nThe current search (SPEC-0001) does case-insensitive substring matching on title and author. That's fine for 3 books, but falls apart with a real catalog. Users expect search to be forgiving \u2014 \"pragmatc progrmmr\" should still find the right book.\n\nThis spec supersedes the search portion of [[SPEC-0001]] without changing the catalog listing or lookup endpoints.\n\n## Goals\n\n- Fuzzy matching that tolerates typos (edit distance <= 2)\n- Results ranked by relevance (exact match > prefix > fuzzy)\n- Still fast enough for typeahead (sub-50ms for catalogs under 10k books)\n\n## Non-goals\n\n- Elasticsearch or external search infrastructure\n- Faceted search / filters\n- Search analytics or query logging\n\n## Design\n\nReplace the substring filter with a scoring function:\n1. Exact substring match: score 1.0\n2. Prefix match: score 0.8\n3. Levenshtein distance <= 2: score 0.5\n4. No match: excluded\n\nResults sorted by score descending. The endpoint signature doesn't change \u2014 same `GET /api/catalog/search?q=` contract.\n\n## Links\n\n- Belongs to: [[COMP-catalog-service]]\n- Provides: [[API-CATALOG-V1]]\n- Supersedes: [[SPEC-0001]]\n- Gates: [[GATE-0001]]\n\n## Acceptance Criteria\n\n- [ ] \"pragmatc\" returns \"The Pragmatic Programmer\"\n- [ ] Exact matches rank higher than fuzzy matches\n- [ ] Performance stays under 50ms for 10k books\n- [ ] API contract (request/response shape) is unchanged\n", "intent/catalog-service/adrs/ADR-0001-in-memory-catalog-store.md": "---\nid: ADR-0001\nstatus: accepted\n---\n\n# Use in-memory store for the book catalog\n\n## Context\n\nThe catalog service needs a data store. Options range from a real database (Postgres, SQLite) to a flat file to an in-memory dict. This is a demo app with a handful of books, not a production bookstore.\n\n## Decision\n\nUse a Python dictionary as the data store. Books are defined as dataclass instances in the source code.\n\n## Alternatives\n\n- **SQLite**: Would add realism but also adds setup steps, migrations, and a dependency. Not worth it for a demo that's showing off the intent layer, not the data layer.\n- **JSON file**: Slightly more realistic than in-memory, but adds file I/O concerns for no real benefit at this scale.\n- **Postgres**: Way too heavy. Would require Docker Compose or a cloud database just to browse 3 books.\n\n## Consequences\n\n- The catalog resets on every restart. That's fine \u2014 it's a demo.\n- No migration story. If we need to change the book schema, we just edit the Python code.\n- Can't demonstrate database-related gates (migration safety, schema drift). That's a tradeoff we accept.\n- Easy to swap out later \u2014 the API contract stays the same regardless of the backing store.\n\n## Links\n\n- For: [[SPEC-0001]]\n", "intent/cart-service/specs/SPEC-0003-shopping-cart.md": "---\nid: SPEC-0003\nstatus: accepted\n---\n\n# Shopping Cart\n\n## Intent\n\nLet users collect books they want to buy before checking out. The cart is per-user, lives in memory, and acts as a staging area between browsing and ordering.\n\n## Context\n\nWithout a cart, users would have to buy one book at a time. The cart service is intentionally simple \u2014 in-memory, no persistence across restarts. If we need durability later, we'd swap in Redis or a database behind the same API.\n\n## Goals\n\n- Add books to cart with quantity\n- Remove individual books\n- Clear entire cart (used after checkout)\n- Return total item count for the cart badge in the UI\n\n## Non-goals\n\n- Cart persistence across server restarts\n- Saved carts / wishlists\n- Price calculation (that's the order service's job, using catalog prices)\n- Cart merging for anonymous-to-logged-in transitions\n\n## Design\n\nThe cart is a simple data structure: a user ID and a list of `(book_id, quantity)` pairs. Adding a book that's already in the cart increments the quantity.\n\nStorage is a Python dict keyed by user ID. The [[API-CART-V1]] interface requires an auth token so we always know whose cart we're operating on.\n\nThe cart service calls [[API-CATALOG-V1]] only to validate that a book_id actually exists before adding it.\n\n## Links\n\n- Belongs to: [[COMP-cart-service]]\n- Provides: [[API-CART-V1]]\n- Consumes: [[API-CATALOG-V1]]\n- Decided by: [[ADR-0003]]\n- Depends on: [[COMP-catalog-service]]\n\n## Acceptance Criteria\n\n- [ ] Adding a book creates a new cart entry or increments existing quantity\n- [ ] Removing a book leaves other items untouched\n- [ ] Clearing the cart results in an empty items list\n- [ ] Cart operations require a valid auth token\n- [ ] Invalid book_ids are rejected with 400\n", "intent/cart-service/adrs/ADR-0003-session-scoped-cart.md": "---\nid: ADR-0003\nstatus: accepted\n---\n\n# Session-scoped in-memory carts\n\n## Context\n\nCarts need to be per-user and available across requests within a session. We could persist them to a database or keep them in memory.\n\n## Decision\n\nStore carts in a Python dict keyed by user ID. Carts exist only as long as the server process is running.\n\n## Alternatives\n\n- **Redis**: The standard choice for session data. Fast, persistent enough, supports TTL. But adds infrastructure for a demo app.\n- **Database**: Durable but slow for the frequent read-modify-write pattern of cart operations. Also requires schema/migration setup.\n- **Client-side storage (localStorage)**: No server state, but then the cart API can't be used by the order service during checkout.\n\n## Consequences\n\n- Carts disappear on restart. Acceptable for a demo.\n- No TTL or cleanup \u2014 abandoned carts grow forever during a session. Fine for demo scale.\n- The cart API contract is identical regardless of backing store, so swapping to Redis later is straightforward.\n- Cart operations are O(1) for lookup, O(n) for the item list where n is number of distinct books (trivially small).\n\n## Links\n\n- For: [[SPEC-0003]]\n", "intent/order-service/specs/SPEC-0008-order-status-tracking.md": "---\nid: SPEC-0008\nstatus: proposed\n---\n\n# Order Status Tracking\n\n## Intent\n\nLet users and internal systems track an order through its lifecycle: pending, confirmed, shipped, delivered, cancelled. Right now orders are created and that's it \u2014 there's no state machine.\n\n## Context\n\n[[SPEC-0004]] handles checkout but leaves orders in a permanent \"pending\" state. For a real system, we need status transitions so the UI can show \"your order shipped\" and internal tools can manage fulfillment.\n\n## Goals\n\n- Define a clear order status state machine\n- Add a PATCH endpoint to advance order status\n- Validate transitions (can't go from \"delivered\" back to \"pending\")\n- Include timestamps for each transition\n\n## Non-goals\n\n- Webhook notifications on status change (notification service handles that separately)\n- Shipping carrier integration\n- Return/refund flow\n\n## Design\n\nStatus transitions:\n```\npending -> confirmed -> shipped -> delivered\npending -> cancelled\nconfirmed -> cancelled\n```\n\nNew endpoint: `PATCH /api/orders/:id/status` with `{ \"status\": \"confirmed\" }`.\n\nInvalid transitions return 409 Conflict with a message explaining what transitions are allowed from the current state.\n\nEach order gets a `status_history` array: `[{ \"status\": \"pending\", \"at\": \"...\" }, ...]`\n\n## Links\n\n- Belongs to: [[COMP-order-service]]\n- Provides: [[API-ORDERS-V1]]\n- Depends on: [[SPEC-0004]]\n\n## Acceptance Criteria\n\n- [ ] Orders start in \"pending\" status\n- [ ] Valid transitions update the status and append to history\n- [ ] Invalid transitions return 409 with allowed transitions\n- [ ] Status history includes timestamps\n- [ ] GET /api/orders/:id includes status_history in response\n", "intent/order-service/specs/SPEC-0004-checkout-flow.md": "---\nid: SPEC-0004\nstatus: accepted\n---\n\n# Checkout Flow\n\n## Intent\n\nTurn a user's cart into a confirmed order. This is the critical path \u2014 it touches every other service and is where money changes hands (conceptually). Getting this right means prices are locked, inventory is checked, and the user gets confirmation.\n\n## Context\n\nThe checkout flow is the most complex interaction in the app. It needs to:\n1. Read the user's cart\n2. Look up current prices from the catalog\n3. Create an order record\n4. Clear the cart\n5. Send a confirmation notification\n\nEach of these steps crosses a service boundary, so the failure modes matter.\n\n## Goals\n\n- Single POST endpoint that orchestrates the full checkout\n- Lock prices at checkout time (not cart-add time)\n- Clear the cart only after order is confirmed\n- Trigger a notification on success\n- Return the complete order object to the caller\n\n## Non-goals\n\n- Payment processing (we're treating all orders as free for the demo)\n- Inventory reservation / stock decrement\n- Partial orders (if any item fails, the whole checkout fails)\n- Async order processing (everything is synchronous)\n\n## Design\n\n`POST /api/orders/checkout` does the following:\n\n1. Verify auth token via [[API-AUTH-V1]]\n2. Fetch cart via [[API-CART-V1]]\n3. For each item, look up current price via [[API-CATALOG-V1]]\n4. Create order with line items and totals\n5. Clear cart via [[API-CART-V1]]\n6. Send confirmation via notification service\n7. Return order to caller\n\nIf the cart is empty, return 400. If any book isn't found in catalog, return 400. No partial success \u2014 it's all or nothing.\n\n## Links\n\n- Belongs to: [[COMP-order-service]]\n- Provides: [[API-ORDERS-V1]]\n- Consumes: [[API-CATALOG-V1]] [[API-CART-V1]] [[API-AUTH-V1]]\n- Depends on: [[COMP-catalog-service]] [[COMP-cart-service]] [[COMP-auth-service]] [[COMP-notification-service]]\n- Decided by: [[ADR-0004]]\n- Gates: [[GATE-0003]]\n\n## Rollout\n\n- [[ROLLOUT-0001]]\n\n## Acceptance Criteria\n\n- [ ] Checkout with a non-empty cart creates an order and returns it\n- [ ] Checkout with an empty cart returns 400\n- [ ] Order total is calculated from current catalog prices, not stored cart prices\n- [ ] Cart is empty after successful checkout\n- [ ] Notification service receives order confirmation\n- [ ] Order appears in GET /api/orders for that user\n", "intent/order-service/adrs/ADR-0004-synchronous-checkout.md": "---\nid: ADR-0004\nstatus: accepted\n---\n\n# Synchronous checkout orchestration\n\n## Context\n\nThe checkout flow crosses 4 service boundaries: auth, cart, catalog, and notifications. We need to decide whether this orchestration is synchronous (single request, all steps in sequence) or asynchronous (event-driven, saga pattern).\n\n## Decision\n\nKeep it synchronous. The checkout endpoint makes sequential calls to each service and returns the complete order in a single response.\n\n## Alternatives\n\n- **Saga pattern with events**: Each step publishes an event, the next service picks it up. More resilient to partial failures, but requires an event bus (Kafka, RabbitMQ) and compensating transactions. Massive overkill for a demo.\n- **Async with polling**: Start checkout, return an order ID, let the client poll for completion. Adds complexity without clear benefit at demo scale.\n- **Two-phase commit**: Guarantees atomicity across services. Extremely complex, and we don't even have real databases to commit to.\n\n## Consequences\n\n- The checkout request blocks until all steps complete. Latency is the sum of all service calls.\n- If any step fails, the whole checkout fails. No partial orders.\n- No need for an event bus, message queue, or distributed transaction coordinator.\n- Notification failure doesn't fail the order (it's fire-and-forget with a try/except).\n- Easy to understand and debug \u2014 the entire flow is visible in one function.\n\n## Links\n\n- For: [[SPEC-0004]]\n", "intent/order-service/rollouts/ROLLOUT-0001-checkout-v1.md": "---\nid: ROLLOUT-0001\nstatus: in-progress\n---\n\n# Checkout Flow v1 Rollout\n\n## Overview\n\nRolling out the synchronous checkout flow described in [[SPEC-0004]]. This is the first version of the order pipeline \u2014 all services need to be deployed and healthy before we can enable checkout.\n\n## Prerequisites\n\n- [x] Catalog service deployed with [[API-CATALOG-V1]] operational\n- [x] Auth service deployed with [[API-AUTH-V1]] operational\n- [x] Cart service deployed with [[API-CART-V1]] operational\n- [ ] Order service deployed with [[API-ORDERS-V1]] operational\n- [ ] Notification service deployed and connected\n- [ ] [[GATE-0001]] passing (catalog API compat)\n- [ ] [[GATE-0002]] passing (auth security)\n- [ ] [[GATE-0003]] passing (order service deps)\n\n## Rollout Plan\n\n### Phase 1: Backend services (current)\n- Deploy order service to staging\n- Run integration tests: checkout with mock cart\n- Verify notification service receives events\n\n### Phase 2: Frontend integration\n- Enable checkout button in web app\n- Add order confirmation page\n- Add order history page\n\n### Phase 3: Production\n- Feature flag: `checkout_enabled=true` for 10% of users\n- Monitor error rates and latency\n- Ramp to 100% if p99 latency < 500ms and error rate < 1%\n\n## Rollback\n\nIf checkout errors exceed 5%:\n1. Set `checkout_enabled=false`\n2. Cart data is preserved (no data loss)\n3. Orders already placed remain in the system\n\n## Links\n\n- For: [[SPEC-0004]]\n- Depends on: [[SPEC-0001]] [[SPEC-0002]] [[SPEC-0003]]\n- Gates: [[GATE-0001]] [[GATE-0002]] [[GATE-0003]]\n", "intent/search-service/adrs/ADR-0007-dedicated-search-service.md": "---\nid: ADR-0007\nstatus: proposed\n---\n\n# Dedicated search service instead of in-catalog search\n\n## Context\n\nSearch is currently handled inside the catalog service (see [[SPEC-0007]]). As the catalog grows, search needs its own index, ranking logic, and potentially a different data store (e.g., Elasticsearch). Running search queries against the primary catalog store creates contention.\n\nThe question is whether to extract search into its own service now or keep it coupled to the catalog.\n\n## Decision\n\nExtract search into a dedicated service that maintains its own index built from catalog data. The search service consumes the Catalog API to build and refresh its index, but serves queries independently.\n\nThis decision is still **proposed** \u2014 we haven't committed to the migration yet. SPEC-0007 covers the immediate fuzzy search improvements inside the catalog service. This ADR captures the longer-term direction.\n\n## Alternatives\n\n- **Keep search in catalog**: Simpler, fewer moving parts. But search and catalog have different scaling characteristics \u2014 search is read-heavy with complex ranking, catalog is CRUD with consistency requirements.\n- **Use a managed search service (Algolia, Typesense)**: Offloads the problem entirely. But adds an external dependency and costs money for what's currently a simple feature.\n- **Client-side search**: Ship the catalog to the browser and search there. Works for small catalogs but doesn't scale.\n\n## Consequences\n\n- Search service needs its own data refresh mechanism (poll or event-driven)\n- Catalog service gets simpler \u2014 just CRUD, no search logic\n- Two services to deploy and monitor instead of one\n- Search can scale independently (more replicas, different instance type)\n- Index staleness becomes a concern \u2014 search results may lag behind catalog updates\n\n## Links\n\n- For: [[COMP-search-service]]\n- Relates to: [[SPEC-0007]]\n- Relates to: [[COMP-catalog-service]]\n", "intent/payment-gateway/specs/SPEC-0009-payment-processing.md": "---\nid: SPEC-0009\nstatus: proposed\n---\n\n# Payment Processing\n\n## Intent\n\nAccept payments for confirmed orders through a pluggable payment provider. The demo uses a stub that always succeeds; production would swap in Stripe or similar. This keeps the order service from knowing anything about payment internals.\n\n## Context\n\nCurrently the checkout flow in [[SPEC-0004]] creates orders but doesn't actually charge anyone. Adding payment processing closes the loop \u2014 orders aren't truly \"confirmed\" until payment succeeds.\n\nThe payment gateway is a separate component because payment logic has its own compliance requirements, error handling, and third-party dependencies. Keeping it isolated means the order service stays clean.\n\n## Goals\n\n- Charge a payment method when checkout completes\n- Return clear success/failure status to the order service\n- Support refunds for cancelled orders\n- Pluggable provider interface (stub for demo, Stripe for prod)\n\n## Non-goals\n\n- PCI DSS compliance (demo only)\n- Saved payment methods or wallets\n- Multi-currency support beyond USD\n- Subscription or recurring billing\n\n## Design\n\nThe payment gateway exposes a simple REST API. The order service calls `POST /api/payments/charge` after creating the order record. If the charge fails, the order status moves to `payment_failed`.\n\nProvider interface:\n\n```python\nclass PaymentProvider:\n    def charge(self, amount_cents: int, token: str) -> ChargeResult\n    def refund(self, charge_id: str) -> RefundResult\n```\n\nThe demo `StubProvider` always returns success after a 50ms fake delay.\n\n## Links\n\n- Belongs to: [[COMP-payment-gateway]]\n- Depends on: [[SPEC-0004]]\n- Depends on: [[COMP-order-service]]\n- Consumes: [[API-AUTH-V1]]\n- Provides: [[API-PAYMENTS-V1]]\n- Gates: [[GATE-0005]]\n\n## Acceptance Criteria\n\n- [ ] Successful charge returns payment ID and `succeeded` status\n- [ ] Failed charge returns `failed` status with error reason\n- [ ] Refund endpoint reverses a completed charge\n- [ ] Stub provider is swappable without changing calling code\n", "intent/notification-service/specs/SPEC-0005-order-notifications.md": "---\nid: SPEC-0005\nstatus: accepted\n---\n\n# Order Notifications\n\n## Intent\n\nSend confirmation emails when orders are placed. Users need to know their order went through, and we need a notification abstraction that can grow to support more channels later.\n\n## Context\n\nRight now we only send order confirmations via email. But the notification service is designed as a standalone component so we can add push notifications, SMS, or webhook integrations later without changing the order service.\n\n## Goals\n\n- Send email notification on order confirmation\n- Abstract the notification channel (email today, push/SMS later)\n- Log all sent notifications for debugging\n\n## Non-goals\n\n- Delivery guarantees (best-effort is fine for a demo)\n- User notification preferences\n- Template engine for email formatting\n- Retry logic for failed sends\n\n## Design\n\nThe notification service exposes a simple internal function (not a REST API in v1) that the order service calls directly. It takes a user_id, order_id, and channel, then formats and \"sends\" the notification.\n\nFor the demo, \"sending\" means appending to an in-memory list. In production, this would be a queue + worker pattern.\n\nThe service uses [[API-AUTH-V1]] only to resolve user email from user_id if needed.\n\n## Links\n\n- Belongs to: [[COMP-notification-service]]\n- Consumes: [[API-AUTH-V1]]\n- Depends on: [[COMP-auth-service]]\n- Decided by: [[ADR-0005]]\n\n## Acceptance Criteria\n\n- [ ] Order confirmation creates a notification record with correct order ID\n- [ ] Notification includes user ID and channel\n- [ ] Sent notifications are retrievable for debugging\n- [ ] Service handles missing user gracefully (logs warning, doesn't crash)\n", "intent/notification-service/adrs/ADR-0005-fire-and-forget-notifications.md": "---\nid: ADR-0005\nstatus: accepted\n---\n\n# Fire-and-forget notification delivery\n\n## Context\n\nThe order service triggers notifications after checkout. We need to decide whether notification delivery blocks the checkout response or happens best-effort in the background.\n\n## Decision\n\nNotifications are fire-and-forget. The order service calls the notification function, logs any errors, and continues. Checkout success doesn't depend on notification success.\n\n## Alternatives\n\n- **Guaranteed delivery with a queue**: Publish to a message queue, have a worker consume and retry. Guarantees delivery but adds infrastructure (queue, dead-letter handling, monitoring).\n- **Synchronous with retry**: Call the notification service and retry on failure. Would make checkout slower and more fragile.\n- **Outbox pattern**: Write notification intent to the database as part of the order transaction, process asynchronously. Requires a real database and a background worker.\n\n## Consequences\n\n- Notifications can be silently lost. Acceptable for a demo \u2014 we log the attempt.\n- Checkout latency is not affected by notification speed.\n- No need for queue infrastructure.\n- Easy to upgrade later: swap the direct function call for a queue publish.\n\n## Links\n\n- For: [[SPEC-0005]]\n", "intent/web-app/specs/SPEC-0006-storefront-ui.md": "---\nid: SPEC-0006\nstatus: accepted\n---\n\n# Storefront UI\n\n## Intent\n\nGive users a web interface to browse books, manage their cart, and check out. The frontend is a thin layer over the backend APIs \u2014 it shouldn't contain business logic.\n\n## Context\n\nWe need a frontend. Next.js gives us server-side rendering for the catalog pages (good for SEO and initial load) and client-side interactivity for the cart. The UI is deliberately minimal \u2014 this is a Sigil demo, not a design showcase.\n\n## Goals\n\n- Product listing page showing all books\n- Individual book detail page\n- Cart sidebar with add/remove/quantity\n- Checkout button that calls the orders API\n- Login/register forms\n- Order history page\n\n## Non-goals\n\n- Responsive design polish\n- Accessibility audit (would be important in production)\n- Client-side search (server-side is fine)\n- Animations or transitions\n\n## Design\n\nPages map directly to API endpoints:\n\n- `/` \u2014 home, links to catalog\n- `/catalog` \u2014 calls [[API-CATALOG-V1]], renders book grid\n- `/catalog/:id` \u2014 book detail page\n- `/cart` \u2014 reads [[API-CART-V1]], add/remove controls\n- `/checkout` \u2014 calls [[API-ORDERS-V1]] checkout endpoint\n- `/orders` \u2014 calls [[API-ORDERS-V1]] list endpoint\n- `/login`, `/register` \u2014 calls [[API-AUTH-V1]]\n\nAuth state is stored in a cookie. All API calls include the JWT token.\n\n## Links\n\n- Belongs to: [[COMP-web-app]]\n- Consumes: [[API-CATALOG-V1]] [[API-AUTH-V1]] [[API-CART-V1]] [[API-ORDERS-V1]]\n- Depends on: [[COMP-catalog-service]] [[COMP-auth-service]] [[COMP-cart-service]] [[COMP-order-service]]\n- Decided by: [[ADR-0006]]\n\n## Acceptance Criteria\n\n- [ ] Catalog page renders book titles, authors, and prices\n- [ ] Adding a book from catalog updates the cart count\n- [ ] Cart page shows all items with quantities and a checkout button\n- [ ] Checkout redirects to order confirmation\n- [ ] Unauthenticated users are redirected to login\n", "intent/web-app/adrs/ADR-0006-nextjs-for-frontend.md": "---\nid: ADR-0006\nstatus: accepted\n---\n\n# Use Next.js for the storefront frontend\n\n## Context\n\nWe need a web frontend for the bookstore. The catalog pages benefit from server-side rendering (fast first paint, SEO), while the cart needs client-side interactivity. We want a framework that handles both without a complex build setup.\n\n## Decision\n\nUse Next.js with the App Router. Server components for catalog pages, client components for cart interactions.\n\n## Alternatives\n\n- **Plain React (Create React App / Vite)**: Simpler, but no SSR. Catalog pages would show a loading spinner while fetching books. Not a great first impression.\n- **Remix**: Also does SSR well, but smaller ecosystem and less familiar to most developers. Next.js is the safer bet for a demo that people need to understand quickly.\n- **Static site + API**: Pre-render catalog at build time. Works for a fixed inventory, but doesn't demonstrate real-time data fetching.\n- **No frontend (API only)**: Would simplify the demo but make it less compelling. People want to see a UI.\n\n## Consequences\n\n- Need Node.js in addition to Python for the backend services. Adds to the tech stack.\n- Server components can call backend APIs directly, reducing client-side JavaScript.\n- The frontend is a thin layer \u2014 no business logic, just API calls and rendering.\n- The app/ directory follows Next.js conventions, which is well-documented.\n\n## Links\n\n- For: [[SPEC-0006]]\n", "gates/GATE-0003-order-service-deps.yaml": "id: GATE-0003\ntype: dependency-policy\nstatus: active\n\napplies_to:\n  - node: COMP-order-service\n  - node: API-ORDERS-V1\n\nenforced_by:\n  kind: builtin\n  rule: \"dependency-check\"\n  config:\n    # Order service may only depend on these components.\n    # Prevents accidental coupling to services it shouldn't know about.\n    allowed_dependencies:\n      - COMP-catalog-service\n      - COMP-cart-service\n      - COMP-auth-service\n      - COMP-notification-service\n      - COMP-payment-gateway\n\npolicy:\n  mode: \"warn\"\n  on_fail: \"block\"\n\ndocs:\n  summary: \"Order service can only depend on catalog, cart, auth, and notification. Prevents uncontrolled coupling.\"\n  owner: \"team-platform\"\n", "gates/GATE-0005-payment-no-raw-card-numbers.yaml": "id: GATE-0005\ntype: pattern\nstatus: active\n\napplies_to:\n  - node: COMP-payment-gateway\n  - node: API-PAYMENTS-V1\n\nenforced_by:\n  kind: pattern\n  config:\n    paths:\n      - \"services/payments/**\"\n    pattern: \"card_number|credit_card|cc_num|pan_number\"\n    negate: true\n    message: \"Payment code must not contain raw card number references. Use tokenized payment methods only.\"\n\npolicy:\n  mode: \"enforce\"\n  on_fail: \"block\"\n\ndocs:\n  summary: \"Payment gateway must never handle raw card numbers \u2014 only tokenized payment methods. Prevents accidental PCI scope expansion.\"\n  owner: \"team-payments\"\n", "gates/GATE-0004-spec-quality.yaml": "id: GATE-0004\ntype: spec-quality\nstatus: active\n\napplies_to:\n  - node_type: spec\n\nenforced_by:\n  kind: builtin\n  rules:\n    - require_sections: [\"Intent\", \"Goals\", \"Non-goals\", \"Design\", \"Acceptance Criteria\", \"Links\"]\n    - require_links: [\"Belongs to\"]\n    - max_missing_links: 2\n\npolicy:\n  mode: \"warn\"\n  on_fail: \"warn\"\n\ndocs:\n  summary: \"All specs must have Intent, Goals, Non-goals, Design, Acceptance Criteria, and Links sections. Every spec must declare which component it belongs to.\"\n  owner: \"team-platform\"\n", "gates/GATE-0001-catalog-api-compat.yaml": "id: GATE-0001\ntype: api-compat\nstatus: active\n\napplies_to:\n  - node: API-CATALOG-V1\n\nenforced_by:\n  kind: command\n  workdir: .\n  command: [\"python3\", \"-c\", \"\nimport json, sys;\n# Verify the catalog API contract hasn't changed in a breaking way.\n# Checks: required fields present, price is int not float, search endpoint exists.\nroutes = open('services/catalog/routes.py').read();\nchecks = [\n  ('list_books' in routes, 'list_books function must exist'),\n  ('get_book' in routes, 'get_book function must exist'),\n  ('search_books' in routes, 'search_books function must exist'),\n  ('price_cents' in routes, 'price must use price_cents (integer cents)'),\n  ('float' not in routes.split('price')[1][:50] if 'price' in routes else True, 'price must not use float'),\n];\nfailures = [msg for ok, msg in checks if not ok];\n[print(f'FAIL: {f}') for f in failures];\nsys.exit(1 if failures else 0)\n\"]\n\npolicy:\n  mode: \"block\"\n  on_fail: \"block\"\n\ndocs:\n  summary: \"Prevents breaking changes to the Catalog API: required endpoints must exist, prices must be integer cents\"\n  owner: \"team-platform\"\n", "gates/GATE-0002-auth-no-plaintext-passwords.yaml": "id: GATE-0002\ntype: security\nstatus: active\n\napplies_to:\n  - node: API-AUTH-V1\n  - node: COMP-auth-service\n\nenforced_by:\n  kind: command\n  workdir: .\n  command: [\"bash\", \"-lc\", \"\n    # Verify that auth service never stores or returns plaintext passwords.\n    # This is a simplified security gate for the demo.\n    AUTH_CODE=$(cat services/auth/auth.py)\n\n    # Check 1: hash_password function must exist\n    echo \\\"$AUTH_CODE\\\" | grep -q 'def hash_password' || { echo 'FAIL: hash_password function missing'; exit 1; }\n\n    # Check 2: password should never appear in a return/response without hashing\n    # Look for 'password' in return statements (crude but effective for demo)\n    RETURNS_WITH_PASSWORD=$(echo \\\"$AUTH_CODE\\\" | grep 'return.*password' | grep -v 'hash' || true)\n    if [ -n \\\"$RETURNS_WITH_PASSWORD\\\" ]; then\n      echo \\\"FAIL: password appears in return statement without hashing\\\"\n      echo \\\"$RETURNS_WITH_PASSWORD\\\"\n      exit 1\n    fi\n\n    # Check 3: SECRET should not be an empty string\n    echo \\\"$AUTH_CODE\\\" | grep -q 'SECRET = \\\"\\\"' && { echo 'FAIL: SECRET is empty'; exit 1; }\n\n    echo 'PASS: auth security checks passed'\n  \"]\n\npolicy:\n  mode: \"block\"\n  on_fail: \"block\"\n\ndocs:\n  summary: \"Ensures auth service hashes passwords and never returns them in plaintext\"\n  owner: \"team-platform\"\n"};
+    window.__SIGIL_DRIFT__ = {
+  "scanned": 61,
+  "mapped": 6,
+  "unowned": 4,
+  "drift_signals": 4,
+  "findings": [
+    {
+      "type": "unowned_files",
+      "count": 4,
+      "files": [
+        "BEFORE-AFTER.md",
+        "DEMO.md",
+        "README.md",
+        "tools/intent_viewer/index.html"
+      ]
+    },
+    {
+      "type": "spec_no_code",
+      "items": [
+        "COMP-payment-gateway"
+      ]
+    }
+  ]
+};
+    window.__SIGIL_TIMELINE__ = {
+  "events": [],
+  "generated_at": "2026-03-08T18:23:02Z"
+};
+    window.__SIGIL_REVIEW__ = {
+  "generated_at": "2026-03-09T02:09:13Z",
+  "summary": {
+    "total_changes": 2,
+    "intent_changes": 0,
+    "code_changes": 2,
+    "covered_files": 0,
+    "uncovered_files": 2,
+    "coverage_pct": 0
+  },
+  "intent_changes": [],
+  "covered": {},
+  "uncovered": [
+    {
+      "status": "M",
+      "path": "docs/index.html"
+    },
+    {
+      "status": "M",
+      "path": "tools/intent_viewer/index.html"
+    }
+  ],
+  "governance": {},
+  "gates": [
+    {
+      "id": "GATE-0001",
+      "summary": "Prevents breaking changes to the Catalog API: required endpoints must exist, prices must be integer cents",
+      "kind": "command",
+      "policy": "block",
+      "passed": true,
+      "scope": 1,
+      "findings": []
+    },
+    {
+      "id": "GATE-0002",
+      "summary": "Ensures auth service hashes passwords and never returns them in plaintext",
+      "kind": "command",
+      "policy": "block",
+      "passed": true,
+      "scope": 4,
+      "findings": []
+    },
+    {
+      "id": "GATE-0003",
+      "summary": "Order service can only depend on catalog, cart, auth, and notification. Prevents uncontrolled coupling.",
+      "kind": "builtin",
+      "policy": "block",
+      "passed": true,
+      "scope": 6,
+      "findings": []
+    },
+    {
+      "id": "GATE-0004",
+      "summary": "All specs must have Intent, Goals, Non-goals, Design, Acceptance Criteria, and Links sections. Every spec must declare which component it belongs to.",
+      "kind": "builtin",
+      "policy": "warn",
+      "passed": true,
+      "scope": 0,
+      "findings": []
+    },
+    {
+      "id": "GATE-0005",
+      "summary": "Payment gateway must never handle raw card numbers \u2014 only tokenized payment methods. Prevents accidental PCI scope expansion.",
+      "kind": "pattern",
+      "policy": "block",
+      "passed": true,
+      "scope": 3,
+      "findings": []
+    }
+  ]
+};
+    window.__SIGIL_COVERAGE__ = {
+  "score": 91,
+  "metrics": {
+    "components_with_spec": {
+      "value": 8,
+      "total": 9,
+      "pct": 89
+    },
+    "specs_with_acceptance": {
+      "value": 9,
+      "total": 9,
+      "pct": 100
+    },
+    "adrs_with_status": {
+      "value": 7,
+      "total": 7,
+      "pct": 100
+    },
+    "adrs_accepted": {
+      "value": 6,
+      "total": 7,
+      "pct": 86
+    }
+  },
+  "stats": {
+    "nodes": 36,
+    "edges": 87,
+    "components": 9,
+    "specs": 9,
+    "adrs": 7,
+    "gates": 5
+  },
+  "components": [
+    {
+      "id": "COMP-search-service",
+      "title": "Search Service",
+      "has_spec": true,
+      "adr_count": 0,
+      "gate_count": 0,
+      "level": "yellow"
+    },
+    {
+      "id": "COMP-auth-service",
+      "title": "Auth Service",
+      "has_spec": true,
+      "adr_count": 1,
+      "gate_count": 1,
+      "level": "green"
+    },
+    {
+      "id": "COMP-payment-gateway",
+      "title": "Payment Gateway",
+      "has_spec": true,
+      "adr_count": 0,
+      "gate_count": 1,
+      "level": "yellow"
+    },
+    {
+      "id": "COMP-cart-service",
+      "title": "Cart Service",
+      "has_spec": true,
+      "adr_count": 1,
+      "gate_count": 0,
+      "level": "green"
+    },
+    {
+      "id": "COMP-catalog-service",
+      "title": "Catalog Service",
+      "has_spec": true,
+      "adr_count": 1,
+      "gate_count": 0,
+      "level": "green"
+    },
+    {
+      "id": "COMP-order-service",
+      "title": "Order Service",
+      "has_spec": true,
+      "adr_count": 1,
+      "gate_count": 1,
+      "level": "green"
+    },
+    {
+      "id": "COMP-notification-service",
+      "title": "Notification Service",
+      "has_spec": true,
+      "adr_count": 1,
+      "gate_count": 0,
+      "level": "green"
+    },
+    {
+      "id": "COMP-admin-dashboard",
+      "title": "Admin Dashboard",
+      "has_spec": false,
+      "adr_count": 0,
+      "gate_count": 0,
+      "level": "red"
+    },
+    {
+      "id": "COMP-web-app",
+      "title": "Web App",
+      "has_spec": true,
+      "adr_count": 1,
+      "gate_count": 0,
+      "level": "green"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "warn",
+      "message": "1 component(s) have no governing spec",
+      "nodes": [
+        "COMP-admin-dashboard"
+      ]
+    },
+    {
+      "severity": "info",
+      "message": "1 ADR(s) still in draft/proposed",
+      "nodes": [
+        "ADR-0007"
+      ]
+    }
+  ]
+};
+
+    // Override fetch to serve embedded data
+    const _origFetch = window.fetch;
+    window.fetch = function(url, opts) {
+      const urlStr = String(url);
+      if (urlStr.includes('graph.json')) {
+        return Promise.resolve(new Response(JSON.stringify(window.__SIGIL_GRAPH__), {status: 200}));
+      }
+      if (urlStr.includes('drift.json')) {
+        return Promise.resolve(new Response(JSON.stringify(window.__SIGIL_DRIFT__), {status: 200}));
+      }
+      if (urlStr.includes('timeline.json')) {
+        return Promise.resolve(new Response(JSON.stringify(window.__SIGIL_TIMELINE__), {status: 200}));
+      }
+      if (urlStr.includes('review.json')) {
+        return Promise.resolve(new Response(JSON.stringify(window.__SIGIL_REVIEW__), {status: 200}));
+      }
+      if (urlStr.includes('coverage.json')) {
+        return Promise.resolve(new Response(JSON.stringify(window.__SIGIL_COVERAGE__), {status: 200}));
+      }
+      // Check file contents
+      for (const [path, content] of Object.entries(window.__SIGIL_FILES__)) {
+        if (urlStr.endsWith(path) || urlStr.includes(path)) {
+          return Promise.resolve(new Response(content, {status: 200}));
+        }
+      }
+      return _origFetch(url, opts);
+    };
+    </script>
+    
+</head>
+<body>
+  <div id="topbar">
+    <div id="topbar-left">
+      <h1>Sigil</h1>
+      <button class="view-btn active" data-view="overview" onclick="switchView('overview')">Overview</button>
+      <button class="view-btn" data-view="graph" onclick="switchView('graph')">Graph</button>
+      <button class="view-btn" data-view="radar" onclick="switchView('radar')">Impact Radar</button>
+      <button class="view-btn" data-view="hierarchy" onclick="switchView('hierarchy')">Hierarchy</button>
+      <button class="view-btn" data-view="coverage" onclick="switchView('coverage')">Coverage</button>
+      <button class="view-btn" data-view="drift" onclick="switchView('drift')">Drift</button>
+      <button class="view-btn" data-view="timeline" onclick="switchView('timeline')">Timeline</button>
+      <button class="view-btn" data-view="matrix" onclick="switchView('matrix')">Matrix</button>
+      <button class="view-btn" data-view="review" onclick="switchView('review')">Review</button>
+      <button id="new-btn" onclick="showNewModal()">+ New</button>
+    </div>
+    <div id="health-badge"></div>
+  </div>
+  <div id="main">
+    <div id="left">
+      <svg id="svg"></svg>
+      <svg id="radar-svg"></svg>
+      <svg id="hierarchy-svg"></svg>
+      <div id="timeline-container"></div>
+      <div id="matrix-container"></div>
+      <div id="legend"></div>
+      <div id="tooltip"></div>
+      <div id="keyhint">
+        <span class="keyhint-key">Cmd+K</span> palette
+        <span class="keyhint-key">j</span><span class="keyhint-key">k</span> cycle
+        <span class="keyhint-key">/</span> search
+        <span class="keyhint-key">g</span> graph
+        <span class="keyhint-key">r</span> radar
+        <span class="keyhint-key">h</span> hier
+        <span class="keyhint-key">c</span> cov
+        <span class="keyhint-key">d</span> drift
+        <span class="keyhint-key">t</span> time
+        <span class="keyhint-key">m</span> matrix
+      </div>
+    </div>
+    <div id="right">
+      <div id="search-bar"><input id="search" placeholder="Search nodes..." /></div>
+      <div id="nav-bar">
+        <button id="nav-back" class="nav-btn" onclick="navBack()" disabled title="Back (Alt+Left)">&#8592;</button>
+        <button id="nav-forward" class="nav-btn" onclick="navForward()" disabled title="Forward (Alt+Right)">&#8594;</button>
+        <button id="nav-home" class="nav-btn" onclick="selectRootNode()" title="Project Root">&#8962; Root</button>
+      </div>
+      <div id="breadcrumb"></div>
+      <div id="node-header"></div>
+      <div id="tabs">
+        <div class="tab active" data-tab="content">Content</div>
+        <div class="tab" data-tab="graph">Edges</div>
+        <div class="tab" data-tab="radar">Blast Radius</div>
+        <div class="tab" data-tab="raw">Raw</div>
+      </div>
+      <div id="content-area">
+        <div class="welcome" id="welcome-panel">
+          <h2>You're looking at an intent graph</h2>
+          <p>Every node on the left is a <strong>why</strong> behind your code — specs, decisions, constraints, and contracts. The edges show how they connect. Click any node to read the full reasoning.</p>
+          <p>This is what Sigil tracks for your codebase. Instead of decisions rotting in Notion or Slack threads, they live here — queryable, diffable, and enforced in CI.</p>
+          <div class="welcome-legend">
+            <div class="legend-item"><div class="legend-dot" style="background:var(--base0D)"></div> Component</div>
+            <div class="legend-item"><div class="legend-dot" style="background:var(--base0B)"></div> Spec</div>
+            <div class="legend-item"><div class="legend-dot" style="background:var(--base0E)"></div> Decision (ADR)</div>
+            <div class="legend-item"><div class="legend-dot" style="background:var(--base08)"></div> Gate</div>
+            <div class="legend-item"><div class="legend-dot" style="background:var(--base0C)"></div> Interface</div>
+          </div>
+          <div class="welcome-hint">
+            <kbd>⌘K</kbd> command palette &nbsp; <kbd>r</kbd> blast radius &nbsp; <kbd>c</kbd> coverage &nbsp; <kbd>/</kbd> search
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="cmd-overlay" onclick="if(event.target===this)hideCmdPalette()">
+    <div id="cmd-palette">
+      <input id="cmd-input" placeholder="Search nodes, switch views, or create..." autocomplete="off" />
+      <div id="cmd-results"></div>
+    </div>
+  </div>
+
+  <div id="modal-overlay" onclick="if(event.target===this)hideNewModal()">
+    <div id="modal">
+      <h3>New Intent Document</h3>
+      <div class="modal-field">
+        <label>Type</label>
+        <select id="new-type">
+          <option value="spec">Spec</option>
+          <option value="adr">ADR</option>
+        </select>
+      </div>
+      <div class="modal-field">
+        <label>Component</label>
+        <select id="new-component"></select>
+      </div>
+      <div class="modal-field">
+        <label>Title</label>
+        <input id="new-title" placeholder="e.g. User Authentication Flow" />
+      </div>
+      <div id="new-feedback"></div>
+      <div class="modal-actions">
+        <button class="modal-cancel" onclick="hideNewModal()">Cancel</button>
+        <button class="modal-create" onclick="createNewDoc()">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script>
+    let graphData = null;
+    let selectedNode = null;
+    let activeTab = "content";
+    let activeView = "graph";
+    let allNodes = [];
+    let sim = null;
+
+    // Navigation state
+    let navHistory = [];
+    let navHistoryIdx = -1;
+    let visitedNodes = new Set();
+    let navigating = false;
+
+    // D3 refs for path highlighting + zoom
+    let svgRef = null;
+    let zoomRef = null;
+    let gRef = null;
+    let nodesRef = null;
+    let labelsRef = null;
+    let nodeGlowRef = null;
+
+    const nodeColors = {
+      component: "#828079",
+      spec:      "#04b372",
+      interface: "#458ae2",
+      gate:      "#e7349c",
+      adr:       "#9871fe",
+      risk:      "#f26c33",
+      rollout:   "#1ad0d6",
+      project:   "#bbff00"
+    };
+
+    const edgeColors = {
+      belongs_to: "var(--base03)",
+      decided_by: "var(--base16)",
+      depends_on: "var(--base09)",
+      gated_by: "var(--base10)",
+      provides: "var(--base13)",
+      consumes: "var(--base14)",
+      relates_to: "var(--base02)",
+      supersedes: "var(--base08)"
+    };
+
+    // ---- Utilities ----
+
+    function esc(s) {
+      return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    async function loadGraph() {
+      const res = await fetch("../../.intent/index/graph.json");
+      if (!res.ok) throw new Error("Failed to load graph.json -- run: python tools/intent/sigil.py index");
+      return await res.json();
+    }
+
+    // ---- Coverage Engine ----
+
+    function computeCoverage(graph) {
+      const nodes = graph.nodes;
+      const edges = graph.edges;
+      const components = nodes.filter(n => n.type === "component");
+      const specs = nodes.filter(n => n.type === "spec");
+      const adrs = nodes.filter(n => n.type === "adr");
+      const gates = nodes.filter(n => n.type === "gate");
+      const findings = [];
+
+      // Components with no governing spec
+      const compsWithSpec = new Set();
+      edges.filter(e => e.type === "belongs_to").forEach(e => {
+        compsWithSpec.add(e.dst);
+      });
+      const uncomps = components.filter(c => !compsWithSpec.has(c.id));
+      if (uncomps.length) {
+        findings.push({
+          sev: "warn",
+          text: `${uncomps.length} component(s) have no governing spec`,
+          nodes: uncomps
+        });
+      }
+
+      // Specs with no acceptance criteria
+      const specsNoAC = specs.filter(s => {
+        const fm = s.frontmatter || {};
+        const summary = s.body_summary || "";
+        return !summary.includes("Acceptance Criteria") && !summary.includes("acceptance criteria");
+      });
+      // Actually check the file content if we have frontmatter
+      // For now use body_summary as a heuristic
+      if (specsNoAC.length && specsNoAC.length < specs.length) {
+        findings.push({
+          sev: "info",
+          text: `${specsNoAC.length} spec(s) may be missing acceptance criteria`,
+          nodes: specsNoAC
+        });
+      }
+
+      // ADRs still in draft
+      const draftADRs = adrs.filter(a => {
+        const fm = a.frontmatter || {};
+        return fm.status === "draft" || fm.status === "proposed";
+      });
+      if (draftADRs.length) {
+        findings.push({
+          sev: "info",
+          text: `${draftADRs.length} ADR(s) still in draft/proposed`,
+          nodes: draftADRs
+        });
+      }
+
+      // Dangling edges
+      const nodeIds = new Set(nodes.map(n => n.id));
+      const dangling = edges.filter(e => !nodeIds.has(e.dst));
+      if (dangling.length) {
+        findings.push({
+          sev: "warn",
+          text: `${dangling.length} dangling reference(s) to missing nodes`,
+          nodes: []
+        });
+      }
+
+      // Components with specs -- positive
+      if (compsWithSpec.size) {
+        findings.push({
+          sev: "ok",
+          text: `${compsWithSpec.size} component(s) have governing specs`,
+          nodes: []
+        });
+      }
+
+      // All ADRs accepted -- positive
+      const acceptedADRs = adrs.filter(a => (a.frontmatter || {}).status === "accepted");
+      if (acceptedADRs.length) {
+        findings.push({
+          sev: "ok",
+          text: `${acceptedADRs.length} ADR(s) are accepted`,
+          nodes: []
+        });
+      }
+
+      // Coverage score: weighted
+      let score = 0;
+      let max = 0;
+
+      // Component coverage (40% weight)
+      if (components.length) {
+        score += (compsWithSpec.size / components.length) * 40;
+        max += 40;
+      }
+
+      // ADR maturity (30% weight)
+      if (adrs.length) {
+        score += (acceptedADRs.length / adrs.length) * 30;
+        max += 30;
+      }
+
+      // Spec quality -- have acceptance criteria (20% weight)
+      if (specs.length) {
+        const withAC = specs.length - specsNoAC.length;
+        score += (withAC / specs.length) * 20;
+        max += 20;
+      }
+
+      // No dangling refs (10% weight)
+      if (edges.length) {
+        const clean = edges.length - dangling.length;
+        score += (clean / edges.length) * 10;
+        max += 10;
+      }
+
+      const pct = max > 0 ? Math.round((score / max) * 100) : 0;
+
+      return {
+        score: pct,
+        stats: {
+          total: nodes.length,
+          components: components.length,
+          specs: specs.length,
+          adrs: adrs.length,
+          gates: gates.length,
+          edges: edges.length
+        },
+        findings
+      };
+    }
+
+    function renderHealthBadge(cov) {
+      const el = document.getElementById("health-badge");
+      let cls = "health-poor";
+      if (cov.score >= 80) cls = "health-excellent";
+      else if (cov.score >= 60) cls = "health-good";
+      else if (cov.score >= 40) cls = "health-fair";
+
+      el.className = cls;
+      el.innerHTML = `${cov.score}% intent health`;
+      el.id = "health-badge";
+    }
+
+    function renderCoverageDashboard(cov) {
+      const area = document.getElementById("content-area");
+      const barColor = cov.score >= 80 ? "var(--base0B)" :
+                       cov.score >= 60 ? "var(--base0D)" :
+                       cov.score >= 40 ? "var(--base0A)" : "var(--base08)";
+
+      const cards = `
+        <div class="cov-grid">
+          <div class="cov-card">
+            <div class="cov-card-title">Health Score</div>
+            <div class="cov-card-value" style="color:${barColor}">${cov.score}%</div>
+            <div class="cov-bar-track"><div class="cov-bar-fill" style="width:${cov.score}%;background:${barColor}"></div></div>
+          </div>
+          <div class="cov-card">
+            <div class="cov-card-title">Total Nodes</div>
+            <div class="cov-card-value" style="color:var(--base06)">${cov.stats.total}</div>
+            <div class="cov-card-sub">${cov.stats.components} comp / ${cov.stats.specs} spec / ${cov.stats.adrs} adr / ${cov.stats.gates} gate</div>
+          </div>
+          <div class="cov-card">
+            <div class="cov-card-title">Edges</div>
+            <div class="cov-card-value" style="color:var(--base0E)">${cov.stats.edges}</div>
+            <div class="cov-card-sub">relationships in the graph</div>
+          </div>
+          <div class="cov-card">
+            <div class="cov-card-title">Findings</div>
+            <div class="cov-card-value" style="color:var(--base0A)">${cov.findings.filter(f => f.sev !== "ok").length}</div>
+            <div class="cov-card-sub">issues to address</div>
+          </div>
+        </div>
+      `;
+
+      const findingsHtml = cov.findings.map(f => {
+        const sevCls = f.sev === "warn" ? "cov-sev-warn" : f.sev === "ok" ? "cov-sev-ok" : "cov-sev-info";
+        const sevLabel = f.sev === "warn" ? "WARN" : f.sev === "ok" ? "PASS" : "INFO";
+        const nodeLinks = f.nodes.map(n =>
+          `<span class="cov-link" onclick="switchView('graph');selectNodeById('${n.id}')">${n.id}</span>`
+        ).join(", ");
+        return `<div class="cov-finding">
+          <span class="cov-sev ${sevCls}">${sevLabel}</span>
+          <span class="cov-finding-text">${esc(f.text)}${nodeLinks ? " (" + nodeLinks + ")" : ""}</span>
+        </div>`;
+      }).join("");
+
+      area.innerHTML = cards + `
+        <h3 style="color:var(--base06);font-size:14px;margin-bottom:10px">Findings</h3>
+        ${findingsHtml}
+      `;
+    }
+
+    async function renderCoverageDashboardAsync() {
+      const cov = computeCoverage(graphData);
+      renderCoverageDashboard(cov);
+      // Try to load coverage.json for per-component details
+      try {
+        const res = await fetch("../../.intent/index/coverage.json");
+        if (!res.ok) throw new Error();
+        const covData = await res.json();
+        if (covData.components && covData.components.length) {
+          const area = document.getElementById("content-area");
+          const levelColor = { green: "var(--base0B)", yellow: "var(--base0A)", red: "var(--base08)" };
+          const levelIcon = { green: "+", yellow: "~", red: "-" };
+          let compHtml = '<h3 style="color:var(--base06);font-size:14px;margin:16px 0 10px">Component Coverage</h3>';
+          compHtml += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px">';
+          covData.components.forEach(c => {
+            const col = levelColor[c.level] || "var(--base05)";
+            const icon = levelIcon[c.level] || "?";
+            compHtml += `<div class="cov-card" style="cursor:pointer;border-left:3px solid ${col}" onclick="switchView('graph');selectNodeById('${c.id}')">
+              <div class="cov-card-title" style="color:${col}">[${icon}] ${esc(c.id)}</div>
+              <div class="cov-card-sub">${c.has_spec ? 'spec' : 'no spec'} · ${c.adr_count} ADR(s) · ${c.gate_count} gate(s)</div>
+            </div>`;
+          });
+          compHtml += '</div>';
+          // Also show metrics from CLI
+          if (covData.metrics) {
+            const m = covData.metrics;
+            compHtml += '<h3 style="color:var(--base06);font-size:14px;margin:16px 0 10px">Metrics</h3><div class="cov-grid">';
+            compHtml += `<div class="cov-card"><div class="cov-card-title">Components with Spec</div><div class="cov-card-value" style="color:var(--base0B)">${m.components_with_spec.pct}%</div><div class="cov-card-sub">${m.components_with_spec.value}/${m.components_with_spec.total}</div></div>`;
+            compHtml += `<div class="cov-card"><div class="cov-card-title">Specs with Acceptance</div><div class="cov-card-value" style="color:var(--base0D)">${m.specs_with_acceptance.pct}%</div><div class="cov-card-sub">${m.specs_with_acceptance.value}/${m.specs_with_acceptance.total}</div></div>`;
+            compHtml += `<div class="cov-card"><div class="cov-card-title">ADRs Accepted</div><div class="cov-card-value" style="color:var(--base0E)">${m.adrs_accepted.pct}%</div><div class="cov-card-sub">${m.adrs_accepted.value}/${m.adrs_accepted.total}</div></div>`;
+            compHtml += `<div class="cov-card"><div class="cov-card-title">ADRs with Status</div><div class="cov-card-value" style="color:var(--base0C)">${m.adrs_with_status.pct}%</div><div class="cov-card-sub">${m.adrs_with_status.value}/${m.adrs_with_status.total}</div></div>`;
+            compHtml += '</div>';
+          }
+          area.innerHTML += compHtml;
+        }
+      } catch(e) { /* coverage.json not available, client-side view is sufficient */ }
+    }
+
+    // ---- Drift Detection View ----
+
+    async function renderDriftDashboard() {
+      const area = document.getElementById("content-area");
+      document.getElementById("node-header").innerHTML = '<h2>Drift Detection</h2><div><span class="pill pill-type">intent vs code</span></div>';
+      document.getElementById("breadcrumb").innerHTML = '';
+      document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+
+      // Try to load drift.json
+      let drift;
+      try {
+        const res = await fetch("../../.intent/index/drift.json");
+        if (!res.ok) throw new Error();
+        drift = await res.json();
+      } catch {
+        area.innerHTML = `<div class="md-body">
+          <p>No drift data available. Run <code>python tools/intent/sigil.py drift</code> to generate.</p>
+        </div>`;
+        return;
+      }
+
+      const hasFindings = drift.findings && drift.findings.length > 0;
+      const statusColor = hasFindings ? "var(--base0A)" : "var(--base0B)";
+      const statusText = hasFindings ? "Drift detected" : "Aligned";
+
+      let html = `
+        <div class="cov-grid">
+          <div class="cov-card">
+            <div class="cov-card-title">Status</div>
+            <div class="cov-card-value" style="color:${statusColor}">${statusText}</div>
+          </div>
+          <div class="cov-card">
+            <div class="cov-card-title">Files Scanned</div>
+            <div class="cov-card-value" style="color:var(--base06)">${drift.scanned || 0}</div>
+          </div>
+          <div class="cov-card">
+            <div class="cov-card-title">Mapped to Components</div>
+            <div class="cov-card-value" style="color:var(--base0B)">${drift.mapped || 0}</div>
+          </div>
+          <div class="cov-card">
+            <div class="cov-card-title">Unowned Files</div>
+            <div class="cov-card-value" style="color:${drift.unowned ? 'var(--base09)' : 'var(--base0B)'}">${drift.unowned || 0}</div>
+          </div>
+        </div>
+      `;
+
+      if (drift.findings && drift.findings.length) {
+        html += '<h3 style="color:var(--base06);font-size:14px;margin-bottom:10px">Findings</h3>';
+        drift.findings.forEach(f => {
+          if (f.type === "unowned_files") {
+            html += `<div class="cov-finding">
+              <span class="cov-sev cov-sev-warn">DRIFT</span>
+              <span class="cov-finding-text">${f.count} file(s) not mapped to any component</span>
+            </div>`;
+            if (f.files) {
+              html += '<div style="margin:4px 0 12px 40px;font-size:12px;color:var(--base04)">';
+              f.files.slice(0, 20).forEach(fp => {
+                html += `<div style="margin:2px 0"><code style="background:var(--base02);padding:1px 4px;border-radius:2px;font-size:11px">${esc(fp)}</code></div>`;
+              });
+              if (f.files.length > 20) html += `<div>... and ${f.files.length - 20} more</div>`;
+              html += '</div>';
+            }
+          } else if (f.type === "no_spec") {
+            html += `<div class="cov-finding">
+              <span class="cov-sev cov-sev-warn">DRIFT</span>
+              <span class="cov-finding-text">Components with code but no governing spec</span>
+            </div>`;
+            if (f.items) {
+              html += '<div style="margin:4px 0 12px 40px;font-size:12px;color:var(--base04)">';
+              f.items.forEach(item => { html += `<div style="margin:2px 0">${esc(item)}</div>`; });
+              html += '</div>';
+            }
+          } else if (f.type === "spec_no_code") {
+            html += `<div class="cov-finding">
+              <span class="cov-sev cov-sev-info">INFO</span>
+              <span class="cov-finding-text">Components with specs but no matching code files</span>
+            </div>`;
+            if (f.items) {
+              html += '<div style="margin:4px 0 12px 40px;font-size:12px;color:var(--base04)">';
+              f.items.forEach(item => {
+                html += `<div style="margin:2px 0"><span class="cov-link" onclick="switchView(\'graph\');selectNodeById(\'${item}\')">${esc(item)}</span></div>`;
+              });
+              html += '</div>';
+            }
+          }
+        });
+      } else {
+        html += `<div class="cov-finding">
+          <span class="cov-sev cov-sev-ok">PASS</span>
+          <span class="cov-finding-text">All code files are mapped to components with governing specs</span>
+        </div>`;
+      }
+
+      area.innerHTML = html;
+    }
+
+    // ---- Review Dashboard ----
+
+    async function renderReviewDashboard() {
+      const area = document.getElementById("content-area");
+      document.getElementById("node-header").innerHTML = '<h2>Intent Review</h2><div><span class="pill pill-type">code review governance</span></div>';
+      document.getElementById("breadcrumb").innerHTML = '';
+      document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+
+      let review;
+      try {
+        const res = await fetch("../../.intent/index/review.json");
+        if (!res.ok) throw new Error();
+        review = await res.json();
+      } catch {
+        area.innerHTML = `<div class="md-body">
+          <p>No review data available. Run <code>sigil index</code> or <code>sigil serve</code> to generate.</p>
+        </div>`;
+        return;
+      }
+
+      const s = review.summary || {};
+      const pct = s.coverage_pct !== undefined ? s.coverage_pct : 100;
+      const covColor = pct >= 80 ? "var(--base0B)" : pct >= 50 ? "var(--base0A)" : "var(--base08)";
+      const covLabel = pct >= 80 ? "GOOD" : pct >= 50 ? "FAIR" : "LOW";
+
+      // Gate summary
+      const gates = review.gates || [];
+      const gatesPassed = gates.filter(g => g.passed).length;
+      const gatesTotal = gates.length;
+      const gatesColor = gatesTotal === 0 ? "var(--base04)" : gatesPassed === gatesTotal ? "var(--base0B)" : "var(--base08)";
+
+      let html = `
+        <div class="cov-grid">
+          <div class="cov-card">
+            <div class="cov-card-title">Intent Coverage</div>
+            <div class="cov-card-value" style="color:${covColor};font-size:36px">${pct}%</div>
+            <div style="font-size:11px;color:var(--base04);margin-top:4px">${covLabel} &mdash; ${s.covered_files || 0}/${s.code_changes || 0} files governed</div>
+          </div>
+          <div class="cov-card">
+            <div class="cov-card-title">Changes</div>
+            <div class="cov-card-value" style="color:var(--base06)">${s.total_changes || 0}</div>
+            <div style="font-size:11px;color:var(--base04);margin-top:4px">${s.intent_changes || 0} intent, ${s.code_changes || 0} code</div>
+          </div>
+          <div class="cov-card">
+            <div class="cov-card-title">Gates</div>
+            <div class="cov-card-value" style="color:${gatesColor}">${gatesPassed}/${gatesTotal}</div>
+            <div style="font-size:11px;color:var(--base04);margin-top:4px">${gatesPassed === gatesTotal ? 'all passing' : (gatesTotal - gatesPassed) + ' failing'}</div>
+          </div>
+          <div class="cov-card">
+            <div class="cov-card-title">Ungoverned</div>
+            <div class="cov-card-value" style="color:${(s.uncovered_files || 0) > 0 ? 'var(--base09)' : 'var(--base0B)'}">${s.uncovered_files || 0}</div>
+            <div style="font-size:11px;color:var(--base04);margin-top:4px">files without component mapping</div>
+          </div>
+        </div>
+      `;
+
+      // Intent document changes
+      const intentChanges = review.intent_changes || [];
+      if (intentChanges.length > 0) {
+        html += '<h3 style="color:var(--base06);font-size:14px;margin:16px 0 10px">Intent Document Changes</h3>';
+        const statusBadge = (s) => {
+          const colors = { A: "var(--base0B)", M: "var(--base0D)", D: "var(--base08)", R: "var(--base0E)" };
+          const labels = { A: "added", M: "modified", D: "deleted", R: "renamed" };
+          return `<span style="display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:600;background:${colors[s] || 'var(--base03)'};color:var(--base00);margin-right:6px">${(labels[s] || s).toUpperCase()}</span>`;
+        };
+        intentChanges.forEach(ic => {
+          const nodeId = ic.path.split("/").pop().replace(/\.md$/, "").replace(/\.yaml$/, "");
+          html += `<div style="margin:4px 0;font-size:12px">
+            ${statusBadge(ic.status)}
+            <code style="background:var(--base02);padding:1px 4px;border-radius:2px;font-size:11px">${esc(ic.path)}</code>
+          </div>`;
+        });
+      }
+
+      // Governed code changes by component
+      const covered = review.covered || {};
+      const governance = review.governance || {};
+      const coveredComps = Object.keys(covered);
+      if (coveredComps.length > 0) {
+        html += '<h3 style="color:var(--base06);font-size:14px;margin:16px 0 10px">Governed Code Changes</h3>';
+        coveredComps.forEach(cid => {
+          const files = covered[cid];
+          const gov = governance[cid] || {};
+          html += `<div style="margin:8px 0;padding:10px;background:var(--base02);border-radius:6px">`;
+          html += `<div style="font-weight:600;font-size:13px;margin-bottom:6px">
+            <span class="cov-link" onclick="switchView('graph');selectNodeById('${cid}')">${esc(cid)}</span>
+            <span style="color:var(--base04);font-weight:400;margin-left:8px">${files.length} file(s)</span>
+          </div>`;
+
+          // Governance badges
+          const govParts = [];
+          if (gov.specs && gov.specs.length) {
+            govParts.push(gov.specs.map(s =>
+              `<span class="cov-link" onclick="switchView('graph');selectNodeById('${s.id}')" style="font-size:11px">${esc(s.id)}</span>`
+            ).join(' '));
+          }
+          if (gov.adrs && gov.adrs.length) {
+            govParts.push(gov.adrs.map(a =>
+              `<span class="cov-link" onclick="switchView('graph');selectNodeById('${a.id}')" style="font-size:11px">${esc(a.id)}</span>`
+            ).join(' '));
+          }
+          if (gov.gates && gov.gates.length) {
+            govParts.push(gov.gates.map(g =>
+              `<span class="cov-link" onclick="switchView('graph');selectNodeById('${g.id}')" style="font-size:11px">${esc(g.id)}</span>`
+            ).join(' '));
+          }
+          if (govParts.length) {
+            html += `<div style="margin-bottom:6px;font-size:11px;color:var(--base04)">Governed by: ${govParts.join(' &middot; ')}</div>`;
+          }
+
+          files.forEach(f => {
+            const st = f.status || "M";
+            const stColors = { A: "var(--base0B)", M: "var(--base0D)", D: "var(--base08)" };
+            html += `<div style="margin:2px 0;font-size:11px;color:var(--base04)">
+              <span style="color:${stColors[st] || 'var(--base04)'};font-weight:600;width:12px;display:inline-block">${st}</span>
+              <code style="background:var(--base01);padding:1px 4px;border-radius:2px">${esc(f.path)}</code>
+            </div>`;
+          });
+          html += `</div>`;
+        });
+      }
+
+      // Ungoverned files
+      const uncovered = review.uncovered || [];
+      if (uncovered.length > 0) {
+        html += `<h3 style="color:var(--base09);font-size:14px;margin:16px 0 10px">Ungoverned Files</h3>`;
+        html += `<div style="padding:10px;background:rgba(242,108,51,0.08);border:1px solid rgba(242,108,51,0.2);border-radius:6px">`;
+        uncovered.forEach(f => {
+          html += `<div style="margin:2px 0;font-size:11px;color:var(--base09)">
+            <code style="background:var(--base02);padding:1px 4px;border-radius:2px">${esc(f.path)}</code>
+          </div>`;
+        });
+        html += `</div>`;
+      }
+
+      // Gate results
+      if (gates.length > 0) {
+        html += '<h3 style="color:var(--base06);font-size:14px;margin:16px 0 10px">Gate Results</h3>';
+        gates.forEach(gr => {
+          const passColor = gr.passed ? "var(--base0B)" : "var(--base08)";
+          const passLabel = gr.passed ? "PASS" : "FAIL";
+          html += `<div class="cov-finding">
+            <span class="cov-sev" style="background:${gr.passed ? 'rgba(4,179,114,0.15)' : 'rgba(231,52,156,0.15)'};color:${passColor}">${passLabel}</span>
+            <span class="cov-finding-text">
+              <span class="cov-link" onclick="switchView('graph');selectNodeById('${gr.id}')">${esc(gr.id)}</span>: ${esc(gr.summary || '')}
+            </span>
+          </div>`;
+          if (gr.findings && gr.findings.length) {
+            html += '<div style="margin:4px 0 8px 40px;font-size:11px;color:var(--base04)">';
+            gr.findings.forEach(f => {
+              const msg = typeof f === "string" ? f : (f.severity + ": " + f.message);
+              html += `<div style="margin:2px 0">${esc(msg)}</div>`;
+            });
+            html += '</div>';
+          }
+        });
+      }
+
+      area.innerHTML = html;
+    }
+
+    // ---- Impact Radar ----
+
+    function getBlastRadius(nodeId, graph) {
+      const rings = [[], [], []]; // direct, secondary, tertiary
+      const visited = new Set([nodeId]);
+
+      function getConnected(id) {
+        const out = [];
+        graph.edges.forEach(e => {
+          if (e.src === id && !visited.has(e.dst)) out.push({ id: e.dst, type: e.type, dir: "out" });
+          if (e.dst === id && !visited.has(e.src)) out.push({ id: e.src, type: e.type, dir: "in" });
+        });
+        return out;
+      }
+
+      // Ring 0: direct connections
+      const direct = getConnected(nodeId);
+      direct.forEach(d => { visited.add(d.id); rings[0].push(d); });
+
+      // Ring 1: secondary
+      direct.forEach(d => {
+        getConnected(d.id).forEach(s => {
+          if (!visited.has(s.id)) { visited.add(s.id); rings[1].push(s); }
+        });
+      });
+
+      // Ring 2: tertiary
+      rings[1].forEach(d => {
+        getConnected(d.id).forEach(t => {
+          if (!visited.has(t.id)) { visited.add(t.id); rings[2].push(t); }
+        });
+      });
+
+      return rings;
+    }
+
+    function renderRadarView(node) {
+      const radarSvg = d3.select("#radar-svg");
+      radarSvg.selectAll("*").remove();
+      if (!node) return;
+
+      const width = radarSvg.node().clientWidth;
+      const height = radarSvg.node().clientHeight;
+      const cx = width / 2, cy = height / 2;
+      const maxR = Math.min(width, height) / 2 - 40;
+      const rings = getBlastRadius(node.id, graphData);
+      const ringRadii = [maxR * 0.3, maxR * 0.6, maxR * 0.9];
+      const ringLabels = ["direct", "secondary", "tertiary"];
+      const ringColors = ["rgba(187,255,0,0.06)", "rgba(152,113,254,0.04)", "rgba(69,138,226,0.03)"];
+
+      const g = radarSvg.append("g");
+
+      // Draw rings
+      ringRadii.slice().reverse().forEach((r, i) => {
+        const idx = 2 - i;
+        g.append("circle")
+          .attr("cx", cx).attr("cy", cy).attr("r", r)
+          .attr("fill", ringColors[idx])
+          .attr("stroke", "var(--base02)").attr("stroke-width", 0.5);
+      });
+
+      // Ring labels
+      ringRadii.forEach((r, i) => {
+        g.append("text")
+          .attr("class", "radar-ring-label")
+          .attr("x", cx).attr("y", cy - r + 12)
+          .text(ringLabels[i] + " (" + rings[i].length + ")");
+      });
+
+      // Center node
+      g.append("circle")
+        .attr("cx", cx).attr("cy", cy).attr("r", 16)
+        .attr("fill", nodeColors[node.type] || "#5a5d62");
+      g.append("text")
+        .attr("class", "radar-center-label")
+        .attr("x", cx).attr("y", cy)
+        .text(node.id);
+
+      // Place nodes in rings
+      rings.forEach((ring, ri) => {
+        const r = ringRadii[ri];
+        ring.forEach((item, ni) => {
+          const angle = (2 * Math.PI * ni / ring.length) - Math.PI / 2;
+          const nx = cx + r * Math.cos(angle);
+          const ny = cy + r * Math.sin(angle);
+
+          const targetNode = graphData.nodes.find(n => n.id === item.id);
+          const color = targetNode ? (nodeColors[targetNode.type] || "#5a5d62") : "#5a5d62";
+
+          // Edge line
+          g.append("line")
+            .attr("class", "radar-edge")
+            .attr("x1", cx).attr("y1", cy)
+            .attr("x2", nx).attr("y2", ny);
+
+          // Node
+          const ng = g.append("g")
+            .attr("class", "radar-node")
+            .attr("transform", `translate(${nx},${ny})`)
+            .on("click", () => {
+              selectNodeById(item.id);
+              if (activeView === "radar") renderRadarView(allNodes.find(n => n.id === item.id));
+            });
+
+          ng.append("circle")
+            .attr("r", 7).attr("fill", color);
+          ng.append("text")
+            .attr("y", 12).text(item.id);
+        });
+      });
+
+      // Total blast radius count
+      const total = rings[0].length + rings[1].length + rings[2].length;
+      g.append("text")
+        .attr("x", 14).attr("y", 20)
+        .attr("fill", "var(--base04)").attr("font-size", 11)
+        .text(`Blast radius: ${total} node(s)`);
+    }
+
+    function renderBlastRadiusTab(node) {
+      const area = document.getElementById("content-area");
+      const rings = getBlastRadius(node.id, graphData);
+      const ringNames = ["Direct", "Secondary", "Tertiary"];
+
+      let html = `<h3 style="color:var(--base06);font-size:14px;margin-bottom:4px">Blast Radius for ${esc(node.id)}</h3>
+        <div style="color:var(--base03);font-size:12px;margin-bottom:14px">What depends on or is connected to this node</div>`;
+
+      rings.forEach((ring, i) => {
+        if (!ring.length) return;
+        html += `<h4 style="color:var(--base14);font-size:12px;margin:12px 0 6px">${ringNames[i]} (${ring.length})</h4>`;
+        html += `<ul class="edge-list">${ring.map(item => {
+          const targetNode = graphData.nodes.find(n => n.id === item.id);
+          const typeLabel = targetNode ? targetNode.type : "?";
+          return `<li>
+            <span class="edge-dir">${item.dir === "out" ? "&rarr;" : "&larr;"}</span>
+            <span class="edge-type">${item.type}</span>
+            <span class="edge-target" onclick="selectNodeById('${item.id}')">${item.id}</span>
+            <span style="color:var(--base03);font-size:11px">${typeLabel}</span>
+          </li>`;
+        }).join("")}</ul>`;
+      });
+
+      const total = rings[0].length + rings[1].length + rings[2].length;
+      if (!total) html += '<div style="color:var(--base03);font-size:13px;margin:10px 0">No connections found (isolated node).</div>';
+
+      area.innerHTML = html;
+    }
+
+    // ---- Hierarchy View ----
+
+    function renderHierarchyView() {
+      const hsvg = d3.select("#hierarchy-svg");
+      hsvg.selectAll("*").remove();
+      const width = hsvg.node().clientWidth;
+      const height = hsvg.node().clientHeight;
+      const g = hsvg.append("g");
+
+      // Zoom
+      hsvg.call(d3.zoom().scaleExtent([0.3, 4]).on("zoom", (ev) => {
+        g.attr("transform", ev.transform);
+      }));
+
+      // Layer assignment: components (0), specs/interfaces/gates (1), adrs (2)
+      const layerMap = { component: 0, interface: 0, spec: 1, gate: 1, adr: 2, risk: 2, rollout: 2 };
+      const layerNames = ["Components & Interfaces", "Specs & Gates", "ADRs & Decisions"];
+      const layers = [[], [], []];
+      const nodes = graphData.nodes;
+
+      nodes.forEach(n => {
+        const layer = layerMap[n.type] !== undefined ? layerMap[n.type] : 1;
+        layers[layer].push(n);
+      });
+
+      const layerHeight = height / (layers.length + 1);
+      const padding = 60;
+      const positions = {};
+
+      // Draw layer labels and position nodes
+      layers.forEach((layer, li) => {
+        const y = padding + (li + 0.5) * layerHeight;
+
+        // Layer label
+        g.append("text")
+          .attr("x", 16).attr("y", y - 20)
+          .attr("fill", "var(--base03)").attr("font-size", 10)
+          .attr("font-weight", 600).attr("text-transform", "uppercase")
+          .attr("letter-spacing", "1px")
+          .text(layerNames[li]);
+
+        // Divider line
+        if (li > 0) {
+          g.append("line")
+            .attr("x1", 0).attr("x2", width)
+            .attr("y1", y - layerHeight / 2).attr("y2", y - layerHeight / 2)
+            .attr("stroke", "var(--base02)").attr("stroke-dasharray", "4,4");
+        }
+
+        // Position nodes evenly
+        const nodeSpacing = (width - 2 * padding) / Math.max(layer.length, 1);
+        layer.forEach((n, ni) => {
+          const x = padding + nodeSpacing * (ni + 0.5);
+          positions[n.id] = { x, y };
+        });
+      });
+
+      // Draw edges
+      graphData.edges.forEach(e => {
+        const src = positions[e.src];
+        const dst = positions[e.dst];
+        if (!src || !dst) return;
+        g.append("line")
+          .attr("x1", src.x).attr("y1", src.y)
+          .attr("x2", dst.x).attr("y2", dst.y)
+          .attr("stroke", "var(--base02)").attr("stroke-width", 1);
+      });
+
+      // Draw nodes
+      nodes.forEach(n => {
+        const pos = positions[n.id];
+        if (!pos) return;
+        const ng = g.append("g")
+          .attr("transform", `translate(${pos.x},${pos.y})`)
+          .attr("cursor", "pointer")
+          .on("click", () => selectNodeById(n.id))
+          .on("mouseenter", (ev) => showTooltip(ev, n))
+          .on("mousemove", (ev) => moveTooltip(ev))
+          .on("mouseleave", () => hideTooltip());
+
+        ng.append("circle")
+          .attr("r", n.type === "component" ? 12 : 8)
+          .attr("fill", nodeColors[n.type] || "#5a5d62")
+          .attr("stroke", selectedNode && selectedNode.id === n.id ? "#f8f6f2" : "none")
+          .attr("stroke-width", 2);
+
+        ng.append("text")
+          .attr("dy", n.type === "component" ? -18 : -14)
+          .attr("text-anchor", "middle")
+          .attr("fill", "var(--base04)").attr("font-size", 10)
+          .text(n.id);
+      });
+    }
+
+    // ---- Matrix View ----
+
+    function renderMatrixView() {
+      const container = document.getElementById("matrix-container");
+      document.getElementById("node-header").innerHTML = '<h2>Dependency Matrix</h2><div><span class="pill pill-type">relationships grid</span></div>';
+      document.getElementById("breadcrumb").innerHTML = '';
+      document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+
+      if (!graphData || !graphData.nodes.length) {
+        container.innerHTML = '<div style="color:var(--base03);padding:20px">No nodes.</div>';
+        return;
+      }
+
+      const nodes = graphData.nodes;
+      const edges = graphData.edges;
+
+      // Build adjacency: src -> dst -> [edge types]
+      const adj = {};
+      edges.forEach(e => {
+        if (!adj[e.src]) adj[e.src] = {};
+        if (!adj[e.src][e.dst]) adj[e.src][e.dst] = [];
+        if (!adj[e.src][e.dst].includes(e.type)) adj[e.src][e.dst].push(e.type);
+      });
+
+      // Color intensity based on edge count
+      function cellColor(types) {
+        if (!types || !types.length) return "transparent";
+        const intensity = Math.min(types.length / 3, 1);
+        // Use edge type for color
+        const primary = types[0];
+        const base = edgeColors[primary] || "var(--base02)";
+        return `color-mix(in srgb, ${base} ${30 + intensity * 50}%, transparent)`;
+      }
+
+      // Build HTML table
+      let html = '<table class="matrix-table"><thead><tr><th></th>';
+      nodes.forEach(n => {
+        const color = nodeColors[n.type] || "var(--base04)";
+        html += `<th class="col-header" style="color:${color}" title="${n.id}: ${esc(n.title || '')}">${n.id}</th>`;
+      });
+      html += '</tr></thead><tbody>';
+
+      nodes.forEach(src => {
+        const srcColor = nodeColors[src.type] || "var(--base04)";
+        html += `<tr><th class="row-header" style="color:${srcColor}" title="${src.id}: ${esc(src.title || '')}">${src.id}</th>`;
+        nodes.forEach(dst => {
+          if (src.id === dst.id) {
+            html += '<td class="matrix-cell matrix-diag"></td>';
+          } else {
+            const types = (adj[src.id] && adj[src.id][dst.id]) || [];
+            const bg = cellColor(types);
+            const title = types.length ? `${src.id} → ${dst.id}: ${types.join(', ')}` : '';
+            html += `<td class="matrix-cell" style="background:${bg}" title="${title}"
+              onclick="${types.length ? `selectNodeById('${src.id}')` : ''}"></td>`;
+          }
+        });
+        html += '</tr>';
+      });
+      html += '</tbody></table>';
+
+      container.innerHTML = html;
+
+      // Summary in content area
+      const totalRelationships = edges.length;
+      const edgeTypeCounts = {};
+      edges.forEach(e => { edgeTypeCounts[e.type] = (edgeTypeCounts[e.type] || 0) + 1; });
+
+      const summaryHtml = `
+        <div class="cov-grid">
+          <div class="cov-card">
+            <div class="cov-card-title">Relationships</div>
+            <div class="cov-card-value" style="color:var(--base0E)">${totalRelationships}</div>
+          </div>
+          <div class="cov-card">
+            <div class="cov-card-title">Density</div>
+            <div class="cov-card-value" style="color:var(--base0D)">${(totalRelationships / (nodes.length * (nodes.length - 1)) * 100).toFixed(1)}%</div>
+            <div class="cov-card-sub">of possible connections</div>
+          </div>
+        </div>
+        <h3 style="color:var(--base06);font-size:14px;margin-bottom:10px">Edge Types</h3>
+        ${Object.entries(edgeTypeCounts).sort((a,b) => b[1]-a[1]).map(([type, count]) => `
+          <div class="cov-finding">
+            <span class="cov-sev" style="background:${edgeColors[type] || 'var(--base02)'};color:var(--base00)">${count}</span>
+            <span class="cov-finding-text">${type}</span>
+          </div>
+        `).join("")}
+      `;
+      document.getElementById("content-area").innerHTML = summaryHtml;
+    }
+
+    // ---- Timeline View ----
+
+    async function renderTimelineView() {
+      const container = document.getElementById("timeline-container");
+      document.getElementById("node-header").innerHTML = '<h2>Intent Timeline</h2><div><span class="pill pill-type">evolution history</span></div>';
+      document.getElementById("breadcrumb").innerHTML = '';
+      document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+
+      let timeline;
+      try {
+        const res = await fetch("../../.intent/index/timeline.json");
+        if (!res.ok) throw new Error();
+        timeline = await res.json();
+      } catch {
+        container.innerHTML = `<div class="tl-empty">
+          No timeline data. Run <code>python3 tools/intent/sigil.py timeline</code> to generate.
+        </div>`;
+        document.getElementById("content-area").innerHTML = container.innerHTML;
+        return;
+      }
+
+      const events = timeline.events || [];
+      if (!events.length) {
+        container.innerHTML = '<div class="tl-empty">No intent events found.</div>';
+        document.getElementById("content-area").innerHTML = container.innerHTML;
+        return;
+      }
+
+      // Group events by node type (swim lanes)
+      const laneOrder = ["component", "interface", "spec", "gate", "adr", "risk", "rollout", "unknown"];
+      const laneNames = { component: "Components", interface: "Interfaces", spec: "Specs", gate: "Gates", adr: "ADRs", risk: "Risks", rollout: "Rollouts", unknown: "Other" };
+      const lanes = {};
+      events.forEach(ev => {
+        const lane = laneOrder.includes(ev.node_type) ? ev.node_type : "unknown";
+        if (!lanes[lane]) lanes[lane] = [];
+        lanes[lane].push(ev);
+      });
+
+      // Time range
+      const dates = events.map(e => new Date(e.date).getTime());
+      const minDate = Math.min(...dates);
+      const maxDate = Math.max(...dates);
+      const range = maxDate - minDate || 1;
+
+      // Build HTML
+      const trackWidth = container.clientWidth - 140;
+      const actionIcons = { added: "+", modified: "~", removed: "x" };
+
+      let html = `<div class="tl-header">Intent Evolution<span>${events.length} events</span></div>`;
+
+      // Tooltip element
+      html += '<div id="tl-tooltip" class="tl-event-tooltip"></div>';
+
+      laneOrder.forEach(laneKey => {
+        if (!lanes[laneKey]) return;
+        const laneEvents = lanes[laneKey];
+
+        html += `<div class="tl-swimlane">
+          <div class="tl-lane-label" style="color:${nodeColors[laneKey] || 'var(--base04)'}">${laneNames[laneKey]}</div>
+          <div class="tl-lane-track">`;
+
+        // Deduplicate overlapping positions
+        const positions = [];
+        laneEvents.forEach((ev, i) => {
+          const t = new Date(ev.date).getTime();
+          let pct = ((t - minDate) / range) * 100;
+          // Nudge if too close to previous
+          while (positions.some(p => Math.abs(p - pct) < 3)) pct += 3;
+          positions.push(pct);
+
+          const color = nodeColors[laneKey] || '#5a5d62';
+          const icon = actionIcons[ev.action] || "?";
+          html += `<div class="tl-event" data-action="${ev.action}" data-idx="${i}" data-lane="${laneKey}"
+            style="left:calc(${Math.min(pct, 95)}% - 12px);background:${color}"
+            onclick="selectNodeById('${ev.node_id}')"
+            onmouseenter="showTlTooltip(event, ${JSON.stringify(ev).replace(/"/g, '&quot;')})"
+            onmouseleave="hideTlTooltip()">${icon}</div>`;
+        });
+
+        html += `</div></div>`;
+      });
+
+      // Time axis
+      const tickCount = Math.min(6, events.length);
+      html += '<div class="tl-axis" style="position:relative;height:24px">';
+      for (let i = 0; i < tickCount; i++) {
+        const t = minDate + (range * i / (tickCount - 1 || 1));
+        const d = new Date(t);
+        const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+        const pct = (i / (tickCount - 1 || 1)) * 100;
+        html += `<span class="tl-axis-label" style="left:${pct}%">${label}</span>`;
+      }
+      html += '</div>';
+
+      // Summary stats in content area
+      const nodesSeen = new Set(events.map(e => e.node_id));
+      const addEvents = events.filter(e => e.action === "added").length;
+      const modEvents = events.filter(e => e.action === "modified").length;
+      const uniqueCommits = new Set(events.map(e => e.sha)).size;
+
+      const summaryHtml = `
+        <div class="cov-grid">
+          <div class="cov-card">
+            <div class="cov-card-title">Total Events</div>
+            <div class="cov-card-value" style="color:var(--base0F)">${events.length}</div>
+          </div>
+          <div class="cov-card">
+            <div class="cov-card-title">Nodes Touched</div>
+            <div class="cov-card-value" style="color:var(--base0D)">${nodesSeen.size}</div>
+          </div>
+          <div class="cov-card">
+            <div class="cov-card-title">Additions</div>
+            <div class="cov-card-value" style="color:var(--base0B)">${addEvents}</div>
+          </div>
+          <div class="cov-card">
+            <div class="cov-card-title">Modifications</div>
+            <div class="cov-card-value" style="color:var(--base0A)">${modEvents}</div>
+          </div>
+        </div>
+        <h3 style="color:var(--base06);font-size:14px;margin-bottom:10px">Event Log</h3>
+        ${events.slice().reverse().map(ev => `
+          <div class="cov-finding">
+            <span class="cov-sev ${ev.action === 'added' ? 'cov-sev-ok' : ev.action === 'removed' ? 'cov-sev-warn' : 'cov-sev-info'}">${ev.action.toUpperCase()}</span>
+            <span class="cov-finding-text">
+              <span class="cov-link" onclick="switchView('graph');selectNodeById('${ev.node_id}')">${ev.node_id}</span>
+              ${esc(ev.node_title || '')}
+              <span style="color:var(--base03);font-size:11px;margin-left:6px">${ev.sha === 'working-tree' ? 'working tree' : ev.sha}</span>
+            </span>
+          </div>
+        `).join("")}
+      `;
+
+      container.innerHTML = html;
+      document.getElementById("content-area").innerHTML = summaryHtml;
+    }
+
+    function showTlTooltip(ev, data) {
+      const tt = document.getElementById("tl-tooltip");
+      if (!tt) return;
+      const date = new Date(data.date).toLocaleString();
+      tt.innerHTML = `
+        <div style="color:var(--base0D);font-weight:600">${esc(data.node_id)}</div>
+        <div style="color:var(--base06);margin:2px 0">${esc(data.node_title || '')}</div>
+        <div style="color:var(--base04);font-size:11px">${data.action} &middot; ${date}</div>
+        <div style="color:var(--base03);font-size:11px;margin-top:2px">${esc(data.message || '')}</div>
+      `;
+      tt.classList.add("show");
+      tt.style.left = (ev.clientX + 12) + "px";
+      tt.style.top = (ev.clientY - 60) + "px";
+    }
+
+    function hideTlTooltip() {
+      const tt = document.getElementById("tl-tooltip");
+      if (tt) tt.classList.remove("show");
+    }
+
+    // ---- Overview (Landing) View ----
+
+    async function renderOverview() {
+      const area = document.getElementById("content-area");
+      const headerEl = document.getElementById("node-header");
+      const breadcrumb = document.getElementById("breadcrumb");
+      breadcrumb.innerHTML = '';
+      document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+
+      const nodes = graphData.nodes;
+      const edges = graphData.edges;
+      const components = nodes.filter(n => n.type === "component");
+      const specs = nodes.filter(n => n.type === "spec");
+      const adrs = nodes.filter(n => n.type === "adr");
+      const gates = nodes.filter(n => n.type === "gate");
+      const cov = computeCoverage(graphData);
+
+      // Find root specs: specs that govern components via belongs_to edges
+      const specGovernance = {};
+      edges.filter(e => e.type === "belongs_to").forEach(e => {
+        const srcNode = nodes.find(n => n.id === e.src);
+        if (srcNode && srcNode.type === "component") {
+          if (!specGovernance[e.dst]) specGovernance[e.dst] = 0;
+          specGovernance[e.dst]++;
+        }
+      });
+
+      // Connectivity count for tie-breaking
+      const connectivity = {};
+      edges.forEach(e => {
+        connectivity[e.src] = (connectivity[e.src] || 0) + 1;
+        connectivity[e.dst] = (connectivity[e.dst] || 0) + 1;
+      });
+
+      const rootSpecs = specs
+        .map(s => ({ ...s, governed: specGovernance[s.id] || 0, conn: connectivity[s.id] || 0 }))
+        .sort((a, b) => b.governed !== a.governed ? b.governed - a.governed : b.conn - a.conn)
+        .slice(0, 8);
+
+      // Try to load project name + one-liner from README.md
+      let projectName = "Intent Graph";
+      let projectDesc = "";
+      try {
+        const res = await fetch("../../README.md");
+        if (res.ok) {
+          const text = await res.text();
+          const titleMatch = text.match(/^#\s+(.+)$/m);
+          if (titleMatch) projectName = titleMatch[1].trim();
+          const lines = text.split('\n');
+          let foundTitle = false;
+          for (const line of lines) {
+            if (!foundTitle && line.trim().startsWith('#')) { foundTitle = true; continue; }
+            if (foundTitle && line.trim() && !line.trim().startsWith('#') && !line.trim().startsWith('!')) {
+              projectDesc = line.trim().replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+              break;
+            }
+          }
+        }
+      } catch (_) {}
+
+      headerEl.innerHTML = `
+        <h2>${esc(projectName)}</h2>
+        <div>
+          <span class="pill pill-type">${components.length} components</span>
+          <span class="pill pill-type">${specs.length} specs</span>
+          <span class="pill pill-type">${adrs.length} ADRs</span>
+          <span class="pill pill-type">${gates.length} gates</span>
+        </div>`;
+
+      const barColor = cov.score >= 80 ? "var(--base0B)" : cov.score >= 60 ? "var(--base0D)" : cov.score >= 40 ? "var(--base0A)" : "var(--base08)";
+
+      let specsHtml = "";
+      if (rootSpecs.length) {
+        specsHtml = rootSpecs.map(s => {
+          const raw = s.body_summary || '';
+          // Strip markdown headings from the summary for a clean one-liner
+          const summary = raw.replace(/^#+\s+[^\n]+\n?/gm, '').trim().substring(0, 180);
+          const fm = s.frontmatter || {};
+          const statusPill = fm.status
+            ? `<span class="pill pill-status" data-status="${fm.status}" style="font-size:10px;padding:1px 6px">${fm.status}</span>`
+            : '';
+          const govText = s.governed > 0
+            ? `<span style="color:var(--base03);font-size:11px">&nbsp;·&nbsp;${s.governed} component${s.governed !== 1 ? 's' : ''}</span>`
+            : '';
+          return `<div style="padding:12px 14px;border:1px solid var(--base02);border-radius:8px;margin-bottom:8px;cursor:pointer;background:var(--base00);transition:border-color 0.15s"
+            onclick="switchView('graph');selectNodeById('${s.id}')"
+            onmouseenter="this.style.borderColor='var(--base0D)'"
+            onmouseleave="this.style.borderColor='var(--base02)'">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+              <span style="color:var(--base0B);font-weight:600;font-size:13px">${esc(s.title || s.id)}</span>
+              ${statusPill}${govText}
+            </div>
+            <div style="color:var(--base04);font-size:12px;line-height:1.5">${summary ? esc(summary) + (summary.length < raw.replace(/^#+\s+[^\n]+\n?/gm, '').trim().length ? '...' : '') : '<em style="color:var(--base03)">No description yet.</em>'}</div>
+            <div style="color:var(--base03);font-size:11px;margin-top:6px">${s.id}</div>
+          </div>`;
+        }).join("");
+      } else if (specs.length === 0) {
+        specsHtml = `<div style="color:var(--base03);font-size:13px;padding:8px 0">No specs found. Add intent documents to your <code>.intent/</code> directory.</div>`;
+      }
+
+      area.innerHTML = `
+        ${projectDesc ? `<div style="color:var(--base04);font-size:13px;line-height:1.6;margin-bottom:16px;padding:10px 12px;background:var(--base00);border-radius:6px;border-left:3px solid var(--base0D)">${esc(projectDesc)}</div>` : ''}
+        <div class="cov-grid" style="margin-bottom:16px">
+          <div class="cov-card">
+            <div class="cov-card-title">Intent Health</div>
+            <div class="cov-card-value" style="color:${barColor}">${cov.score}%</div>
+            <div class="cov-bar-track"><div class="cov-bar-fill" style="width:${cov.score}%;background:${barColor}"></div></div>
+          </div>
+          <div class="cov-card">
+            <div class="cov-card-title">Graph Size</div>
+            <div class="cov-card-value" style="color:var(--base06)">${nodes.length}</div>
+            <div class="cov-card-sub">${edges.length} relationships</div>
+          </div>
+        </div>
+        <h3 style="color:var(--base06);font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px">Start here — key design intents</h3>
+        ${specsHtml}
+        <div style="margin-top:12px;padding:8px 10px;background:var(--base00);border:1px solid var(--base02);border-radius:6px;font-size:11px;color:var(--base03)">
+          Click a card to explore on the graph &nbsp;·&nbsp;
+          <kbd style="background:var(--base02);color:var(--base04);padding:1px 4px;border-radius:3px;font-size:10px">⌘K</kbd> search &nbsp;·&nbsp;
+          <kbd style="background:var(--base02);color:var(--base04);padding:1px 4px;border-radius:3px;font-size:10px">c</kbd> coverage &nbsp;·&nbsp;
+          <kbd style="background:var(--base02);color:var(--base04);padding:1px 4px;border-radius:3px;font-size:10px">h</kbd> hierarchy
+        </div>`;
+    }
+
+    // ---- View Switching ----
+
+    function switchView(view) {
+      activeView = view;
+      document.querySelectorAll(".view-btn").forEach(b => b.classList.toggle("active", b.dataset.view === view));
+
+      const svgEl = document.getElementById("svg");
+      const radarEl = document.getElementById("radar-svg");
+      const legend = document.getElementById("legend");
+      const hierEl = document.getElementById("hierarchy-svg");
+      const tlEl = document.getElementById("timeline-container");
+      const mtxEl = document.getElementById("matrix-container");
+
+      // Hide all first
+      svgEl.style.display = "none";
+      radarEl.style.display = "none";
+      hierEl.style.display = "none";
+      tlEl.style.display = "none";
+      mtxEl.style.display = "none";
+      legend.style.display = "none";
+
+      if (view === "overview") {
+        svgEl.style.display = "block";
+        legend.style.display = "block";
+        renderOverview();
+      } else if (view === "graph") {
+        svgEl.style.display = "block";
+        legend.style.display = "block";
+        if (selectedNode) showTab(activeTab);
+      } else if (view === "radar") {
+        radarEl.style.display = "block";
+        if (selectedNode) {
+          renderRadarView(selectedNode);
+          showTab("radar");
+        }
+      } else if (view === "hierarchy") {
+        hierEl.style.display = "block";
+        legend.style.display = "block";
+        renderHierarchyView();
+        if (selectedNode) showTab(activeTab);
+      } else if (view === "coverage") {
+        document.getElementById("node-header").innerHTML = '<h2>Intent Coverage Dashboard</h2><div><span class="pill pill-type">health report</span></div>';
+        document.getElementById("breadcrumb").innerHTML = '';
+        document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+        renderCoverageDashboardAsync();
+      } else if (view === "drift") {
+        renderDriftDashboard();
+      } else if (view === "timeline") {
+        tlEl.style.display = "block";
+        renderTimelineView();
+      } else if (view === "matrix") {
+        mtxEl.style.display = "block";
+        renderMatrixView();
+      } else if (view === "review") {
+        renderReviewDashboard();
+      }
+    }
+
+    // ---- Core UI ----
+
+    function buildLegend() {
+      const types = [...new Set(graphData.nodes.map(n => n.type))];
+      const el = document.getElementById("legend");
+      el.innerHTML = types.map(t =>
+        `<div class="legend-item"><div class="legend-dot" style="background:${nodeColors[t] || '#5a5d62'}"></div>${t}</div>`
+      ).join("");
+    }
+
+    function buildBreadcrumb(node) {
+      const el = document.getElementById("breadcrumb");
+      if (!node) { el.innerHTML = ""; return; }
+
+      // Walk up the hierarchy: ADR → Spec (via decided_by) → Component (via belongs_to)
+      const chain = [node];
+      const visited = new Set([node.id]);
+
+      function findParent(id) {
+        // Try decided_by first (ADR → Spec), then belongs_to (Spec/ADR → Component)
+        for (const relType of ["decided_by", "belongs_to"]) {
+          const edge = graphData.edges.find(e => e.src === id && e.type === relType && !visited.has(e.dst));
+          if (edge) {
+            const parent = graphData.nodes.find(n => n.id === edge.dst);
+            if (parent) return parent;
+          }
+        }
+        return null;
+      }
+
+      let current = node;
+      while (current) {
+        const parent = findParent(current.id);
+        if (parent) {
+          visited.add(parent.id);
+          chain.unshift(parent);
+          current = parent;
+        } else {
+          break;
+        }
+      }
+
+      el.innerHTML = chain.map((n, i) => {
+        const sep = i > 0 ? '<span class="sep">&rsaquo;</span>' : '';
+        const label = n.type === "component" ? n.title || n.id : n.id;
+        return `${sep}<span onclick="selectNodeById('${n.id}')">${label}</span>`;
+      }).join("");
+    }
+
+    function renderHeader(node) {
+      const el = document.getElementById("node-header");
+      const fm = node.frontmatter || node._frontmatter || {};
+      const status = fm.status;
+      const statusPill = status
+        ? `<span class="pill pill-status" data-status="${status}">${status}</span>`
+        : '';
+      // Blast radius count
+      const rings = getBlastRadius(node.id, graphData);
+      const total = rings[0].length + rings[1].length + rings[2].length;
+      const radiusPill = total > 0
+        ? `<span class="pill" style="background:var(--base02);color:var(--base09)">${total} connected</span>`
+        : '';
+      el.innerHTML = `
+        <h2>${esc(node.title || node.id)}</h2>
+        <div>
+          <span class="pill pill-type">${node.type}</span>
+          <span class="pill pill-id">${node.id}</span>
+          ${statusPill}${radiusPill}
+        </div>`;
+    }
+
+    function processHumanPP(html) {
+      html = html.replace(/(?<![<\w])!!([^!\n]+?)!!/g, '<span class="marker-attention">!! $1</span>');
+      html = html.replace(/(?<![<\w])!!\s/g, '<span class="marker-attention">!!</span> ');
+      html = html.replace(/(?<![<\w])\?\?([^?\n]+?)\?\?/g, '<span class="marker-uncertainty">?? $1</span>');
+      html = html.replace(/(?<![<\w])\?\?\s/g, '<span class="marker-uncertainty">??</span> ');
+      html = html.replace(/(?<![<\w])&gt;&gt;([^<\n]+?)(?=<|$)/gm, '<span class="marker-reference">&gt;&gt; $1</span>');
+      html = html.replace(/(?<![<\w])&gt;&gt;\s/g, '<span class="marker-reference">&gt;&gt;</span> ');
+      html = html.replace(/\b(FIXME|BUG|XXX)\b/g, '<span class="marker-attention">$1</span>');
+      html = html.replace(/\b(TODO|HACK)\b/g, '<span class="marker-uncertainty">$1</span>');
+      html = html.replace(/\b(NOTE|NB)\b/g, '<span class="marker-reference">$1</span>');
+      html = html.replace(/\[\[([A-Z]+-[A-Za-z0-9-]+)\]\]/g,
+        '<span class="wikilink" onclick="selectNodeById(\'$1\')">$1</span>');
+      return html;
+    }
+
+    async function renderContent(node) {
+      const area = document.getElementById("content-area");
+
+      if (node.type === "component") {
+        area.innerHTML = '<div class="loading">Loading component...</div>';
+        try {
+          const res = await fetch("../../" + node.path);
+          const text = await res.text();
+          area.innerHTML = `<div class="md-body"><pre><code>${esc(text)}</code></pre></div>`;
+        } catch {
+          area.innerHTML = '<div class="loading">Could not load file.</div>';
+        }
+        return;
+      }
+
+      area.innerHTML = '<div class="loading">Loading...</div>';
+      try {
+        const res = await fetch("../../" + node.path);
+        const text = await res.text();
+        let body = text;
+        const fmMatch = text.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+        if (fmMatch) {
+          body = fmMatch[2];
+          const fm = {};
+          fmMatch[1].split("\n").forEach(line => {
+            const kv = line.match(/^(\w+):\s*(.+)$/);
+            if (kv) fm[kv[1]] = kv[2];
+          });
+          node._frontmatter = fm;
+          renderHeader(node);
+        }
+        let html = marked.parse(body);
+        html = processHumanPP(html);
+        area.innerHTML = `<div class="md-body">${html}</div>`;
+      } catch {
+        area.innerHTML = '<div class="loading">Could not load file content.</div>';
+      }
+    }
+
+    function renderGraph(node) {
+      const area = document.getElementById("content-area");
+      const outgoing = graphData.edges.filter(e => e.src === node.id);
+      const incoming = graphData.edges.filter(e => e.dst === node.id);
+      const dedup = (edges) => {
+        const seen = new Set();
+        return edges.filter(e => {
+          const key = `${e.type}-${e.src}-${e.dst}`;
+          if (seen.has(key)) return false;
+          seen.add(key); return true;
+        });
+      };
+      const renderEdges = (edges, dir) => {
+        if (!edges.length) return '<div style="color:var(--base03);font-size:13px;margin:6px 0">None</div>';
+        return `<ul class="edge-list">${dedup(edges).map(e => {
+          const target = dir === "out" ? e.dst : e.src;
+          return `<li>
+            <span class="edge-dir">${dir === "out" ? "&rarr;" : "&larr;"}</span>
+            <span class="edge-type">${e.type}</span>
+            <span class="edge-target" onclick="selectNodeById('${target}')">${target}</span>
+          </li>`;
+        }).join("")}</ul>`;
+      };
+      area.innerHTML = `
+        <h3 style="color:var(--base06);font-size:14px;margin-bottom:8px">Outgoing (${dedup(outgoing).length})</h3>
+        ${renderEdges(outgoing, "out")}
+        <h3 style="color:var(--base06);font-size:14px;margin:16px 0 8px">Incoming (${dedup(incoming).length})</h3>
+        ${renderEdges(incoming, "in")}
+      `;
+    }
+
+    function renderRaw(node) {
+      const area = document.getElementById("content-area");
+      const clean = {...node};
+      delete clean._frontmatter;
+      delete clean.x; delete clean.y;
+      delete clean.vx; delete clean.vy;
+      delete clean.fx; delete clean.fy;
+      delete clean.index;
+      area.innerHTML = `<div class="md-body"><pre><code>${esc(JSON.stringify(clean, null, 2))}</code></pre></div>`;
+    }
+
+    function showTab(tab) {
+      activeTab = tab;
+      document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.tab === tab));
+      if (!selectedNode) return;
+      if (tab === "content") renderContent(selectedNode);
+      else if (tab === "graph") renderGraph(selectedNode);
+      else if (tab === "radar") renderBlastRadiusTab(selectedNode);
+      else if (tab === "raw") renderRaw(selectedNode);
+    }
+
+    function selectNodeById(id) {
+      const node = allNodes.find(n => n.id === id);
+      if (node) selectNode(node);
+    }
+
+    function selectNode(node) {
+      selectedNode = node;
+      renderHeader(node);
+      buildBreadcrumb(node);
+      showTab(activeTab);
+      d3.selectAll("#svg circle")
+        .attr("stroke", d => d && d.id === node.id ? "#f8f6f2" : "none")
+        .attr("stroke-width", d => d && d.id === node.id ? 2.5 : 0);
+      if (activeView === "radar") renderRadarView(node);
+    }
+
+    // ---- Tooltip ----
+
+    function showTooltip(ev, d) {
+      const tt = document.getElementById("tooltip");
+      const fm = d.frontmatter || {};
+      const statusColor = {
+        accepted: "var(--base0B)", draft: "var(--base0A)",
+        proposed: "var(--base0E)", active: "var(--base0B)",
+        rejected: "var(--base08)"
+      };
+      const statusHtml = fm.status
+        ? `<span class="tt-status" style="background:${statusColor[fm.status] || 'var(--base03)'};color:var(--base00)">${fm.status}</span>`
+        : '';
+      const summary = d.body_summary
+        ? `<div class="tt-summary">${esc(d.body_summary.substring(0, 200))}${d.body_summary.length > 200 ? '...' : ''}</div>`
+        : '';
+      tt.innerHTML = `
+        <span class="tt-id">${esc(d.id)}</span>
+        <span class="tt-type">${d.type}</span>
+        ${statusHtml}
+        <div class="tt-title">${esc(d.title || '')}</div>
+        ${summary}
+      `;
+      tt.classList.add("show");
+      moveTooltip(ev);
+    }
+
+    function moveTooltip(ev) {
+      const tt = document.getElementById("tooltip");
+      const left = document.getElementById("left");
+      const rect = left.getBoundingClientRect();
+      let x = ev.clientX - rect.left + 16;
+      let y = ev.clientY - rect.top + 16;
+      if (x + 330 > rect.width) x = ev.clientX - rect.left - 330;
+      if (y + 150 > rect.height) y = ev.clientY - rect.top - 150;
+      tt.style.left = x + "px";
+      tt.style.top = y + "px";
+    }
+
+    function hideTooltip() {
+      document.getElementById("tooltip").classList.remove("show");
+    }
+
+    // ---- Keyboard Navigation ----
+
+    document.addEventListener("keydown", function(ev) {
+      // Cmd/Ctrl+K for command palette (works everywhere)
+      if ((ev.metaKey || ev.ctrlKey) && ev.key === "k") {
+        ev.preventDefault();
+        const overlay = document.getElementById("cmd-overlay");
+        if (overlay.classList.contains("show")) hideCmdPalette();
+        else showCmdPalette();
+        return;
+      }
+
+      // Skip if typing in search or command palette
+      if (ev.target.tagName === "INPUT") {
+        if (ev.key === "Escape") {
+          ev.target.blur();
+          hideCmdPalette();
+        }
+        return;
+      }
+
+      if (ev.key === "/") {
+        ev.preventDefault();
+        document.getElementById("search").focus();
+      } else if (ev.key === "j" || ev.key === "k") {
+        if (!allNodes.length) return;
+        const idx = selectedNode ? allNodes.findIndex(n => n.id === selectedNode.id) : -1;
+        let next;
+        if (ev.key === "j") next = (idx + 1) % allNodes.length;
+        else next = (idx - 1 + allNodes.length) % allNodes.length;
+        selectNode(allNodes[next]);
+      } else if (ev.key === "o") {
+        switchView("overview");
+      } else if (ev.key === "r") {
+        switchView("radar");
+      } else if (ev.key === "c") {
+        switchView("coverage");
+      } else if (ev.key === "g") {
+        switchView("graph");
+      } else if (ev.key === "h") {
+        switchView("hierarchy");
+      } else if (ev.key === "d") {
+        switchView("drift");
+      } else if (ev.key === "t") {
+        switchView("timeline");
+      } else if (ev.key === "m") {
+        switchView("matrix");
+      } else if (ev.key === "w") {
+        switchView("review");
+      } else if (ev.key === "Escape") {
+        hideTooltip();
+      }
+    });
+
+    // ---- Main Graph Render ----
+
+    function render(graph) {
+      graphData = graph;
+      const svg = d3.select("#svg");
+      const width = svg.node().clientWidth;
+      const height = svg.node().clientHeight;
+      svg.selectAll("*").remove();
+
+      // Compute connectivity for node sizing
+      const connectivity = {};
+      graph.edges.forEach(e => {
+        connectivity[e.src] = (connectivity[e.src] || 0) + 1;
+        connectivity[e.dst] = (connectivity[e.dst] || 0) + 1;
+      });
+      const maxConn = Math.max(...Object.values(connectivity), 1);
+
+      const nodes = graph.nodes.map(d => ({...d, _conn: connectivity[d.id] || 0}));
+      allNodes = nodes;
+      const links = graph.edges.map(e => ({ source: e.src, target: e.dst, type: e.type }));
+
+      const linkKey = l => `${typeof l.source === 'object' ? l.source.id : l.source}-${typeof l.target === 'object' ? l.target.id : l.target}`;
+      const seenLinks = new Set();
+      const uniqueLinks = links.filter(l => {
+        const k = linkKey(l);
+        if (seenLinks.has(k)) return false;
+        seenLinks.add(k); return true;
+      });
+
+      // SVG defs for glow filter and arrow markers
+      const defs = svg.append("defs");
+      const glowFilter = defs.append("filter").attr("id", "glow").attr("x", "-50%").attr("y", "-50%").attr("width", "200%").attr("height", "200%");
+      glowFilter.append("feGaussianBlur").attr("stdDeviation", "3").attr("result", "blur");
+      glowFilter.append("feMerge").selectAll("feMergeNode").data(["blur", "SourceGraphic"]).join("feMergeNode").attr("in", d => d);
+
+      // Arrow markers for directed edges
+      ["belongs_to","decided_by","depends_on","gated_by","provides","consumes","relates_to","supersedes"].forEach(t => {
+        defs.append("marker")
+          .attr("id", "arrow-" + t).attr("viewBox", "0 0 10 6").attr("refX", 10).attr("refY", 3)
+          .attr("markerWidth", 8).attr("markerHeight", 6).attr("orient", "auto")
+          .append("path").attr("d", "M0,0 L10,3 L0,6").attr("fill", edgeColors[t] || "var(--base02)");
+      });
+
+      const g = svg.append("g");
+      svg.call(d3.zoom().scaleExtent([0.3, 4]).on("zoom", (ev) => {
+        g.attr("transform", ev.transform);
+      }));
+
+      sim = d3.forceSimulation(nodes)
+        .force("link", d3.forceLink(uniqueLinks).id(d => d.id).distance(120))
+        .force("charge", d3.forceManyBody().strength(-250))
+        .force("center", d3.forceCenter(width / 2, height / 2))
+        .force("collide", d3.forceCollide(30))
+        .force("x", d3.forceX(width / 2).strength(0.03))
+        .force("y", d3.forceY(height / 2).strength(0.03));
+
+      // Curved edges using paths instead of lines
+      const link = g.append("g")
+        .selectAll("path").data(uniqueLinks).join("path")
+        .attr("fill", "none")
+        .attr("stroke", d => edgeColors[d.type] || "var(--base02)")
+        .attr("stroke-width", 1.5)
+        .attr("stroke-opacity", 0.6)
+        .attr("marker-end", d => `url(#arrow-${d.type})`);
+
+      const edgeLabel = g.append("g")
+        .selectAll("text").data(uniqueLinks).join("text")
+        .attr("class", "edge-label")
+        .text(d => d.type)
+        .attr("text-anchor", "middle");
+
+      link.on("mouseenter", function(ev, d) {
+        d3.select(this).attr("stroke-opacity", 1).attr("stroke-width", 2.5);
+        edgeLabel.filter(e => e === d).classed("visible", true);
+      }).on("mouseleave", function() {
+        link.attr("stroke-opacity", 0.6).attr("stroke-width", 1.5);
+        edgeLabel.classed("visible", false);
+      });
+
+      function nodeRadius(d) {
+        const base = d.type === "component" ? 14 : 8;
+        const scale = 1 + (d._conn / maxConn) * 0.6;
+        return Math.round(base * scale);
+      }
+
+      // Glow circles for high-connectivity nodes
+      const glowThreshold = maxConn * 0.5;
+      const nodeGlow = g.append("g").selectAll("circle").data(nodes.filter(d => d._conn >= glowThreshold)).join("circle")
+        .attr("r", d => nodeRadius(d) + 6)
+        .attr("fill", d => nodeColors[d.type] || "#5a5d62")
+        .attr("opacity", 0.15)
+        .attr("filter", "url(#glow)");
+
+      const node = g.append("g").selectAll("circle").data(nodes).join("circle")
+        .attr("r", nodeRadius)
+        .attr("fill", d => nodeColors[d.type] || "#5a5d62")
+        .attr("cursor", "pointer")
+        .call(d3.drag()
+          .on("start", (ev, d) => { if (!ev.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+          .on("drag", (ev, d) => { d.fx = ev.x; d.fy = ev.y; })
+          .on("end", (ev, d) => { if (!ev.active) sim.alphaTarget(0); d.fx = null; d.fy = null; })
+        );
+
+      node.append("title").text(d => `${d.id}: ${d.title || ""}`);
+
+      const label = g.append("g").selectAll("text").data(nodes).join("text")
+        .text(d => d.id)
+        .attr("font-size", 10)
+        .attr("fill", "#828079")
+        .attr("dx", d => nodeRadius(d) + 4).attr("dy", 3)
+        .attr("pointer-events", "none");
+
+      node.on("click", (ev, d) => selectNode(d));
+
+      node.on("mouseenter", function(ev, d) {
+        link.attr("stroke-opacity", l =>
+          (l.source.id === d.id || l.target.id === d.id) ? 1 : 0.15
+        ).attr("stroke-width", l =>
+          (l.source.id === d.id || l.target.id === d.id) ? 2.5 : 1
+        );
+        edgeLabel.classed("visible", l =>
+          l.source.id === d.id || l.target.id === d.id
+        );
+        // Dim unconnected nodes
+        const connected = new Set([d.id]);
+        uniqueLinks.forEach(l => {
+          if (l.source.id === d.id) connected.add(l.target.id);
+          if (l.target.id === d.id) connected.add(l.source.id);
+        });
+        node.attr("opacity", n => connected.has(n.id) ? 1 : 0.2);
+        label.attr("opacity", n => connected.has(n.id) ? 1 : 0.15);
+        showTooltip(ev, d);
+      }).on("mousemove", function(ev, d) {
+        moveTooltip(ev);
+      }).on("mouseleave", function() {
+        link.attr("stroke-opacity", 0.6).attr("stroke-width", 1.5);
+        edgeLabel.classed("visible", false);
+        node.attr("opacity", 1);
+        label.attr("opacity", 1);
+        hideTooltip();
+      });
+
+      // Curved path helper
+      function linkPath(d) {
+        const dx = d.target.x - d.source.x;
+        const dy = d.target.y - d.source.y;
+        const dr = Math.sqrt(dx * dx + dy * dy) * 1.5;
+        // Offset endpoint by target node radius
+        const targetNode = nodes.find(n => n.id === (typeof d.target === 'object' ? d.target.id : d.target));
+        const tr = targetNode ? nodeRadius(targetNode) + 4 : 10;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        const ox = d.target.x - (dx / dist) * tr;
+        const oy = d.target.y - (dy / dist) * tr;
+        return `M${d.source.x},${d.source.y} A${dr},${dr} 0 0,1 ${ox},${oy}`;
+      }
+
+      sim.on("tick", () => {
+        link.attr("d", linkPath);
+        node.attr("cx", d => d.x).attr("cy", d => d.y);
+        nodeGlow.attr("cx", d => d.x).attr("cy", d => d.y);
+        label.attr("x", d => d.x).attr("y", d => d.y);
+        edgeLabel
+          .attr("x", d => (d.source.x + d.target.x) / 2)
+          .attr("y", d => (d.source.y + d.target.y) / 2 - 6);
+      });
+
+      // Search
+      document.getElementById("search").oninput = function() {
+        const q = this.value.toLowerCase().trim();
+        if (!q) return;
+        const found = nodes.find(n =>
+          (n.id && n.id.toLowerCase().includes(q)) ||
+          (n.title && n.title.toLowerCase().includes(q)) ||
+          (n.body_summary && n.body_summary.toLowerCase().includes(q))
+        );
+        if (found) selectNode(found);
+      };
+
+      // Tab clicks
+      document.querySelectorAll(".tab").forEach(t => {
+        t.onclick = () => showTab(t.dataset.tab);
+      });
+
+      // Compute and show health badge
+      const cov = computeCoverage(graphData);
+      renderHealthBadge(cov);
+      buildLegend();
+
+      // Show overview landing by default
+      switchView('overview');
+    }
+
+    // ---- New Doc Modal ----
+
+    function showNewModal() {
+      const overlay = document.getElementById("modal-overlay");
+      const compSelect = document.getElementById("new-component");
+      // Populate components dropdown
+      const components = graphData ? graphData.nodes.filter(n => n.type === "component") : [];
+      compSelect.innerHTML = components.map(c =>
+        `<option value="${c.id.replace('COMP-', '')}">${c.title || c.id}</option>`
+      ).join("") || '<option value="general">general</option>';
+      document.getElementById("new-title").value = "";
+      document.getElementById("new-feedback").innerHTML = "";
+      overlay.classList.add("show");
+      setTimeout(() => document.getElementById("new-title").focus(), 100);
+    }
+
+    function hideNewModal() {
+      document.getElementById("modal-overlay").classList.remove("show");
+    }
+
+    async function createNewDoc() {
+      const type = document.getElementById("new-type").value;
+      const component = document.getElementById("new-component").value;
+      const title = document.getElementById("new-title").value.trim();
+      const feedback = document.getElementById("new-feedback");
+
+      if (!title) {
+        feedback.innerHTML = '<div class="modal-error">Title is required</div>';
+        return;
+      }
+
+      try {
+        const res = await fetch("/api/new", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type, component, title })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          feedback.innerHTML = `<div class="modal-error">${esc(data.error || 'Failed')}</div>`;
+          return;
+        }
+        feedback.innerHTML = `<div class="modal-success">Created ${data.id} — reloading graph...</div>`;
+        // Reload graph
+        setTimeout(async () => {
+          hideNewModal();
+          const graph = await loadGraph();
+          render(graph);
+          selectNodeById(data.id);
+        }, 500);
+      } catch (err) {
+        feedback.innerHTML = `<div class="modal-error">Server not running? Use <code>sigil serve</code> to enable creation.</div>`;
+      }
+    }
+
+    // ---- Command Palette ----
+
+    let cmdSelectedIdx = 0;
+    let cmdItems = [];
+
+    function showCmdPalette() {
+      const overlay = document.getElementById("cmd-overlay");
+      overlay.classList.add("show");
+      const input = document.getElementById("cmd-input");
+      input.value = "";
+      cmdSelectedIdx = 0;
+      updateCmdResults("");
+      setTimeout(() => input.focus(), 50);
+    }
+
+    function hideCmdPalette() {
+      document.getElementById("cmd-overlay").classList.remove("show");
+    }
+
+    function getCmdItems(query) {
+      const q = query.toLowerCase().trim();
+      const items = [];
+
+      // Views
+      const views = [
+        { label: "Overview", action: () => switchView("overview"), type: "view", hint: "o" },
+        { label: "Graph View", action: () => switchView("graph"), type: "view", hint: "g" },
+        { label: "Impact Radar", action: () => switchView("radar"), type: "view", hint: "r" },
+        { label: "Hierarchy", action: () => switchView("hierarchy"), type: "view", hint: "h" },
+        { label: "Coverage Dashboard", action: () => switchView("coverage"), type: "view", hint: "c" },
+        { label: "Drift Detection", action: () => switchView("drift"), type: "view", hint: "d" },
+        { label: "Timeline", action: () => switchView("timeline"), type: "view", hint: "t" },
+        { label: "Dependency Matrix", action: () => switchView("matrix"), type: "view", hint: "m" },
+        { label: "Review", action: () => switchView("review"), type: "view", hint: "w" },
+      ];
+
+      // Actions
+      const actions = [
+        { label: "New Spec", action: () => { hideCmdPalette(); showNewModal(); document.getElementById("new-type").value = "spec"; }, type: "action", hint: "create" },
+        { label: "New ADR", action: () => { hideCmdPalette(); showNewModal(); document.getElementById("new-type").value = "adr"; }, type: "action", hint: "create" },
+      ];
+
+      // Nodes
+      const nodes = (graphData ? graphData.nodes : []).map(n => ({
+        label: `${n.id} — ${n.title || ""}`,
+        action: () => { switchView("graph"); selectNodeById(n.id); },
+        type: n.type,
+        hint: n.path,
+        color: nodeColors[n.type]
+      }));
+
+      const all = [...views, ...actions, ...nodes];
+      if (!q) return all.slice(0, 12);
+      return all.filter(item =>
+        item.label.toLowerCase().includes(q) ||
+        (item.hint && item.hint.toLowerCase().includes(q)) ||
+        (item.type && item.type.toLowerCase().includes(q))
+      ).slice(0, 12);
+    }
+
+    function updateCmdResults(query) {
+      cmdItems = getCmdItems(query);
+      cmdSelectedIdx = Math.min(cmdSelectedIdx, cmdItems.length - 1);
+      if (cmdSelectedIdx < 0) cmdSelectedIdx = 0;
+
+      const results = document.getElementById("cmd-results");
+      results.innerHTML = cmdItems.map((item, i) => {
+        const color = item.color || (item.type === "view" ? "var(--base0D)" : item.type === "action" ? "var(--base0B)" : "var(--base04)");
+        const icon = item.type === "view" ? "V" : item.type === "action" ? "+" : item.type[0].toUpperCase();
+        return `<div class="cmd-item${i === cmdSelectedIdx ? ' selected' : ''}" onclick="executeCmdItem(${i})">
+          <div class="cmd-item-icon" style="background:${color}">${icon}</div>
+          <div class="cmd-item-text">${esc(item.label)}</div>
+          <div class="cmd-item-type">${item.type}</div>
+        </div>`;
+      }).join("");
+    }
+
+    function executeCmdItem(idx) {
+      if (cmdItems[idx]) {
+        hideCmdPalette();
+        cmdItems[idx].action();
+      }
+    }
+
+    document.getElementById("cmd-input").addEventListener("input", function() {
+      cmdSelectedIdx = 0;
+      updateCmdResults(this.value);
+    });
+
+    document.getElementById("cmd-input").addEventListener("keydown", function(ev) {
+      if (ev.key === "ArrowDown") {
+        ev.preventDefault();
+        cmdSelectedIdx = Math.min(cmdSelectedIdx + 1, cmdItems.length - 1);
+        updateCmdResults(this.value);
+      } else if (ev.key === "ArrowUp") {
+        ev.preventDefault();
+        cmdSelectedIdx = Math.max(cmdSelectedIdx - 1, 0);
+        updateCmdResults(this.value);
+      } else if (ev.key === "Enter") {
+        ev.preventDefault();
+        executeCmdItem(cmdSelectedIdx);
+      } else if (ev.key === "Escape") {
+        hideCmdPalette();
+      }
+    });
+
+    // Configure marked
+    marked.setOptions({ gfm: true, breaks: false });
+
+    loadGraph().then(render).catch(err => {
+      document.getElementById("content-area").textContent = String(err);
+    });
+
+    // ---- Live Reload ----
+    // Polls /api/version from sigil serve; hot-reloads graph when version changes.
+    (function initLiveReload() {
+      let knownVersion = null;
+      let reloadTimer = null;
+      const POLL_MS = 1500;
+
+      async function checkVersion() {
+        try {
+          const res = await fetch("/api/version", { cache: "no-store" });
+          if (!res.ok) return; // not running under sigil serve
+          const data = await res.json();
+          if (knownVersion === null) {
+            knownVersion = data.version;
+            showLiveIndicator(true);
+            return;
+          }
+          if (data.version !== knownVersion) {
+            knownVersion = data.version;
+            const graph = await loadGraph();
+            const prevSelected = selectedNode ? selectedNode.id : null;
+            render(graph);
+            // Restore selection if the node still exists
+            if (prevSelected) {
+              const restored = allNodes.find(n => n.id === prevSelected);
+              if (restored) { selectedNode = restored; renderGraph(restored); }
+            }
+            // Re-render active view
+            if (activeView !== "graph") switchView(activeView);
+            flashLiveIndicator();
+          }
+        } catch (_) {
+          // /api/version not available — static mode, stop polling
+          showLiveIndicator(false);
+          clearInterval(reloadTimer);
+        }
+      }
+
+      function showLiveIndicator(show) {
+        let el = document.getElementById("live-indicator");
+        if (!el && show) {
+          el = document.createElement("div");
+          el.id = "live-indicator";
+          el.style.cssText = "position:fixed;bottom:12px;right:12px;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:600;font-family:inherit;background:rgba(4,179,114,0.15);color:var(--base0B);z-index:300;transition:opacity 0.3s;pointer-events:none;";
+          el.textContent = "LIVE";
+          document.body.appendChild(el);
+        }
+        if (el) el.style.display = show ? "block" : "none";
+      }
+
+      function flashLiveIndicator() {
+        const el = document.getElementById("live-indicator");
+        if (!el) return;
+        el.style.background = "rgba(4,179,114,0.4)";
+        setTimeout(() => { el.style.background = "rgba(4,179,114,0.15)"; }, 400);
+      }
+
+      reloadTimer = setInterval(checkVersion, POLL_MS);
+      // First check immediately
+      checkVersion();
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+version: "1.0"
+project: shelf-bookstore
+
+paths:
+  components: components/
+  intent: intent/
+  interfaces: interfaces/
+  gates: gates/
+  index: .intent/index/
+
+id_counters:
+  SPEC: 9
+  ADR: 7
+  GATE: 5
+  RISK: 0
+  ROLLOUT: 1
