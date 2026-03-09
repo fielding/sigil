@@ -1,150 +1,12 @@
 # Sigil
 
+[![intent coverage](.intent/badge.svg)](https://fielding.github.io/sigil/)
+
 **Your codebase knows *what*. Sigil knows *why*.**
 
 Every team writes specs and ADRs. Almost none survive first contact with the codebase — they rot in Notion, drift from reality, and nobody reviews them in PRs. When someone asks "why was this built this way?" the answer is in a Slack thread from six months ago, or it left with the engineer who quit.
 
 Sigil fixes this. It's a CLI that turns your specs, decisions, and constraints into a connected knowledge graph — right in your Git repo. When you open a PR, Sigil posts an intent diff: what architectural decisions changed, what specs were affected, what gates apply. Your team reviews *intent* first, code second.
-
-**[See a live demo](https://fielding.github.io/sigil/)** — a full intent graph you can explore in your browser right now.
-
-[![Sigil intent graph viewer — 36 nodes, 96 edges, 8 interactive views](docs/branding/graph-screenshot.png)](https://fielding.github.io/sigil/)
-
-## See it work
-
-```bash
-$ sigil why src/services/auth.ts
-src/services/auth.ts
-  └─ COMP-auth-service (component)
-       ├─ SPEC-0012 "Token refresh flow" (spec)
-       ├─ ADR-0003 "Use JWT with short-lived tokens" (decision)
-       └─ GATE-0001 "Auth token expiry check" (gate)
-```
-
-Ask "why does this file exist?" and get a real answer — traced through specs, decisions, and constraints.
-
-```bash
-$ sigil impact COMP-order-service
-COMP-order-service
-  Ring 1: SPEC-0003, ADR-0002, GATE-0002, API-ORDERS-V1
-  Ring 2: COMP-payment-gateway, COMP-inventory, COMP-notification
-  Ring 3: SPEC-0008, ADR-0005, GATE-0005
-  Total: 32 affected nodes
-```
-
-Check the blast radius before you touch anything. Know what breaks.
-
-## Concepts in 30 seconds
-
-Sigil tracks five things. That's it.
-
-| What | In plain English | Example |
-|------|-----------------|---------|
-| **Component** | A service or module in your system | `auth-service`, `payment-gateway` |
-| **Spec** | The plan for what you're building and why | "Token refresh flow" — intent, constraints, acceptance criteria |
-| **Decision** (ADR) | Why you chose one approach over another | "Use JWT with short-lived tokens" — context, options, outcome |
-| **Gate** | A rule that must pass before code ships | "Auth tokens must expire within 1 hour" — enforced in CI |
-| **Interface** | An API contract or event schema | `API-ORDERS-V1` — the surface area between services |
-
-These connect into a graph with typed edges (`depends_on`, `gated_by`, `decided_by`, ...). That graph is what makes everything queryable, diffable, and visible.
-
-## Install
-
-```bash
-pip install sigil-cli
-sigil init
-```
-
-One command. Scans your repo, scaffolds the structure, detects components from package manifests, builds the knowledge graph, and opens an interactive viewer. Zero config.
-
-Requires Python 3.11+.
-
-<details>
-<summary>Other install methods</summary>
-
-```bash
-# Via npx (no install required)
-npx @fielding/sigil init
-
-# Global install via npm
-npm install -g @fielding/sigil
-
-# From source
-git clone https://github.com/fielding/sigil.git
-cd sigil && pip install -e .
-```
-
-</details>
-
-## Try it on a demo project
-
-Want to see Sigil on a real (sample) codebase before using it on your own? The repo includes a complete example — a bookstore app with 9 components, 36 nodes, and 96 edges:
-
-```bash
-git clone https://github.com/fielding/sigil.git
-cd sigil
-pip install sigil-cli
-sigil serve --repo examples/demo-app
-```
-
-Opens in your browser. Click around the graph. Try the [Impact Radar](https://fielding.github.io/sigil/) view. Check coverage. Explore drift.
-
-## What you get
-
-**Structure.** Specs, decisions, gates, and interfaces follow templates with typed frontmatter. Intent lives next to code, not in a wiki nobody checks.
-
-**Connections.** Everything links. Ask `sigil why src/auth.ts` and trace from file to component to spec to decision. Ask `sigil ask "payment processing"` and search your architecture like a knowledge base.
-
-**Enforcement.** Gates block PRs that violate your stated intent. Pattern checks, coverage thresholds, lint rules — defined in YAML, enforced in CI with `sigil ci`.
-
-**Visibility.** Eight interactive views in a bundled browser UI:
-
-| View | Key | Shows |
-|------|-----|-------|
-| **Graph** | `g` | Force-directed knowledge graph |
-| **Impact Radar** | `r` | Blast radius of any node |
-| **Hierarchy** | `h` | Components → Specs/Gates → Decisions |
-| **Coverage** | `c` | Health score (0–100%) |
-| **Drift** | `d` | Where code and intent have diverged |
-| **Timeline** | `t` | Git-backed intent evolution |
-| **Matrix** | `m` | Dependency heatmap |
-| **Review** | `w` | Governance snapshot |
-
-Command palette (`Cmd+K`), keyboard nav (`j`/`k`, `/` to search), live reload via `sigil serve`.
-
-## Workflow
-
-```bash
-# Create your first spec
-sigil new spec auth-service "Token refresh flow"
-
-# Record an architectural decision
-sigil new adr auth-service "Use JWT with short-lived tokens"
-
-# Define a gate to enforce it
-sigil new gate "Auth token expiry" --applies-to COMP-auth-service
-
-# Check everything passes
-sigil check
-
-# See your intent graph health
-sigil status
-```
-
-## CI Integration
-
-Three lines in your GitHub Actions workflow:
-
-```yaml
-- run: pip install sigil-cli
-- run: sigil ci
-- run: sigil pr ${{ github.event.pull_request.number }}
-  if: github.event_name == 'pull_request'
-  env:
-    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-```
-
-`sigil ci` runs index, lint, check, badge, and review in one shot. `sigil pr` posts a comment on your PR with coverage percentage, governed vs. ungoverned changes, gate results, and links to the intent graph. Add `--strict` to fail on warnings.
 
 ## What reviewers see
 
@@ -207,6 +69,148 @@ When Sigil runs on a PR, it posts a comment like this:
 ---
 
 At a glance, reviewers know: which specs govern the changed code, whether any architectural decisions were updated, which gates passed, and which files aren't tracked yet. That last part is the most important — every ungoverned file is a gap in your team's institutional knowledge.
+
+## Install
+
+```bash
+pip install sigil-cli
+sigil init
+```
+
+One command. Scans your repo, scaffolds the structure, detects components from package manifests, builds the knowledge graph, and opens an interactive viewer. Zero config.
+
+Requires Python 3.11+.
+
+<details>
+<summary>Other install methods</summary>
+
+```bash
+# Via npx (no install required)
+npx @fielding/sigil init
+
+# Global install via npm
+npm install -g @fielding/sigil
+
+# From source
+git clone https://github.com/fielding/sigil.git
+cd sigil && pip install -e .
+```
+
+</details>
+
+## Live demo
+
+**[See a live demo](https://fielding.github.io/sigil/)** — explore a full intent graph in your browser right now.
+
+[![Sigil intent graph viewer — 36 nodes, 96 edges, 8 interactive views](docs/branding/graph-screenshot.png)](https://fielding.github.io/sigil/)
+
+## See it work
+
+```bash
+$ sigil why src/services/auth.ts
+src/services/auth.ts
+  └─ COMP-auth-service (component)
+       ├─ SPEC-0012 "Token refresh flow" (spec)
+       ├─ ADR-0003 "Use JWT with short-lived tokens" (decision)
+       └─ GATE-0001 "Auth token expiry check" (gate)
+```
+
+Ask "why does this file exist?" and get a real answer — traced through specs, decisions, and constraints.
+
+```bash
+$ sigil impact COMP-order-service
+COMP-order-service
+  Ring 1: SPEC-0003, ADR-0002, GATE-0002, API-ORDERS-V1
+  Ring 2: COMP-payment-gateway, COMP-inventory, COMP-notification
+  Ring 3: SPEC-0008, ADR-0005, GATE-0005
+  Total: 32 affected nodes
+```
+
+Check the blast radius before you touch anything. Know what breaks.
+
+## Try it on a demo project
+
+Want to see Sigil on a real (sample) codebase before using it on your own? The repo includes a complete example — a bookstore app with 9 components, 36 nodes, and 96 edges:
+
+```bash
+git clone https://github.com/fielding/sigil.git
+cd sigil
+pip install sigil-cli
+sigil serve --repo examples/demo-app
+```
+
+Opens in your browser. Click around the graph. Try the [Impact Radar](https://fielding.github.io/sigil/) view. Check coverage. Explore drift.
+
+## Concepts in 30 seconds
+
+Sigil tracks five things. That's it.
+
+| What | In plain English | Example |
+|------|-----------------|---------|
+| **Component** | A service or module in your system | `auth-service`, `payment-gateway` |
+| **Spec** | The plan for what you're building and why | "Token refresh flow" — intent, constraints, acceptance criteria |
+| **Decision** (ADR) | Why you chose one approach over another | "Use JWT with short-lived tokens" — context, options, outcome |
+| **Gate** | A rule that must pass before code ships | "Auth tokens must expire within 1 hour" — enforced in CI |
+| **Interface** | An API contract or event schema | `API-ORDERS-V1` — the surface area between services |
+
+These connect into a graph with typed edges (`depends_on`, `gated_by`, `decided_by`, ...). That graph is what makes everything queryable, diffable, and visible.
+
+## What you get
+
+**Structure.** Specs, decisions, gates, and interfaces follow templates with typed frontmatter. Intent lives next to code, not in a wiki nobody checks.
+
+**Connections.** Everything links. Ask `sigil why src/auth.ts` and trace from file to component to spec to decision. Ask `sigil ask "payment processing"` and search your architecture like a knowledge base.
+
+**Enforcement.** Gates block PRs that violate your stated intent. Pattern checks, coverage thresholds, lint rules — defined in YAML, enforced in CI with `sigil ci`.
+
+**Visibility.** Eight interactive views in a bundled browser UI:
+
+| View | Key | Shows |
+|------|-----|-------|
+| **Graph** | `g` | Force-directed knowledge graph |
+| **Impact Radar** | `r` | Blast radius of any node |
+| **Hierarchy** | `h` | Components → Specs/Gates → Decisions |
+| **Coverage** | `c` | Health score (0–100%) |
+| **Drift** | `d` | Where code and intent have diverged |
+| **Timeline** | `t` | Git-backed intent evolution |
+| **Matrix** | `m` | Dependency heatmap |
+| **Review** | `w` | Governance snapshot |
+
+Command palette (`Cmd+K`), keyboard nav (`j`/`k`, `/` to search), live reload via `sigil serve`.
+
+## Workflow
+
+```bash
+# Create your first spec
+sigil new spec auth-service "Token refresh flow"
+
+# Record an architectural decision
+sigil new adr auth-service "Use JWT with short-lived tokens"
+
+# Define a gate to enforce it
+sigil new gate "Auth token expiry" --applies-to COMP-auth-service
+
+# Check everything passes
+sigil check
+
+# See your intent graph health
+sigil status
+```
+
+## CI Integration
+
+Three lines in your GitHub Actions workflow:
+
+```yaml
+- run: pip install sigil-cli
+- run: sigil ci
+- run: sigil pr ${{ github.event.pull_request.number }}
+  if: github.event_name == 'pull_request'
+  env:
+    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+`sigil ci` runs index, lint, check, badge, and review in one shot. `sigil pr` posts a comment on your PR with coverage percentage, governed vs. ungoverned changes, gate results, and links to the intent graph. Add `--strict` to fail on warnings.
 
 ## CLI Reference
 
