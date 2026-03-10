@@ -3445,6 +3445,18 @@
 
       area.innerHTML = `
         ${projectDesc ? `<div style="color:var(--base04);font-size:13px;line-height:1.6;margin-bottom:16px;padding:10px 12px;background:var(--base00);border-radius:6px;border-left:3px solid var(--base0D)">${esc(projectDesc)}</div>` : ''}
+        <div onclick="switchView('review')" style="margin-bottom:16px;padding:12px 14px;background:rgba(248,81,73,0.05);border:1px solid rgba(248,81,73,0.3);border-radius:8px;cursor:pointer;transition:border-color 0.15s" onmouseenter="this.style.borderColor='rgba(248,81,73,0.6)'" onmouseleave="this.style.borderColor='rgba(248,81,73,0.3)'">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="background:#f85149;color:#fff;font-size:9px;font-weight:700;letter-spacing:1px;padding:2px 7px;border-radius:3px;text-transform:uppercase">BLOCKED</span>
+              <span style="color:var(--base05);font-size:12px;font-weight:600">PR #47 — feat: JWT refresh + checkout + payment</span>
+            </div>
+            <span style="color:var(--base03);font-size:11px;white-space:nowrap">See enforcement →</span>
+          </div>
+          <div style="font-size:12px;color:var(--base04);line-height:1.5">
+            <span style="color:#f85149">❌</span> <span style="color:var(--base03)">GATE-0005:</span> <code style="color:#f85149;font-size:11px;background:rgba(248,81,73,0.1);padding:1px 5px;border-radius:3px">services/payments/checkout.py:47</code> <span style="color:var(--base04)">— raw card number accessed (PCI violation)</span>
+          </div>
+        </div>
         <div class="cov-grid" style="margin-bottom:16px">
           <div class="cov-card">
             <div class="cov-card-title">Intent Health</div>
@@ -3459,7 +3471,12 @@
         </div>
         <h3 style="color:var(--base06);font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px">Start here — key design intents</h3>
         ${specsHtml}
-        <div style="margin-top:12px;padding:8px 10px;background:var(--base00);border:1px solid var(--base02);border-radius:6px;font-size:11px;color:var(--base03)">
+        <div style="margin-top:16px;padding:12px 14px;background:var(--base00);border:1px solid var(--base02);border-radius:8px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--base03);margin-bottom:8px">Try on your own project</div>
+          <code style="font-size:12px;color:var(--base0F);line-height:1.8;display:block">git clone https://github.com/fielding/sigil<br>cd sigil &amp;&amp; pip install -e . &amp;&amp; sigil init</code>
+          <div style="margin-top:8px;font-size:11px;color:var(--base03)">Requires Python 3.11+ &nbsp;·&nbsp; <a href="https://github.com/fielding/sigil" target="_blank" style="color:var(--base0D);text-decoration:none">GitHub ↗</a></div>
+        </div>
+        <div style="margin-top:8px;padding:8px 10px;border:1px solid var(--base02);border-radius:6px;font-size:11px;color:var(--base03)">
           Click a card to explore on the graph &nbsp;·&nbsp;
           <kbd style="background:var(--base02);color:var(--base04);padding:1px 4px;border-radius:3px;font-size:10px">⌘K</kbd> search &nbsp;·&nbsp;
           <kbd style="background:var(--base02);color:var(--base04);padding:1px 4px;border-radius:3px;font-size:10px">c</kbd> coverage &nbsp;·&nbsp;
