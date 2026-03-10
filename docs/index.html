@@ -2649,15 +2649,20 @@
       const gatesPassed = gates.filter(g => g.passed).length;
       const gatesTotal = gates.length;
       const gatesColor = gatesTotal === 0 ? "var(--base04)" : gatesPassed === gatesTotal ? "var(--base0B)" : "var(--base08)";
+      const hasBlockingFailure = gates.some(g => !g.passed && g.policy === 'block');
 
       // PR context banner (if present)
       const pr = review.pr;
       const prBanner = pr ? `
-        <div style="margin-bottom:16px;padding:10px 14px;background:var(--base01);border:1px solid var(--base02);border-radius:8px;font-size:13px">
-          <span style="color:var(--base0E);font-weight:700;margin-right:8px">PR #${pr.number}</span>
-          <span style="color:var(--base06)">${esc(pr.title)}</span>
-          ${pr.author ? `<span style="color:var(--base03);font-size:11px;margin-left:8px">by ${esc(pr.author)}</span>` : ''}
-          ${pr.base && pr.head ? `<span style="color:var(--base03);font-size:11px;margin-left:8px">${esc(pr.head)} → ${esc(pr.base)}</span>` : ''}
+        <div style="margin-bottom:16px;padding:10px 14px;background:${hasBlockingFailure ? 'rgba(248,81,73,0.06)' : 'var(--base01)'};border:1px solid ${hasBlockingFailure ? 'rgba(248,81,73,0.35)' : 'var(--base02)'};border-radius:8px;font-size:13px">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span style="color:var(--base0E);font-weight:700">PR #${pr.number}</span>
+            <span style="color:var(--base06)">${esc(pr.title)}</span>
+            ${pr.author ? `<span style="color:var(--base03);font-size:11px">by ${esc(pr.author)}</span>` : ''}
+            ${pr.base && pr.head ? `<span style="color:var(--base03);font-size:11px">${esc(pr.head)} → ${esc(pr.base)}</span>` : ''}
+            ${hasBlockingFailure ? `<span style="background:#f85149;color:#fff;font-size:10px;font-weight:700;letter-spacing:1px;padding:2px 8px;border-radius:3px;text-transform:uppercase">BLOCKED</span>` : ''}
+          </div>
+          ${hasBlockingFailure ? `<div style="margin-top:6px;font-size:11px;color:#f85149">⛔ This PR cannot merge — ${gates.filter(g=>!g.passed&&g.policy==='block').length} blocking gate${gates.filter(g=>!g.passed&&g.policy==='block').length>1?'s':''} failed</div>` : ''}
         </div>` : '';
 
       // Build GitHub-style PR comment preview
@@ -2709,7 +2714,7 @@
                 <tr><td style="padding:3px 16px 3px 0;color:#c9d1d9">Ungoverned Files</td><td style="padding:3px 0;font-weight:600;color:${(s.uncovered_files||0)>0?'#d29922':'#3fb950'}">${s.uncovered_files||0} ${govIcon}</td></tr>
               </table>
               ${intentChangesSummary ? `<details style="margin-bottom:10px"><summary style="color:#7d8590;font-size:12px;cursor:pointer;margin-bottom:6px">Intent document changes (${(review.intent_changes||[]).length})</summary>${intentChangesSummary}</details>` : ''}
-              ${gateRows ? `<details style="margin-bottom:10px"><summary style="color:#7d8590;font-size:12px;cursor:pointer;margin-bottom:6px">Gate results (${gatesPassed}/${gatesTotal} passing)</summary>${gateRows}</details>` : ''}
+              ${gateRows ? `<details style="margin-bottom:10px"${gatesPassed < gatesTotal ? ' open' : ''}><summary style="color:${gatesPassed < gatesTotal ? '#f85149' : '#7d8590'};font-size:12px;cursor:pointer;margin-bottom:6px;font-weight:${gatesPassed < gatesTotal ? '600' : '400'}">Gate results (${gatesPassed}/${gatesTotal} passing)${gatesPassed < gatesTotal ? ' ⛔' : ''}</summary>${gateRows}</details>` : ''}
               ${uncovRows ? `<details><summary style="color:#d29922;font-size:12px;cursor:pointer;margin-bottom:6px">⚠️ Ungoverned files (${(review.uncovered||[]).length})</summary>${uncovRows}</details>` : ''}
             </div>
           </div>
@@ -2822,21 +2827,25 @@
 
       // Gate results
       if (gates.length > 0) {
-        html += '<h3 style="color:var(--base06);font-size:14px;margin:16px 0 10px">Gate Results</h3>';
+        const gateHeadColor = gates.some(g => !g.passed) ? "var(--base08)" : "var(--base06)";
+        html += `<h3 style="color:${gateHeadColor};font-size:14px;margin:16px 0 10px">Gate Results${gates.some(g=>!g.passed) ? ' ⛔' : ''}</h3>`;
         gates.forEach(gr => {
           const passColor = gr.passed ? "var(--base0B)" : "var(--base08)";
           const passLabel = gr.passed ? "PASS" : "FAIL";
-          html += `<div class="cov-finding">
-            <span class="cov-sev" style="background:${gr.passed ? 'rgba(4,179,114,0.15)' : 'rgba(231,52,156,0.15)'};color:${passColor}">${passLabel}</span>
+          const rowBg = !gr.passed ? 'background:rgba(248,81,73,0.05);border:1px solid rgba(248,81,73,0.15);border-radius:6px;' : '';
+          html += `<div class="cov-finding" style="${rowBg}">
+            <span class="cov-sev" style="background:${gr.passed ? 'rgba(4,179,114,0.15)' : 'rgba(248,81,73,0.15)'};color:${passColor}">${passLabel}</span>
             <span class="cov-finding-text">
               <span class="cov-link" onclick="switchView('graph');selectNodeById('${gr.id}')">${esc(gr.id)}</span>: ${esc(gr.summary || '')}
             </span>
           </div>`;
           if (gr.findings && gr.findings.length) {
-            html += '<div style="margin:4px 0 8px 40px;font-size:11px;color:var(--base04)">';
+            html += '<div style="margin:4px 0 8px 16px">';
             gr.findings.forEach(f => {
-              const msg = typeof f === "string" ? f : (f.severity + ": " + f.message);
-              html += `<div style="margin:2px 0">${esc(msg)}</div>`;
+              const msg = typeof f === "string" ? f : f.message;
+              const sev = typeof f === "string" ? "error" : (f.severity || "error");
+              const sevColor = sev === "error" ? "var(--base08)" : sev === "warning" ? "var(--base0A)" : "var(--base04)";
+              html += `<div style="margin:3px 0;padding:5px 10px;background:rgba(248,81,73,0.08);border-left:3px solid var(--base08);border-radius:0 4px 4px 0;font-size:11px;color:${sevColor};font-family:'SF Mono','Fira Code',monospace">${esc(msg)}</div>`;
             });
             html += '</div>';
           }

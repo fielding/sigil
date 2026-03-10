@@ -534,6 +534,14 @@
     #content-area::-webkit-scrollbar-track { background: var(--base01); }
     #content-area::-webkit-scrollbar-thumb { background: var(--base02); border-radius: 3px; }
     #content-area::-webkit-scrollbar-thumb:hover { background: var(--base03); }
+
+    /* Selection ring animation */
+    @keyframes rotate-dash {
+      to { stroke-dashoffset: -14; }
+    }
+    #selection-ring {
+      animation: rotate-dash 2s linear infinite;
+    }
   </style>
 </head>
 <body>
@@ -665,6 +673,10 @@
     let nodesRef = null;
     let labelsRef = null;
     let nodeGlowRef = null;
+    let linkRef = null;
+    let edgeLabelRef = null;
+    let selectionRingRef = null;
+    let nodeRadiusFn = null;
 
     const nodeColors = {
       component: "#828079",
@@ -1055,6 +1067,7 @@
       const gatesPassed = gates.filter(g => g.passed).length;
       const gatesTotal = gates.length;
       const gatesColor = gatesTotal === 0 ? "var(--base04)" : gatesPassed === gatesTotal ? "var(--base0B)" : "var(--base08)";
+      const hasBlockingFailure = gates.some(g => !g.passed && g.policy === 'block');
 
       // Build GitHub-style PR comment preview
       const covIcon = pct >= 80 ? '✅' : pct >= 50 ? '⚠️' : '❌';
@@ -1062,20 +1075,32 @@
       const govIcon = (s.uncovered_files || 0) > 0 ? '⚠️' : '✅';
       const pr = review.pr;
       const prBanner = pr ? `
-        <div style="margin-bottom:16px;padding:10px 14px;background:var(--base01);border:1px solid var(--base02);border-radius:8px;font-size:13px">
-          <span style="color:var(--base0E);font-weight:700;margin-right:8px">PR #${pr.number}</span>
-          <span style="color:var(--base06)">${esc(pr.title)}</span>
-          ${pr.author ? `<span style="color:var(--base03);font-size:11px;margin-left:8px">by ${esc(pr.author)}</span>` : ''}
-          ${pr.base && pr.head ? `<span style="color:var(--base03);font-size:11px;margin-left:8px">${esc(pr.head)} → ${esc(pr.base)}</span>` : ''}
+        <div style="margin-bottom:16px;padding:10px 14px;background:${hasBlockingFailure ? 'rgba(248,81,73,0.06)' : 'var(--base01)'};border:1px solid ${hasBlockingFailure ? 'rgba(248,81,73,0.35)' : 'var(--base02)'};border-radius:8px;font-size:13px">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span style="color:var(--base0E);font-weight:700">PR #${pr.number}</span>
+            <span style="color:var(--base06)">${esc(pr.title)}</span>
+            ${pr.author ? `<span style="color:var(--base03);font-size:11px">by ${esc(pr.author)}</span>` : ''}
+            ${pr.base && pr.head ? `<span style="color:var(--base03);font-size:11px">${esc(pr.head)} → ${esc(pr.base)}</span>` : ''}
+            ${hasBlockingFailure ? `<span style="background:#f85149;color:#fff;font-size:10px;font-weight:700;letter-spacing:1px;padding:2px 8px;border-radius:3px;text-transform:uppercase">BLOCKED</span>` : ''}
+          </div>
+          ${hasBlockingFailure ? `<div style="margin-top:6px;font-size:11px;color:#f85149">⛔ This PR cannot merge — ${gates.filter(g=>!g.passed&&g.policy==='block').length} blocking gate${gates.filter(g=>!g.passed&&g.policy==='block').length>1?'s':''} failed</div>` : ''}
         </div>` : '';
       const intentChangesSummary = (review.intent_changes || []).map(ic => {
         const name = ic.path.split('/').pop().replace(/\.md$/, '').replace(/\.yaml$/, '');
         const label = ic.status === 'A' ? 'added' : ic.status === 'D' ? 'deleted' : 'modified';
         return `<div style="margin:2px 0;font-size:12px;color:#7d8590"><span style="color:${ic.status==='A'?'#3fb950':ic.status==='D'?'#f85149':'#79c0ff'};font-weight:600;margin-right:6px">${label}</span><code style="background:#21262d;padding:1px 5px;border-radius:3px;font-size:11px;color:#c9d1d9">${esc(name)}</code></div>`;
       }).join('');
-      const gateRows = (review.gates || []).map(g =>
-        `<div style="margin:2px 0;font-size:12px"><span style="color:${g.passed?'#3fb950':'#f85149'};margin-right:6px">${g.passed?'✅':'❌'}</span><code style="color:#8b949e;font-size:11px">${esc(g.id)}</code><span style="color:#7d8590;margin-left:6px">${esc(g.summary||'')}</span></div>`
-      ).join('');
+      const gateRows = (review.gates || []).map(g => {
+        const findingsHtml = (!g.passed && g.findings && g.findings.length)
+          ? g.findings.map(f =>
+              `<div style="margin-top:4px;padding:4px 8px;background:rgba(248,81,73,0.08);border-left:2px solid #f85149;font-size:11px;color:#f85149;font-family:'SF Mono','Fira Code',monospace">${esc(f.message||f)}</div>`
+            ).join('')
+          : '';
+        return `<div style="margin:4px 0;font-size:12px">
+          <div><span style="color:${g.passed?'#3fb950':'#f85149'};margin-right:6px">${g.passed?'✅':'❌'}</span><code style="color:#8b949e;font-size:11px">${esc(g.id)}</code><span style="color:#7d8590;margin-left:6px">${esc(g.summary||'')}</span></div>
+          ${findingsHtml}
+        </div>`;
+      }).join('');
       const uncovRows = (review.uncovered || []).map(f =>
         `<div style="margin:2px 0;font-size:12px;color:#d29922"><code style="background:#21262d;padding:1px 5px;border-radius:3px;font-size:11px">${esc(f.path)}</code></div>`
       ).join('');
@@ -1105,7 +1130,7 @@
                 <tr><td style="padding:3px 16px 3px 0;color:#c9d1d9">Ungoverned Files</td><td style="padding:3px 0;font-weight:600;color:${(s.uncovered_files||0)>0?'#d29922':'#3fb950'}">${s.uncovered_files||0} ${govIcon}</td></tr>
               </table>
               ${intentChangesSummary ? `<details style="margin-bottom:10px"><summary style="color:#7d8590;font-size:12px;cursor:pointer;margin-bottom:6px">Intent document changes (${(review.intent_changes||[]).length})</summary>${intentChangesSummary}</details>` : ''}
-              ${gateRows ? `<details style="margin-bottom:10px"><summary style="color:#7d8590;font-size:12px;cursor:pointer;margin-bottom:6px">Gate results (${gatesPassed}/${gatesTotal} passing)</summary>${gateRows}</details>` : ''}
+              ${gateRows ? `<details style="margin-bottom:10px"${gatesPassed < gatesTotal ? ' open' : ''}><summary style="color:${gatesPassed < gatesTotal ? '#f85149' : '#7d8590'};font-size:12px;cursor:pointer;margin-bottom:6px;font-weight:${gatesPassed < gatesTotal ? '600' : '400'}">Gate results (${gatesPassed}/${gatesTotal} passing)${gatesPassed < gatesTotal ? ' ⛔' : ''}</summary>${gateRows}</details>` : ''}
               ${uncovRows ? `<details><summary style="color:#d29922;font-size:12px;cursor:pointer;margin-bottom:6px">⚠️ Ungoverned files (${(review.uncovered||[]).length})</summary>${uncovRows}</details>` : ''}
             </div>
           </div>
@@ -1218,21 +1243,25 @@
 
       // Gate results
       if (gates.length > 0) {
-        html += '<h3 style="color:var(--base06);font-size:14px;margin:16px 0 10px">Gate Results</h3>';
+        const gateHeadColor = gates.some(g => !g.passed) ? "var(--base08)" : "var(--base06)";
+        html += `<h3 style="color:${gateHeadColor};font-size:14px;margin:16px 0 10px">Gate Results${gates.some(g=>!g.passed) ? ' ⛔' : ''}</h3>`;
         gates.forEach(gr => {
           const passColor = gr.passed ? "var(--base0B)" : "var(--base08)";
           const passLabel = gr.passed ? "PASS" : "FAIL";
-          html += `<div class="cov-finding">
-            <span class="cov-sev" style="background:${gr.passed ? 'rgba(4,179,114,0.15)' : 'rgba(231,52,156,0.15)'};color:${passColor}">${passLabel}</span>
+          const rowBg = !gr.passed ? 'background:rgba(248,81,73,0.05);border:1px solid rgba(248,81,73,0.15);border-radius:6px;' : '';
+          html += `<div class="cov-finding" style="${rowBg}">
+            <span class="cov-sev" style="background:${gr.passed ? 'rgba(4,179,114,0.15)' : 'rgba(248,81,73,0.15)'};color:${passColor}">${passLabel}</span>
             <span class="cov-finding-text">
               <span class="cov-link" onclick="switchView('graph');selectNodeById('${gr.id}')">${esc(gr.id)}</span>: ${esc(gr.summary || '')}
             </span>
           </div>`;
           if (gr.findings && gr.findings.length) {
-            html += '<div style="margin:4px 0 8px 40px;font-size:11px;color:var(--base04)">';
+            html += '<div style="margin:4px 0 8px 16px">';
             gr.findings.forEach(f => {
-              const msg = typeof f === "string" ? f : (f.severity + ": " + f.message);
-              html += `<div style="margin:2px 0">${esc(msg)}</div>`;
+              const msg = typeof f === "string" ? f : f.message;
+              const sev = typeof f === "string" ? "error" : (f.severity || "error");
+              const sevColor = sev === "error" ? "var(--base08)" : sev === "warning" ? "var(--base0A)" : "var(--base04)";
+              html += `<div style="margin:3px 0;padding:5px 10px;background:rgba(248,81,73,0.08);border-left:3px solid var(--base08);border-radius:0 4px 4px 0;font-size:11px;color:${sevColor};font-family:'SF Mono','Fira Code',monospace">${esc(msg)}</div>`;
             });
             html += '</div>';
           }
@@ -1998,33 +2027,67 @@
 
     function highlightPath() {
       if (!nodesRef || !labelsRef) return;
-      if (visitedNodes.size === 0) {
+
+      // Direct neighbors of the currently selected node
+      const neighborSet = new Set();
+      if (selectedNode && graphData) {
+        neighborSet.add(selectedNode.id);
+        graphData.edges.forEach(e => {
+          if (e.src === selectedNode.id) neighborSet.add(e.dst);
+          if (e.dst === selectedNode.id) neighborSet.add(e.src);
+        });
+        // Root is always a neighbor of components
+        if (selectedNode.type === 'component') neighborSet.add('__ROOT__');
+        if (selectedNode._isRoot) graphData.nodes.filter(n => n.type === 'component').forEach(n => neighborSet.add(n.id));
+      }
+
+      // Union of visited history + current neighborhood
+      const highlight = new Set([...visitedNodes, ...neighborSet]);
+
+      if (highlight.size === 0) {
         nodesRef.attr("opacity", 1)
-          .attr("stroke", d => d && selectedNode && d.id === selectedNode.id ? "#f8f6f2" : "none")
-          .attr("stroke-width", d => d && selectedNode && d.id === selectedNode.id ? 2.5 : 0);
+          .attr("stroke", d => d && selectedNode && d.id === selectedNode.id ? "var(--base07)" : "none")
+          .attr("stroke-width", 2.5);
         labelsRef.attr("opacity", 1);
+        if (linkRef) linkRef
+          .attr("stroke-opacity", d => d.type === 'project_root' ? 0.4 : 0.6)
+          .attr("stroke-width", d => d.type === 'project_root' ? 1 : 1.5);
         return;
       }
+
       nodesRef
-        .attr("opacity", d => {
-          if (!d) return 1;
-          if (d.id === (selectedNode && selectedNode.id)) return 1;
-          if (visitedNodes.has(d.id)) return 1;
-          return 0.2;
-        })
+        .attr("opacity", d => (!d || highlight.has(d.id)) ? 1 : 0.12)
         .attr("stroke", d => {
           if (!d) return "none";
-          if (d.id === (selectedNode && selectedNode.id)) return "#f8f6f2";
+          if (d.id === (selectedNode && selectedNode.id)) return "var(--base07)";
+          if (neighborSet.has(d.id)) return nodeColors[d.type] || "#5a5d62";
           if (visitedNodes.has(d.id)) return nodeColors[d.type] || "#5a5d62";
           return "none";
         })
         .attr("stroke-width", d => {
           if (!d) return 0;
           if (d.id === (selectedNode && selectedNode.id)) return 2.5;
-          if (visitedNodes.has(d.id)) return 1.5;
+          if (neighborSet.has(d.id) || visitedNodes.has(d.id)) return 1.5;
           return 0;
         });
-      labelsRef.attr("opacity", d => (!d || visitedNodes.has(d.id)) ? 1 : 0.2);
+      labelsRef.attr("opacity", d => (!d || highlight.has(d.id)) ? 1 : 0.12);
+
+      // Highlight edges connected to selected node, fade others
+      if (linkRef && selectedNode) {
+        linkRef
+          .attr("stroke-opacity", l => {
+            const srcId = typeof l.source === 'object' ? l.source.id : l.source;
+            const dstId = typeof l.target === 'object' ? l.target.id : l.target;
+            if (srcId === selectedNode.id || dstId === selectedNode.id) return 1;
+            return 0.08;
+          })
+          .attr("stroke-width", l => {
+            const srcId = typeof l.source === 'object' ? l.source.id : l.source;
+            const dstId = typeof l.target === 'object' ? l.target.id : l.target;
+            if (srcId === selectedNode.id || dstId === selectedNode.id) return 2.5;
+            return l.type === 'project_root' ? 1 : 1.5;
+          });
+      }
     }
 
     function zoomToNode(node) {
@@ -2257,6 +2320,20 @@
       highlightPath();
       zoomToNode(node);
       if (activeView === "radar") renderRadarView(node);
+
+      // Show/update selection ring on graph
+      if (selectionRingRef && nodeRadiusFn) {
+        const sn = allNodes.find(n => n.id === node.id);
+        if (sn && sn.x !== undefined) {
+          selectionRingRef
+            .attr("cx", sn.x).attr("cy", sn.y)
+            .attr("r", nodeRadiusFn(sn) + 8)
+            .attr("opacity", 0.75);
+        } else {
+          // Node not yet positioned by sim — wait for tick to place it
+          selectionRingRef.attr("r", 26).attr("opacity", 0.75);
+        }
+      }
     }
 
     // ---- Tooltip ----
@@ -2441,6 +2518,10 @@
 
       const maxConn = Math.max(...Object.values(connectivity), 1);
 
+      // Anchor root at center so components radiate outward from it
+      rootNodeObj.fx = width / 2;
+      rootNodeObj.fy = height / 2;
+
       const nodes = [rootNodeObj, ...graph.nodes.map(d => ({...d, _conn: connectivity[d.id] || 0}))];
       rootNodeObj._conn = components.length;
       allNodes = nodes;
@@ -2478,12 +2559,12 @@
       svg.call(zoomRef);
 
       sim = d3.forceSimulation(nodes)
-        .force("link", d3.forceLink(uniqueLinks).id(d => d.id).distance(d => d.type === 'project_root' ? 160 : 120))
-        .force("charge", d3.forceManyBody().strength(-250))
-        .force("center", d3.forceCenter(width / 2, height / 2))
-        .force("collide", d3.forceCollide(30))
-        .force("x", d3.forceX(width / 2).strength(0.03))
-        .force("y", d3.forceY(height / 2).strength(0.03));
+        .force("link", d3.forceLink(uniqueLinks).id(d => d.id)
+          .distance(d => d.type === 'project_root' ? 185 : d.type === 'belongs_to' ? 85 : 115)
+          .strength(d => d.type === 'belongs_to' ? 0.7 : d.type === 'project_root' ? 0.4 : 0.3))
+        .force("charge", d3.forceManyBody().strength(d => d._isRoot ? -800 : d.type === 'component' ? -500 : -200))
+        .force("center", d3.forceCenter(width / 2, height / 2).strength(0.05))
+        .force("collide", d3.forceCollide(d => nodeRadius(d) + 22));
 
       // Curved edges using paths instead of lines
       const link = g.append("g")
@@ -2494,20 +2575,21 @@
         .attr("stroke-opacity", d => d.type === 'project_root' ? 0.4 : 0.6)
         .attr("stroke-dasharray", d => d.type === 'project_root' ? "4,4" : null)
         .attr("marker-end", d => d.type === 'project_root' ? null : `url(#arrow-${d.type})`);
+      linkRef = link;
 
       const edgeLabel = g.append("g")
         .selectAll("text").data(uniqueLinks.filter(l => l.type !== 'project_root')).join("text")
         .attr("class", "edge-label")
         .text(d => d.type)
         .attr("text-anchor", "middle");
+      edgeLabelRef = edgeLabel;
 
       link.on("mouseenter", function(ev, d) {
         d3.select(this).attr("stroke-opacity", 1).attr("stroke-width", 2.5);
         edgeLabel.filter(e => e === d).classed("visible", true);
       }).on("mouseleave", function() {
-        link.attr("stroke-opacity", d => d.type === 'project_root' ? 0.4 : 0.6)
-            .attr("stroke-width", d => d.type === 'project_root' ? 1 : 1.5);
         edgeLabel.classed("visible", false);
+        highlightPath(); // restore to selected-node neighborhood state
       });
 
       function nodeRadius(d) {
@@ -2516,6 +2598,18 @@
         const scale = 1 + (d._conn / maxConn) * 0.6;
         return Math.round(base * scale);
       }
+      nodeRadiusFn = nodeRadius;
+
+      // Selection ring (behind everything so it doesn't occlude nodes)
+      selectionRingRef = g.append("circle")
+        .attr("id", "selection-ring")
+        .attr("fill", "none")
+        .attr("stroke", "var(--base0F)")
+        .attr("stroke-width", 1.5)
+        .attr("stroke-dasharray", "4,3")
+        .attr("opacity", 0)
+        .attr("r", 0)
+        .attr("pointer-events", "none");
 
       // Glow circles for high-connectivity nodes and root
       const glowThreshold = maxConn * 0.5;
@@ -2604,6 +2698,11 @@
         edgeLabel
           .attr("x", d => (d.source.x + d.target.x) / 2)
           .attr("y", d => (d.source.y + d.target.y) / 2 - 6);
+        // Keep selection ring on the selected node
+        if (selectionRingRef && selectedNode) {
+          const sn = allNodes.find(n => n.id === selectedNode.id);
+          if (sn && sn.x !== undefined) selectionRingRef.attr("cx", sn.x).attr("cy", sn.y);
+        }
       });
 
       // Search
