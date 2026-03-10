@@ -357,6 +357,22 @@
       margin: 0 2px;
     }
 
+    /* Focus mode button */
+    #focus-btn {
+      position: absolute; top: 12px; left: 12px;
+      display: flex; align-items: center; gap: 6px;
+      padding: 5px 12px; font-size: 11px; font-weight: 600;
+      color: var(--base04); background: var(--base01);
+      border: 1px solid var(--base02); border-radius: 4px;
+      cursor: pointer; font-family: inherit;
+      transition: all 0.15s; z-index: 10;
+    }
+    #focus-btn:hover { color: var(--base05); border-color: var(--base03); }
+    #focus-btn.focus-active {
+      color: var(--base0F); border-color: var(--base0F);
+      background: rgba(187,255,0,0.08);
+    }
+
     /* New doc modal */
     #new-btn {
       padding: 4px 10px; font-size: 11px; font-weight: 600;
@@ -570,6 +586,7 @@
       <div id="matrix-container"></div>
       <div id="legend"></div>
       <div id="tooltip"></div>
+      <button id="focus-btn" onclick="toggleFocusMode()" style="display:none;">⊕ Focus</button>
       <div id="keyhint">
         <span class="keyhint-key">Cmd+K</span> palette
         <span class="keyhint-key">j</span><span class="keyhint-key">k</span> cycle
@@ -580,6 +597,7 @@
         <span class="keyhint-key">r</span> radar
         <span class="keyhint-key">h</span> hier
         <span class="keyhint-key">c</span> cov
+        <span class="keyhint-key">f</span> focus
       </div>
     </div>
     <div id="right">
@@ -665,6 +683,10 @@
     let navHistoryIdx = -1;
     let visitedNodes = new Set();
     let navigating = false;
+
+    // Focus mode — show only selected node + 1-hop neighborhood
+    let focusMode = false;
+    let pinnedNodeId = null; // currently pinned (locked) node
 
     // D3 refs for path highlighting + zoom
     let svgRef = null;
@@ -1947,6 +1969,13 @@
         legend.style.display = "block";
         renderReviewDashboard();
       }
+
+      // Focus mode only makes sense on the main graph view
+      if (view !== 'graph') {
+        focusMode = false;
+        applyFocusMode();
+      }
+      updateFocusButton();
     }
 
     // ---- Core UI ----
@@ -2313,11 +2342,28 @@
       visitedNodes.add(node.id);
       updateNavButtons();
 
+      // Pin the newly selected node; unpin the previous one
+      if (sim) {
+        // Unpin previously pinned node
+        if (pinnedNodeId && pinnedNodeId !== node.id) {
+          const prev = allNodes.find(n => n.id === pinnedNodeId);
+          if (prev) { prev.fx = null; prev.fy = null; }
+        }
+        // Pin the new selection (lock position so it anchors the graph)
+        const sn = allNodes.find(n => n.id === node.id);
+        if (sn && sn.x !== undefined && !sn._isRoot) {
+          sn.fx = sn.x;
+          sn.fy = sn.y;
+          pinnedNodeId = node.id;
+        }
+      }
+
       selectedNode = node;
       renderHeader(node);
       buildBreadcrumb();
       showTab(activeTab);
       highlightPath();
+      if (focusMode) applyFocusMode();
       zoomToNode(node);
       if (activeView === "radar") renderRadarView(node);
 
@@ -2334,6 +2380,72 @@
           selectionRingRef.attr("r", 26).attr("opacity", 0.75);
         }
       }
+
+      updateFocusButton();
+    }
+
+    function getNeighborSet(nodeId) {
+      const s = new Set([nodeId]);
+      if (!graphData) return s;
+      graphData.edges.forEach(e => {
+        if (e.src === nodeId) s.add(e.dst);
+        if (e.dst === nodeId) s.add(e.src);
+      });
+      // root always neighbors its components
+      if (nodeId === '__ROOT__') {
+        graphData.nodes.filter(n => n.type === 'component').forEach(n => s.add(n.id));
+      }
+      const nd = allNodes.find(n => n.id === nodeId);
+      if (nd && nd.type === 'component') s.add('__ROOT__');
+      return s;
+    }
+
+    function applyFocusMode() {
+      if (!nodesRef || !linkRef || !labelsRef) return;
+      if (!focusMode || !selectedNode) {
+        // Exit focus: restore full graph visibility (let highlightPath take over)
+        nodesRef.style("display", null);
+        labelsRef.style("display", null);
+        nodeGlowRef && nodeGlowRef.style("display", null);
+        linkRef.style("display", null);
+        edgeLabelRef && edgeLabelRef.style("display", null);
+        highlightPath();
+        return;
+      }
+      const neighbors = getNeighborSet(selectedNode.id);
+      nodesRef.style("display", d => neighbors.has(d.id) ? null : "none");
+      labelsRef.style("display", d => neighbors.has(d.id) ? null : "none");
+      nodeGlowRef && nodeGlowRef.style("display", d => neighbors.has(d.id) ? null : "none");
+      linkRef.style("display", l => {
+        const src = typeof l.source === 'object' ? l.source.id : l.source;
+        const dst = typeof l.target === 'object' ? l.target.id : l.target;
+        return (neighbors.has(src) && neighbors.has(dst)) ? null : "none";
+      });
+      edgeLabelRef && edgeLabelRef.style("display", l => {
+        const src = typeof l.source === 'object' ? l.source.id : l.source;
+        const dst = typeof l.target === 'object' ? l.target.id : l.target;
+        return (neighbors.has(src) && neighbors.has(dst)) ? null : "none";
+      });
+      highlightPath();
+    }
+
+    function toggleFocusMode() {
+      if (!selectedNode) return;
+      focusMode = !focusMode;
+      applyFocusMode();
+      updateFocusButton();
+    }
+
+    function updateFocusButton() {
+      const btn = document.getElementById("focus-btn");
+      if (!btn) return;
+      if (!selectedNode || activeView !== 'graph') {
+        btn.style.display = "none";
+        return;
+      }
+      btn.style.display = "flex";
+      btn.textContent = focusMode ? "⊕ Exit Focus" : "⊕ Focus";
+      btn.classList.toggle("focus-active", focusMode);
     }
 
     // ---- Tooltip ----
@@ -2432,7 +2544,10 @@
         switchView("matrix");
       } else if (ev.key === "w") {
         switchView("review");
+      } else if (ev.key === "f") {
+        toggleFocusMode();
       } else if (ev.key === "Escape") {
+        if (focusMode) { focusMode = false; applyFocusMode(); updateFocusButton(); }
         hideTooltip();
       }
     });
@@ -2491,6 +2606,10 @@
       const width = svg.node().clientWidth;
       const height = svg.node().clientHeight;
       svg.selectAll("*").remove();
+      // Reset focus/pin state on re-render
+      focusMode = false;
+      pinnedNodeId = null;
+      updateFocusButton();
 
       // Show empty state if no real nodes exist
       if (!graph.nodes || graph.nodes.length === 0) {
@@ -2537,6 +2656,37 @@
         seenLinks.add(k); return true;
       });
 
+      // ---- Pre-position nodes for structured layout ----
+      // Components evenly distributed on a ring; their children cluster near them.
+      const cx = width / 2, cy = height / 2;
+      const compRingR = Math.min(width, height) * 0.28; // component ring radius
+      const compAngle = {};
+      components.forEach((c, i) => {
+        const angle = (i / components.length) * 2 * Math.PI - Math.PI / 2;
+        compAngle[c.id] = angle;
+        const cNode = nodes.find(n => n.id === c.id);
+        if (cNode) { cNode.x = cx + compRingR * Math.cos(angle); cNode.y = cy + compRingR * Math.sin(angle); }
+      });
+      // Children (specs, etc.) start near their parent component
+      nodes.forEach(n => {
+        if (n._isRoot || n.type === 'component') return;
+        // Find parent component via belongs_to edge
+        const parentEdge = graph.edges.find(e => e.type === 'belongs_to' && e.src === n.id);
+        const parentAngle = parentEdge ? compAngle[parentEdge.dst] : null;
+        if (parentAngle !== null) {
+          const spread = (Math.random() - 0.5) * 0.8;
+          const childR = compRingR + 80 + Math.random() * 80;
+          n.x = cx + childR * Math.cos(parentAngle + spread);
+          n.y = cy + childR * Math.sin(parentAngle + spread);
+        } else {
+          // ADRs / unattached nodes — random on outer ring
+          const angle = Math.random() * 2 * Math.PI;
+          const r = compRingR + 140 + Math.random() * 80;
+          n.x = cx + r * Math.cos(angle);
+          n.y = cy + r * Math.sin(angle);
+        }
+      });
+
       // SVG defs for glow filter and arrow markers
       const defs = svg.append("defs");
       const glowFilter = defs.append("filter").attr("id", "glow").attr("x", "-50%").attr("y", "-50%").attr("width", "200%").attr("height", "200%");
@@ -2558,13 +2708,16 @@
       });
       svg.call(zoomRef);
 
+      const compRingRadius = Math.min(width, height) * 0.28;
       sim = d3.forceSimulation(nodes)
         .force("link", d3.forceLink(uniqueLinks).id(d => d.id)
-          .distance(d => d.type === 'project_root' ? 185 : d.type === 'belongs_to' ? 85 : 115)
-          .strength(d => d.type === 'belongs_to' ? 0.7 : d.type === 'project_root' ? 0.4 : 0.3))
-        .force("charge", d3.forceManyBody().strength(d => d._isRoot ? -800 : d.type === 'component' ? -500 : -200))
-        .force("center", d3.forceCenter(width / 2, height / 2).strength(0.05))
-        .force("collide", d3.forceCollide(d => nodeRadius(d) + 22));
+          .distance(d => d.type === 'project_root' ? compRingRadius : d.type === 'belongs_to' ? 90 : 120)
+          .strength(d => d.type === 'belongs_to' ? 0.8 : d.type === 'project_root' ? 0.6 : 0.3))
+        .force("charge", d3.forceManyBody().strength(d => d._isRoot ? -1200 : d.type === 'component' ? -600 : -250))
+        .force("radial-comp", d3.forceRadial(compRingRadius, width / 2, height / 2)
+          .strength(d => d.type === 'component' ? 0.7 : 0))
+        .force("center", d3.forceCenter(width / 2, height / 2).strength(0.02))
+        .force("collide", d3.forceCollide(d => nodeRadius(d) + 26));
 
       // Curved edges using paths instead of lines
       const link = g.append("g")
@@ -2628,7 +2781,12 @@
         .call(d3.drag()
           .on("start", (ev, d) => { if (!ev.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
           .on("drag", (ev, d) => { d.fx = ev.x; d.fy = ev.y; })
-          .on("end", (ev, d) => { if (!ev.active) sim.alphaTarget(0); d.fx = null; d.fy = null; })
+          .on("end", (ev, d) => {
+            if (!ev.active) sim.alphaTarget(0);
+            // Keep pinned if this is the selected node; release otherwise
+            if (!d._isRoot && d.id !== pinnedNodeId) { d.fx = null; d.fy = null; }
+            else if (!d._isRoot) { d.fx = ev.x; d.fy = ev.y; } // update pin to dragged position
+          })
         );
       nodesRef = node;
 
