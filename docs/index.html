@@ -2057,14 +2057,14 @@
         display:flex; align-items:center; justify-content:space-between;
         gap:12px;
       ">
-        <code style="font-size:12px;color:#bbff00;line-height:1.6;">git clone https://github.com/fielding/sigil<br>cd sigil &amp;&amp; pip install -e . &amp;&amp; sigil init</code>
-        <button onclick="navigator.clipboard.writeText('git clone https://github.com/fielding/sigil && cd sigil && pip install -e . && sigil init').then(()=>{this.textContent='Copied!';setTimeout(()=>{this.textContent='Copy'},1500)})" style="
+        <code style="font-size:12px;color:#bbff00;line-height:1.6;">pip install git+https://github.com/fielding/sigil.git<br>sigil init</code>
+        <button onclick="navigator.clipboard.writeText('pip install git+https://github.com/fielding/sigil.git && sigil init').then(()=>{this.textContent='Copied!';setTimeout(()=>{this.textContent='Copy'},1500)})" style="
           background:transparent; border:1px solid #3a3d42; border-radius:4px;
           color:#828079; font-size:11px; font-family:inherit;
           padding:4px 10px; cursor:pointer; flex-shrink:0;
         ">Copy</button>
       </div>
-      <p style="font-size:11px;color:#5a5d62;margin-bottom:16px;">Requires Python 3.11+. Alpha — install from source, PyPI package in progress.</p>
+      <p style="font-size:11px;color:#5a5d62;margin-bottom:16px;">Requires Python 3.11+. Or: <code style="color:#828079">uv tool install</code> / <code style="color:#828079">pipx install</code> git+… for global install.</p>
       <div style="display:flex;flex-direction:column;gap:8px;">
         <div style="display:flex;gap:10px;align-items:center;">
           <button onclick="dismissWelcome();switchView('review')" style="
@@ -2126,7 +2126,7 @@
         border-radius:5px;
         font-size:11px;
         cursor:pointer;
-      " onclick="navigator.clipboard.writeText('git clone https://github.com/fielding/sigil && cd sigil && pip install -e . && sigil init').then(()=>{
+      " onclick="navigator.clipboard.writeText('pip install git+https://github.com/fielding/sigil.git && sigil init').then(()=>{
         const el=document.getElementById('install-cta');
         const code=el.querySelector('code');
         const orig=code.textContent;
@@ -2134,10 +2134,10 @@
         el.style.borderColor='rgba(187,255,0,0.6)';
         setTimeout(()=>{code.textContent=orig;el.style.borderColor='rgba(187,255,0,0.25)'},1500)
       })" title="Click to copy install command">
-        <code style="color:#bbff00;font-family:inherit">git clone + pip install -e .</code>
+        <code style="color:#bbff00;font-family:inherit">pip install git+…</code>
         <a href="https://github.com/fielding/sigil" target="_blank" onclick="event.stopPropagation()" style="
           color:#5a5d62;font-size:10px;text-decoration:none;white-space:nowrap;
-        " title="Install from source on GitHub">↗ source</a>
+        " title="View on GitHub">↗ GitHub</a>
       </div>
       <div id="health-badge"></div>
     </div>
@@ -3468,7 +3468,7 @@
         ${specsHtml}
         <div style="margin-top:16px;padding:12px 14px;background:var(--base00);border:1px solid var(--base02);border-radius:8px">
           <div style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--base03);margin-bottom:8px">Try on your own project</div>
-          <code style="font-size:12px;color:var(--base0F);line-height:1.8;display:block">git clone https://github.com/fielding/sigil<br>cd sigil &amp;&amp; pip install -e . &amp;&amp; sigil init</code>
+          <code style="font-size:12px;color:var(--base0F);line-height:1.8;display:block">pip install git+https://github.com/fielding/sigil.git<br>sigil init</code>
           <div style="margin-top:8px;font-size:11px;color:var(--base03)">Requires Python 3.11+ &nbsp;·&nbsp; <a href="https://github.com/fielding/sigil" target="_blank" style="color:var(--base0D);text-decoration:none">GitHub ↗</a></div>
         </div>
         <div style="margin-top:8px;padding:8px 10px;border:1px solid var(--base02);border-radius:6px;font-size:11px;color:var(--base03)">

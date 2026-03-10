@@ -92,26 +92,26 @@ That's the loop: specs define intent, gates enforce it, code can't drift.
 ## Install
 
 ```bash
-git clone https://github.com/fielding/sigil.git
-cd sigil && pip install -e .
+# Recommended: install as a global tool
+uv tool install git+https://github.com/fielding/sigil.git
+# or: pipx install git+https://github.com/fielding/sigil.git
+# or: pip install git+https://github.com/fielding/sigil.git
+
 sigil init
 ```
 
-Three commands. Scans your repo, scaffolds the structure, detects components from package manifests, builds the knowledge graph, and opens an interactive viewer.
+Scans your repo, scaffolds the structure, detects components from package manifests, builds the knowledge graph, and opens an interactive viewer.
 
 Requires Python 3.11+.
 
-> **Alpha:** Install from source. PyPI publishing in progress — `pip install sigil-cli` once released.
+> **Note:** `pip install sigil-cli` (PyPI) coming soon. Install from GitHub in the meantime.
 
 <details>
-<summary>Other install methods</summary>
+<summary>Install from source (contributors)</summary>
 
 ```bash
-# Via npx — coming soon
-# npx @fielding/sigil init
-
-# Global install via npm — coming soon
-# npm install -g @fielding/sigil
+git clone https://github.com/fielding/sigil.git
+cd sigil && pip install -e .
 ```
 
 </details>
@@ -121,10 +121,8 @@ Requires Python 3.11+.
 Want to see Sigil on a real (sample) codebase before using it on your own? The repo includes a complete example — a bookstore app with 9 components, 36 nodes, and 87 edges:
 
 ```bash
-git clone https://github.com/fielding/sigil.git
-cd sigil
-pip install -e .
-sigil serve --repo examples/demo-app
+git clone https://github.com/fielding/sigil.git sigil-demo --depth 1
+sigil serve --repo sigil-demo/examples/demo-app
 ```
 
 Opens in your browser. Click around the graph. Try the [Impact Radar](https://fielding.github.io/sigil/) view. Check coverage. Explore drift.
