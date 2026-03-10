@@ -2,42 +2,29 @@
 
 [![intent coverage](.intent/badge.svg)](https://fielding.github.io/sigil/)
 
-**Version control for architectural decisions. Align product and engineering on specs before a single line of code is written.**
+**Review intent, not just diffs.**
 
-Your team has a meeting. Product describes what they want. Engineering says they can build it. Everyone leaves with a different picture of what "it" is.
-
-Sigil fixes that gap. Write your specs, ADRs, interface contracts, and constraints as structured documents in your repo. Sigil links them into a queryable intent graph — components connected to specs connected to decisions connected to gates. Before anyone writes code, product and engineering review the graph together. Gaps are visible. Disagreements surface. Everyone signs off on the same picture.
-
-Then code is written. And gates ensure it can never drift from what was agreed on.
-
-> **Your codebase knows *what*. Sigil knows *why* — before the first line is written.**
-
-## The workflow
-
-```bash
-# 1. Write a spec for what you're building
-sigil new spec auth-service "Token refresh flow"
-
-# 2. Record why you made a key technical choice
-sigil new adr auth-service "Use JWT with short-lived tokens"
-
-# 3. Define an interface contract between services
-sigil new interface orders "API-ORDERS-V1"
-
-# 4. Set a constraint that must hold — forever
-sigil new gate "Auth token expiry must be under 1 hour" --applies-to COMP-auth-service
-
-# 5. See the full picture of what your team has agreed to build
-sigil serve
-```
-
-Opens in your browser: a force-directed graph of every spec, decision, interface, and constraint — linked together, searchable, with coverage gaps highlighted in red.
+AI writes code faster than humans can review it. The diff gets reviewed. The decision behind it doesn't. Sigil fixes that: specs, ADRs, and architectural constraints live in your repo as a queryable graph. Every PR gets an intent diff — what decisions changed, what specs apply, what gates failed. Your team reviews the *why* alongside the *what*.
 
 [![Sigil intent graph viewer — 36 nodes, 87 edges, 8 interactive views](docs/branding/graph-screenshot.png)](https://fielding.github.io/sigil/)
 
-**[See a live demo →](https://fielding.github.io/sigil/)**
+**[Try the live demo →](https://fielding.github.io/sigil/)**  **·**  [Install](#install)  **·**  [Quickstart](#try-it-on-a-demo-project)
 
-Product sees what's being built and why. Engineering sees the constraints and interfaces. Everyone can ask "where are the gaps?" before a sprint starts.
+---
+
+```bash
+# See what Sigil looks like on a real codebase — no setup required
+sigil demo
+```
+
+Or run it on your own repo:
+
+```bash
+cd your-project && sigil init
+# Scans your repo, builds the knowledge graph, opens the viewer
+```
+
+That's the shift: **intent lives in Git, not in Slack.** Specs and decisions are first-class artifacts, queryable and diffable. Gates block PRs that violate what was agreed on. Your codebase can never drift from the plan — because the plan is enforced.
 
 ## What the graph shows
 
