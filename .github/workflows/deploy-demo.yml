@@ -9,6 +9,7 @@ on:
     branches: [main]
     paths:
       - "examples/demo-app/**"
+      - "tools/intent_viewer/index.html"
       - "npm/lib/sigil_viewer.html"
       - "npm/lib/sigil.py"
   workflow_dispatch:
