@@ -1,0 +1,102 @@
+name: Sigil Intent Review
+description: Run Sigil intent coverage checks and post a PR review comment with architecture analysis.
+
+inputs:
+  github-token:
+    description: GitHub token for posting PR comments. Uses GITHUB_TOKEN if not provided.
+    required: false
+    default: ${{ github.token }}
+  repo:
+    description: Path to the repository root (default: current directory).
+    required: false
+    default: "."
+  strict:
+    description: Fail on warnings in addition to errors.
+    required: false
+    default: "false"
+  pr-comment:
+    description: Post an intent analysis comment on the PR (default true on pull_request events).
+    required: false
+    default: "true"
+  python-version:
+    description: Python version to use. Must be >= 3.11.
+    required: false
+    default: "3.11"
+
+outputs:
+  coverage:
+    description: Intent coverage percentage (0–100).
+    value: ${{ steps.sigil-ci.outputs.coverage }}
+  gates-passed:
+    description: Number of gates that passed.
+    value: ${{ steps.sigil-ci.outputs.gates_passed }}
+  gates-total:
+    description: Total number of gates checked.
+    value: ${{ steps.sigil-ci.outputs.gates_total }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install Sigil
+      shell: bash
+      run: |
+        pip install pyyaml
+        pip install sigil-cli || {
+          echo "PyPI install failed, falling back to source install..."
+          pip install "git+https://github.com/fielding/sigil.git"
+        }
+
+    - name: Run Sigil CI
+      id: sigil-ci
+      shell: bash
+      env:
+        SIGIL_REPO: ${{ inputs.repo }}
+        SIGIL_STRICT: ${{ inputs.strict }}
+      run: |
+        FLAGS=""
+        if [ "$SIGIL_STRICT" = "true" ]; then
+          FLAGS="$FLAGS --strict"
+        fi
+        sigil --repo "$SIGIL_REPO" ci $FLAGS
+
+        # Capture coverage for output
+        COVERAGE=$(python3 -c "
+        import json, pathlib, os
+        idx = pathlib.Path(os.environ.get('SIGIL_REPO', '.')).resolve() / '.intent' / 'index' / 'coverage.json'
+        if idx.exists():
+            d = json.loads(idx.read_text())
+            print(d.get('score', 0))
+        else:
+            print(0)
+        " 2>/dev/null || echo "0")
+
+        GATES=$(python3 -c "
+        import json, pathlib, os
+        idx = pathlib.Path(os.environ.get('SIGIL_REPO', '.')).resolve() / '.intent' / 'index' / 'review.json'
+        if idx.exists():
+            d = json.loads(idx.read_text())
+            gates = d.get('gates', [])
+            passed = sum(1 for g in gates if g.get('passed'))
+            print(f'{passed}/{len(gates)}')
+        else:
+            print('0/0')
+        " 2>/dev/null || echo "0/0")
+
+        echo "coverage=$COVERAGE" >> "$GITHUB_OUTPUT"
+        echo "gates_passed=${GATES%%/*}" >> "$GITHUB_OUTPUT"
+        echo "gates_total=${GATES##*/}" >> "$GITHUB_OUTPUT"
+
+    - name: Post PR intent analysis
+      if: github.event_name == 'pull_request' && inputs.pr-comment == 'true'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        SIGIL_REPO: ${{ inputs.repo }}
+      run: |
+        sigil --repo "$SIGIL_REPO" pr "$PR_NUMBER"

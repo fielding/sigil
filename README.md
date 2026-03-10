@@ -202,10 +202,30 @@ sigil status
 
 ## CI Integration
 
-Three lines in your GitHub Actions workflow:
+One step in your GitHub Actions workflow:
 
 ```yaml
-- run: git clone https://github.com/fielding/sigil.git /tmp/sigil && pip install -e /tmp/sigil
+- uses: fielding/sigil@v1
+  with:
+    github-token: ${{ secrets.GITHUB_TOKEN }}
+```
+
+That's it. On every push, Sigil runs gate enforcement and coverage checks. On every PR, it posts an intent analysis comment: coverage percentage, governed vs. ungoverned changes, gate results, and links to the intent graph.
+
+Add `strict: true` to fail on warnings:
+
+```yaml
+- uses: fielding/sigil@v1
+  with:
+    github-token: ${{ secrets.GITHUB_TOKEN }}
+    strict: true
+```
+
+<details>
+<summary>Manual install (advanced)</summary>
+
+```yaml
+- run: pip install sigil-cli
 - run: sigil ci
 - run: sigil pr ${{ github.event.pull_request.number }}
   if: github.event_name == 'pull_request'
@@ -213,9 +233,7 @@ Three lines in your GitHub Actions workflow:
     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-> **Note:** `pip install sigil-cli` (from PyPI) is coming soon. Until then, use the source install above.
-
-`sigil ci` runs index, lint, check, badge, and review in one shot. `sigil pr` posts a comment on your PR with coverage percentage, governed vs. ungoverned changes, gate results, and links to the intent graph. Add `--strict` to fail on warnings.
+</details>
 
 ## CLI Reference
 
