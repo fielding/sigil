@@ -125,7 +125,7 @@ Three commands. Scans your repo, scaffolds the structure, detects components fro
 
 Requires Python 3.11+.
 
-> **PyPI package coming soon.** `pip install sigil-cli` will work once published.
+> **Alpha:** Install from source. PyPI publishing in progress — `pip install sigil-cli` once released.
 
 <details>
 <summary>Other install methods</summary>

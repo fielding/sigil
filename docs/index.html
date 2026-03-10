@@ -2017,7 +2017,7 @@
     display: flex; align-items: center; justify-content: center;
     backdrop-filter: blur(2px);
     cursor: pointer;
-  " onclick="dismissWelcome()" onkeydown="if(event.key){dismissWelcome()}" tabindex="0">
+  " onclick="dismissWelcome();switchView('review')" onkeydown="if(event.key){dismissWelcome();switchView('review')}" tabindex="0">
     <div style="
       max-width: 560px; width: 90%;
       border: 1px solid #3a3d42;
@@ -2069,7 +2069,7 @@
           padding:4px 10px; cursor:pointer; flex-shrink:0;
         ">Copy</button>
       </div>
-      <p style="font-size:11px;color:#5a5d62;margin-bottom:16px;">Requires Python 3.11+. PyPI package coming soon — install from source in the meantime.</p>
+      <p style="font-size:11px;color:#5a5d62;margin-bottom:16px;">Requires Python 3.11+. Alpha — install from source, PyPI package in progress.</p>
       <div style="display:flex;flex-direction:column;gap:8px;">
         <div style="display:flex;gap:10px;align-items:center;">
           <button onclick="dismissWelcome();switchView('review')" style="
@@ -2079,7 +2079,7 @@
             padding:10px 22px; cursor:pointer;
             letter-spacing:0.5px;
           ">See PR Review →</button>
-          <button onclick="dismissWelcome()" style="
+          <button onclick="dismissWelcome();switchView('graph')" style="
             background:transparent; color:#828079;
             border:1px solid #3a3d42; border-radius:5px;
             font-family:inherit; font-size:12px;
@@ -2104,8 +2104,8 @@
         setTimeout(() => el.remove(), 200);
       }
     }
-    // Also dismiss on any keypress
-    document.addEventListener('keydown', dismissWelcome, { once: true });
+    // Also dismiss on any keypress — go straight to the gate failure demo
+    document.addEventListener('keydown', function() { dismissWelcome(); switchView('review'); }, { once: true });
   </script>
 
   <div id="topbar">
