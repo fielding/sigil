@@ -1697,8 +1697,8 @@ def cmd_init(args) -> int:
             print(f"  Then re-index to see it in the graph:")
             print(f"    sigil index && open {url}")
             print()
-            print(f"  Want to see a full graph first? Try the live demo:")
-            print(f"    https://fielding.github.io/sigil/")
+            print(f"  Want to see a full graph first?")
+            print(f"    sigil demo   # bookstore: 9 services, 36 nodes — loads instantly")
             print(f"  ────────────────────────────────────────────────────────────────")
         else:
             print(f"  Palette:  Cmd+K")
@@ -1721,6 +1721,143 @@ def cmd_init(args) -> int:
         print(f"        Graph indexed — run `sigil status` to see coverage.")
         print(f"        Or open https://fielding.github.io/sigil/ for the live demo.")
 
+    return 0
+
+
+def _find_demo_data() -> Optional[Path]:
+    """Locate the bundled demo JSON file (raw YAML source — slow path)."""
+    # Next to this script (pip install puts it as sibling)
+    bundled = Path(__file__).with_name("sigil_demo.json")
+    if bundled.exists():
+        return bundled
+    # Via importlib
+    import importlib.util
+    spec = importlib.util.find_spec("sigil_cli")
+    if spec and spec.origin:
+        candidate = Path(spec.origin).with_name("sigil_demo.json")
+        if candidate.exists():
+            return candidate
+    # Dev-mode: check examples/ relative to repo root
+    dev_candidate = Path(__file__).parent.parent.parent / "examples" / "sigil_demo.json"
+    if dev_candidate.exists():
+        return dev_candidate
+    return None
+
+
+def _find_demo_index() -> Optional[Path]:
+    """Locate the pre-built demo index directory (fast path — no graph build needed)."""
+    # Bundled alongside this script (npm install puts it here)
+    bundled = Path(__file__).with_name("demo_index")
+    if bundled.is_dir() and (bundled / "graph.json").exists():
+        return bundled
+    # Dev-mode: use pre-built index from examples/demo-app
+    dev_candidate = Path(__file__).parent.parent.parent / "examples" / "demo-app" / ".intent" / "index"
+    if dev_candidate.is_dir() and (dev_candidate / "graph.json").exists():
+        return dev_candidate
+    return None
+
+
+def cmd_demo(args) -> int:
+    """Load the Shelf bookstore demo and open the intent graph viewer instantly."""
+    import tempfile
+    import webbrowser
+    import threading
+    from http.server import HTTPServer, SimpleHTTPRequestHandler
+
+    print()
+    print("  ┌─────────────────────────────────────┐")
+    print("  │         SIGIL — demo                 │")
+    print("  │   Shelf Bookstore · 9 services       │")
+    print("  └─────────────────────────────────────┘")
+    print()
+
+    # Set up viewer
+    viewer_src = _find_viewer(Path("."))
+    if not viewer_src:
+        print("  Error: viewer not found. Reinstall sigil or run from repo root.")
+        return 1
+
+    tmp = Path(tempfile.mkdtemp(prefix="sigil-demo-"))
+    try:
+        viewer_dest = tmp / "tools" / "intent_viewer" / "index.html"
+        viewer_dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(viewer_src, viewer_dest)
+
+        index_dst = tmp / ".intent" / "index"
+        index_dst.mkdir(parents=True, exist_ok=True)
+
+        # Fast path: copy pre-built index JSON files — no graph build needed
+        demo_index = _find_demo_index()
+        if demo_index:
+            for f in demo_index.glob("*.json"):
+                shutil.copy2(f, index_dst / f.name)
+            graph_data = json.loads((index_dst / "graph.json").read_text(encoding="utf-8"))
+            n_nodes = len(graph_data.get("nodes", []))
+            n_edges = len(graph_data.get("edges", []))
+            print(f"  Loaded: {n_nodes} nodes, {n_edges} edges")
+        else:
+            # Slow path: build graph from raw YAML source files
+            demo_json = _find_demo_data()
+            if not demo_json:
+                print("  Error: demo data not bundled. Try reinstalling:")
+                print("    pip install --upgrade sigil-cli")
+                print("    npx @fielding/sigil@latest demo")
+                return 1
+            data = json.loads(demo_json.read_text(encoding="utf-8"))
+            for rel_path, content in data.items():
+                dest = tmp / rel_path
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                dest.write_text(content, encoding="utf-8")
+            g = build_graph(tmp)
+            write_graph_artifacts(tmp, g)
+            n_nodes, n_edges = len(g.nodes), len(g.edges)
+            print(f"  Loaded: {n_nodes} nodes, {n_edges} edges")
+
+        port = int(getattr(args, "port", 0) or 8787)
+
+        class Handler(SimpleHTTPRequestHandler):
+            def __init__(self, *a, **kw):
+                super().__init__(*a, directory=str(tmp), **kw)
+            def log_message(self, fmt, *a):
+                pass
+
+        try:
+            httpd = HTTPServer(("127.0.0.1", port), Handler)
+        except OSError:
+            httpd = HTTPServer(("127.0.0.1", 0), Handler)
+            port = httpd.server_address[1]
+
+        url = f"http://127.0.0.1:{port}/tools/intent_viewer/index.html"
+
+        print()
+        print(f"  ── Shelf Bookstore: a real microservices app ────────────────────")
+        print(f"  9 services · {n_nodes} intent nodes · {n_edges} typed edges · 5 enforced gates")
+        print()
+        print(f"  Viewer: {url}")
+        print()
+        print(f"  Explorer shortcuts:")
+        print(f"    g  Graph view   — force-directed intent graph")
+        print(f"    r  Impact Radar — blast radius of any node")
+        print(f"    h  Hierarchy    — component ownership tree")
+        print(f"    c  Coverage     — spec & gate health per component")
+        print(f"    d  Drift        — files not mapped to any component")
+        print()
+        print(f"  Click any node to see its specs, decisions, and connections.")
+        print()
+        print(f"  Ready for your own project?")
+        print(f"    cd your-project && sigil init")
+        print()
+        print(f"  Press Ctrl+C to stop.")
+        print()
+
+        threading.Timer(0.5, lambda: webbrowser.open(url)).start()
+        try:
+            httpd.serve_forever()
+        except KeyboardInterrupt:
+            print("\nStopped.")
+            httpd.server_close()
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
     return 0
 
 
@@ -5096,6 +5233,7 @@ def main() -> int:
 commands (grouped by workflow):
 
   getting started:
+    demo          See Sigil in action: bookstore app, 9 services, loads instantly
     init          Zero-to-working setup: scaffold, index, open viewer
     bootstrap     Scan repo and create missing component stubs
     new           Create a new intent document from template
@@ -5294,6 +5432,10 @@ commands (grouped by workflow):
     sp.add_argument("--depth", type=int, default=3, help="Max traversal depth (default: 3)")
     sp.add_argument("--json", action="store_true", default=False, help="Output results as JSON")
     sp.set_defaults(fn=cmd_impact)
+
+    sp = sub.add_parser("demo", help="Explore a live demo: bookstore app with 9 services and 36 nodes")
+    sp.add_argument("--port", type=int, default=8787, help="Port for viewer (default: 8787)")
+    sp.set_defaults(fn=cmd_demo)
 
     args = ap.parse_args(_hoist_repo_flag(sys.argv[1:]))
     if not args.cmd:
