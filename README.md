@@ -8,7 +8,7 @@ AI writes code faster than humans can review it. The diff gets reviewed. The dec
 
 [![Sigil intent graph viewer — 36 nodes, 87 edges, 8 interactive views](docs/branding/graph-screenshot.png)](https://fielding.github.io/sigil/)
 
-**[Try the live demo →](https://fielding.github.io/sigil/)**  **·**  [Install](#install)  **·**  [Quickstart](#try-it-on-a-demo-project)
+**[Try the live demo →](https://fielding.github.io/sigil/demo/)**  **·**  [Install](#install)  **·**  [Quickstart](#try-it-on-a-demo-project)
 
 ---
 
@@ -109,7 +109,7 @@ sigil demo
 
 Opens the full intent graph for a bookstore app — 9 services, 36 nodes, 87 edges — in your browser. No cloning required. Click around, explore the views, then come back when you're ready to set it up on your own project with `sigil init`.
 
-No install? **[Open the live demo →](https://fielding.github.io/sigil/)**
+No install? **[Open the live demo →](https://fielding.github.io/sigil/demo/)**
 
 ---
 
