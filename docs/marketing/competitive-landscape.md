@@ -17,7 +17,7 @@ Sigil occupies a new category: **intent-first engineering tooling**. No existing
 
 **Where Sigil differentiates:**
 - **Graph structure.** ADR tools treat decisions as a flat list. Sigil connects ADRs to components, specs, interfaces, and gates via typed edges. An ADR isn't just a document — it's a node in a queryable graph.
-- **CI integration.** ADR tools don't post diffs on PRs. Sigil's `sigil diff` computes graph-level changes and posts them as PR comments.
+- **Pre-sprint graph review.** ADR tools produce documents nobody reviews together. Sigil produces a live graph that product and engineering review before sprints start.
 - **Broader scope.** ADR tools only handle decisions. Sigil handles specs, components, interfaces, and gates — the full intent surface.
 - **Visualization.** No ADR tool provides an interactive graph viewer.
 
@@ -55,7 +55,7 @@ Sigil occupies a new category: **intent-first engineering tooling**. No existing
 **Where Sigil differentiates:**
 - **In Git, not in a silo.** Docs in Notion are disconnected from the codebase. They can't be diffed across commits, linted in CI, or linked to specific components with typed edges.
 - **Structured, not freeform.** Wikis let you write anything. Sigil enforces structure: required sections, valid statuses, explicit relationships. Structure enables automation.
-- **Reviewable in PRs.** You can't put a Notion page in a PR comment. Sigil's intent diffs are native to the code review workflow.
+- **Reviewable before code starts.** You can't run `sigil serve` on a Notion page and get a graph product and engineering review together. Sigil turns specs into a shared picture before a sprint starts.
 - **No rot.** Wiki docs rot because there's no feedback loop. Sigil's CI integration creates the feedback loop — if you change intent, the diff shows up in the PR.
 
 **Our take:** Wikis are where specs go to die. Sigil is where they stay alive. We're not replacing Notion for general docs — we're replacing it specifically for architectural intent.
@@ -73,7 +73,7 @@ Sigil occupies a new category: **intent-first engineering tooling**. No existing
 
 **Where Sigil differentiates:**
 - **Intent, not just structure.** Architecture-as-code tools model what the system looks like. Sigil models why it's built that way — the specs, decisions, and constraints behind the structure.
-- **Review workflow.** These tools generate diagrams. Sigil generates PR comments. The output is designed for the code review loop, not a documentation site.
+- **Pre-code review.** These tools generate diagrams after the architecture is decided in someone's head. Sigil structures the decision-making process itself — before code starts, not after.
 - **Broader artifact types.** Architecture tools model components and relationships. Sigil also models specs, ADRs, interface contracts, and gate constraints.
 
 **Our take:** Architecture-as-code is the right instinct (define structure in repo). Sigil goes further: define intent in repo, with enforcement.
@@ -104,7 +104,7 @@ Sigil occupies a new category: **intent-first engineering tooling**. No existing
 | Repo-native artifacts | Yes | Yes | Partial | No | Yes |
 | Knowledge graph | Yes | No | Partial | No | Partial |
 | Typed relationships | Yes | No | Limited | No | Yes |
-| CI integration (PR diffs) | Yes | No | No | No | No |
+| Pre-sprint graph review | Yes | No | No | No | No |
 | Interactive viewer | Yes | No | Yes | N/A | Yes |
 | Lint / validation | Yes | No | Yes | No | Partial |
 | Scaffolding CLI | Yes | Yes | Yes | No | No |
@@ -116,6 +116,6 @@ Sigil occupies a new category: **intent-first engineering tooling**. No existing
 
 **We are NOT replacing:** Backstage, Notion, your wiki, or your diagramming tool.
 
-**We ARE replacing:** The gap between "we wrote a spec" and "the spec actually matters in code review." Sigil is the missing feedback loop between design documents and the development workflow.
+**We ARE replacing:** The gap between "we wrote a spec" and "we actually agreed on it before writing code." Sigil is the alignment layer between design documents and the sprint — the step where product and engineering review the graph together and say "yes, this is what we're building."
 
-**Adjacent, not competitive:** Sigil can coexist with all of the above. Use Notion for meeting notes. Use Backstage for your service catalog. Use Structurizr for diagrams. Use Sigil for the intent that governs all of it — and make that intent reviewable in every PR.
+**Adjacent, not competitive:** Sigil can coexist with all of the above. Use Notion for meeting notes. Use Backstage for your service catalog. Use Structurizr for diagrams. Use Sigil for the intent that governs all of it — structured, versioned in Git, reviewable before code starts, and enforced in CI downstream.

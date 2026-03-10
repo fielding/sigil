@@ -10,7 +10,7 @@ The launch is optimized for **one viral moment on Hacker News** supported by sus
 
 ### Prep work
 - [ ] Polish README (use README-draft.md as base)
-- [ ] Record a 90-second terminal demo: `sigil init` -> write a spec -> open PR -> see intent diff comment
+- [ ] Record a 90-second terminal demo: `sigil init` -> write a spec -> link an interface -> run `sigil serve` -> show the graph before any code is written
 - [ ] Create a demo repo (or clean up this repo) that strangers can clone and run in < 2 minutes
 - [ ] Write the HN Show post draft
 - [ ] Write the launch Twitter thread draft
@@ -18,21 +18,21 @@ The launch is optimized for **one viral moment on Hacker News** supported by sus
 - [ ] Test the entire flow on a clean machine: clone, init, new, lint, index, viewer, CI
 
 ### Build anticipation (optional, low effort)
-- Post 1-2 "building in public" tweets showing the graph viewer or a PR comment screenshot
+- Post 1-2 "building in public" tweets showing the graph viewer — the pre-code intent graph, not a PR comment
 - No teaser campaign. Dev tools don't need hype. They need a working demo.
 
 ## Launch Day
 
 ### Channel 1: Hacker News (Show HN) — PRIMARY
 
-**Why:** HN is where engineering leads discover tools. A well-positioned Show HN can drive thousands of GitHub stars and genuine adoption. Sigil's thesis ("review intent, not just diffs") is the kind of opinionated take that generates HN discussion.
+**Why:** HN is where engineering leads discover tools. A well-positioned Show HN can drive thousands of GitHub stars and genuine adoption. Sigil's thesis ("align product and engineering on specs before writing code") is the kind of opinionated take that generates HN discussion.
 
 **Format:** Show HN post
 
 **Title options (pick one):**
-- "Show HN: Sigil -- turn specs and ADRs into a reviewable knowledge graph in your Git repo"
-- "Show HN: Sigil -- an intent-first engineering CLI that posts architecture diffs on PRs"
-- "Show HN: Sigil -- review intent, not just diffs"
+- "Show HN: Sigil -- version control for architectural decisions, reviewed before code is written"
+- "Show HN: Sigil -- turn specs and ADRs into a queryable intent graph your whole team reviews before sprints start"
+- "Show HN: Sigil -- pre-code alignment tooling: specs, ADRs, and gates as a knowledge graph in Git"
 
 **Post body:**
 - 3-4 paragraphs: problem, solution, how it works, current state + roadmap
@@ -52,11 +52,11 @@ The launch is optimized for **one viral moment on Hacker News** supported by sus
 **Format:** Launch thread (8-10 tweets)
 
 **Thread structure:**
-1. Hook: "Your specs are dead. Here's how to bring them back." + screenshot of PR intent diff
-2. Problem: Specs rot in Notion. ADRs are write-only. Architecture is invisible.
-3. Solution: Sigil indexes specs, ADRs, and constraints into a knowledge graph in your Git repo.
-4. Demo: Terminal recording GIF of `sigil init` -> `sigil new spec` -> graph viewer
-5. CI magic: Screenshot of PR comment with intent diff
+1. Hook: "Product and engineering aligned before writing any code. Here's how." + screenshot of intent graph
+2. Problem: Specs rot in Notion. ADRs are write-only. Everyone leaves planning meetings with a different picture of what "it" is.
+3. Solution: Sigil indexes specs, ADRs, and constraints into a knowledge graph in your Git repo — reviewed together before code starts.
+4. Demo: Terminal recording GIF of `sigil init` -> `sigil new spec` -> `sigil serve` -> interactive graph with gaps highlighted
+5. Downstream enforcement: Gate blocking a PR because a constraint defined in the pre-code spec was violated
 6. Key features: graph, diff, lint, viewer, bootstrap
 7. Philosophy: "Intent should live where code lives"
 8. What's next: VS Code extension, gate enforcement, drift detection
@@ -76,7 +76,7 @@ The launch is optimized for **one viral moment on Hacker News** supported by sus
 - **r/programming** — "Show r/programming" style post, similar to HN framing
 - **r/ExperiencedDevs** — Frame around the problem: "How do you keep architectural decisions alive?"
 - **r/softwarearchitecture** — Direct relevance. Post about the intent-first approach.
-- **r/devops** / **r/platformengineering** — Frame around CI integration: "We added architecture diffs to our PR comments"
+- **r/devops** / **r/platformengineering** — Frame around pre-code alignment: "We started reviewing the intent graph before sprints, not just diffs after"
 
 **Format:** Text post with problem-solution structure. Link to repo. Include a screenshot. Don't over-sell.
 
@@ -120,7 +120,7 @@ The launch is optimized for **one viral moment on Hacker News** supported by sus
 - **Clones and unique visitors** — GitHub Insights. Real adoption signal.
 - **Issues opened** — People trying the tool and hitting edges. Good sign.
 - **Forks** — Contributors interested in the project.
-- **PR comments posted** — Real CI integration adoption. The north star metric.
+- **`sigil serve` sessions before code** — Teams running `sigil serve` at the start of sprints, not just in CI. The north star metric.
 
 ### What NOT to do
 - Don't buy ads. Dev tools spread by word of mouth and HN/Reddit.

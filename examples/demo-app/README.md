@@ -41,7 +41,7 @@ The app itself is intentionally simple (~150 lines of Python). The interesting p
 +------------------+
 ```
 
-**36 nodes, 96 edges** — 9 components, 5 API interfaces, 9 specs, 7 ADRs, 5 gates, 1 rollout plan.
+**36 nodes, 87 edges** — 9 components, 5 API interfaces, 9 specs, 7 ADRs, 5 gates, 1 rollout plan.
 
 ## Quick Start
 
