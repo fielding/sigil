@@ -2,11 +2,13 @@
 
 [![intent coverage](.intent/badge.svg)](https://fielding.github.io/sigil/)
 
-**Your codebase knows *what*. Sigil knows *why*.**
+**AI writes code faster than humans can review it. Reviewing diffs doesn't scale anymore.**
 
-Every team writes specs and ADRs. Almost none survive first contact with the codebase — they rot in Notion, drift from reality, and nobody reviews them in PRs. When someone asks "why was this built this way?" the answer is in a Slack thread from six months ago, or it left with the engineer who quit.
+When a model generates a thousand lines of code, your reviewers can't catch every architectural issue by reading diffs. They need to know: *does this change violate a design decision we made? Does it touch code with no owner? Does it break a constraint we explicitly defined?*
 
-Sigil fixes this. It's a CLI that turns your specs, decisions, and constraints into a connected knowledge graph — right in your Git repo. When you open a PR, Sigil posts an intent diff: what architectural decisions changed, what specs were affected, what gates apply. Your team reviews *intent* first, code second.
+Sigil answers those questions automatically. It turns your specs, decisions, and constraints into a connected knowledge graph — right in your Git repo. When you open a PR, Sigil posts an intent diff: which specs govern the changed code, which gates passed or failed, which files have no architectural owner. Your team reviews *intent* first, code second.
+
+> **Your codebase knows *what*. Sigil knows *why*.**
 
 ## What reviewers see
 
@@ -73,27 +75,26 @@ At a glance, reviewers know: which specs govern the changed code, whether any ar
 ## Install
 
 ```bash
-pip install sigil-cli
+git clone https://github.com/fielding/sigil.git
+cd sigil && pip install -e .
 sigil init
 ```
 
-One command. Scans your repo, scaffolds the structure, detects components from package manifests, builds the knowledge graph, and opens an interactive viewer. Zero config.
+Three commands. Scans your repo, scaffolds the structure, detects components from package manifests, builds the knowledge graph, and opens an interactive viewer.
 
 Requires Python 3.11+.
+
+> **PyPI package coming soon.** `pip install sigil-cli` will work once published.
 
 <details>
 <summary>Other install methods</summary>
 
 ```bash
-# Via npx (no install required)
-npx @fielding/sigil init
+# Via npx — coming soon
+# npx @fielding/sigil init
 
-# Global install via npm
-npm install -g @fielding/sigil
-
-# From source
-git clone https://github.com/fielding/sigil.git
-cd sigil && pip install -e .
+# Global install via npm — coming soon
+# npm install -g @fielding/sigil
 ```
 
 </details>
@@ -135,11 +136,13 @@ Want to see Sigil on a real (sample) codebase before using it on your own? The r
 ```bash
 git clone https://github.com/fielding/sigil.git
 cd sigil
-pip install sigil-cli
+pip install -e .
 sigil serve --repo examples/demo-app
 ```
 
 Opens in your browser. Click around the graph. Try the [Impact Radar](https://fielding.github.io/sigil/) view. Check coverage. Explore drift.
+
+No install? **[Open the live demo →](https://fielding.github.io/sigil/)**
 
 ## Concepts in 30 seconds
 
@@ -202,13 +205,15 @@ sigil status
 Three lines in your GitHub Actions workflow:
 
 ```yaml
-- run: pip install sigil-cli
+- run: git clone https://github.com/fielding/sigil.git /tmp/sigil && pip install -e /tmp/sigil
 - run: sigil ci
 - run: sigil pr ${{ github.event.pull_request.number }}
   if: github.event_name == 'pull_request'
   env:
     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
+
+> **Note:** `pip install sigil-cli` (from PyPI) is coming soon. Until then, use the source install above.
 
 `sigil ci` runs index, lint, check, badge, and review in one shot. `sigil pr` posts a comment on your PR with coverage percentage, governed vs. ungoverned changes, gate results, and links to the intent graph. Add `--strict` to fail on warnings.
 
