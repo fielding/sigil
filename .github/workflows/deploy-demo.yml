@@ -1,25 +1,24 @@
-name: Deploy live demo to GitHub Pages
+name: Refresh live demo
+
+# Automatically regenerates docs/index.html (the live demo) whenever the
+# demo app's intent graph or the viewer changes. Commits the result to main
+# so GitHub Pages (legacy mode, /docs) picks it up.
 
 on:
   push:
     branches: [main]
+    paths:
+      - "examples/demo-app/**"
+      - "npm/lib/sigil_viewer.html"
+      - "npm/lib/sigil.py"
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: true
+  contents: write
 
 jobs:
-  deploy:
+  refresh-demo:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
       - uses: actions/checkout@v4
@@ -35,22 +34,17 @@ jobs:
       - name: Index demo app graph
         run: sigil index --repo examples/demo-app
 
-      - name: Export self-contained viewer
-        run: sigil export --repo examples/demo-app --output examples/demo-app/.intent/demo.html
+      - name: Export viewer to docs/index.html
+        run: sigil export --repo examples/demo-app --output docs/index.html
 
-      - name: Build Pages directory
+      - name: Commit if changed
         run: |
-          mkdir -p _site
-          cp examples/demo-app/.intent/demo.html _site/index.html
-
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: _site
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          git config user.name "sigil-bot"
+          git config user.email "sigil-bot@users.noreply.github.com"
+          git add docs/index.html
+          if git diff --cached --quiet; then
+            echo "docs/index.html unchanged, skipping commit"
+          else
+            git commit -m "chore: refresh live demo [skip ci]"
+            git push
+          fi
