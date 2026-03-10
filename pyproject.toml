@@ -40,6 +40,7 @@ sigil = "sigil_cli:main"
 [tool.hatch.build.targets.wheel.force-include]
 "tools/intent/sigil.py" = "sigil_cli.py"
 "tools/intent_viewer/index.html" = "sigil_viewer.html"
+"examples/sigil_demo.json" = "sigil_demo.json"
 
 [tool.pytest.ini_options]
 testpaths = ["tools/intent/tests"]

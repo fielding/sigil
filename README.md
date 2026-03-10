@@ -96,11 +96,7 @@ That's the loop: specs define intent, gates enforce it, code can't drift.
 uv tool install git+https://github.com/fielding/sigil.git
 # or: pipx install git+https://github.com/fielding/sigil.git
 # or: pip install git+https://github.com/fielding/sigil.git
-
-sigil init
 ```
-
-Scans your repo, scaffolds the structure, detects components from package manifests, builds the knowledge graph, and opens an interactive viewer.
 
 Requires Python 3.11+.
 
@@ -118,16 +114,26 @@ cd sigil && pip install -e .
 
 ## Try it on a demo project
 
-Want to see Sigil on a real (sample) codebase before using it on your own? The repo includes a complete example — a bookstore app with 9 components, 36 nodes, and 87 edges:
+Want to see what Sigil looks like on a real codebase before setting it up on your own? Run:
 
 ```bash
-git clone https://github.com/fielding/sigil.git sigil-demo --depth 1
-sigil serve --repo sigil-demo/examples/demo-app
+sigil demo
 ```
 
-Opens in your browser. Click around the graph. Try the [Impact Radar](https://fielding.github.io/sigil/) view. Check coverage. Explore drift.
+Opens the full intent graph for a bookstore app — 9 services, 36 nodes, 87 edges — in your browser. No cloning required. Click around, explore the views, then come back when you're ready to set it up on your own project with `sigil init`.
 
 No install? **[Open the live demo →](https://fielding.github.io/sigil/)**
+
+---
+
+Once you've seen the demo, set it up on your own project:
+
+```bash
+cd your-project
+sigil init
+```
+
+Scans your repo, scaffolds the structure, detects components from package manifests, builds the knowledge graph, and opens an interactive viewer.
 
 ## Concepts in 30 seconds
 
