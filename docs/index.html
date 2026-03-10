@@ -2028,33 +2028,28 @@
     " onclick="event.stopPropagation()">
       <div style="font-size:11px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#bbff00;margin-bottom:20px;">SIGIL</div>
       <h2 style="font-size:22px;font-weight:700;color:#f8f6f2;line-height:1.3;margin-bottom:12px;">
-        Review intent,<br>not just diffs.
+        Write intent before code.<br>Enforce it at merge.
       </h2>
-      <p style="font-size:13px;color:#9a9690;line-height:1.7;margin-bottom:8px;">
-        AI writes code faster than humans can review it. Reviewing diffs line-by-line doesn't scale anymore.
-        <em style="color:#dbd6cc;">You need to review intent.</em>
-      </p>
       <p style="font-size:13px;color:#9a9690;line-height:1.7;margin-bottom:16px;">
-        Sigil turns your specs, decisions, and constraints into a live knowledge graph — right in your repo.
-        On every PR, it posts what changed <em style="color:#dbd6cc;">architecturally</em>: which specs are affected, which gates passed, which files have no owner. Reviewers see intent before they see code.
+        Specs, ADRs, and interface contracts live in your repo as structured docs. Sigil links them into a queryable graph — gaps visible before a sprint starts. Once agreed, <em style="color:#dbd6cc;">gates block any PR that violates what was decided.</em>
       </p>
       <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px;padding:14px 16px;background:rgba(255,255,255,0.03);border:1px solid #282b31;border-radius:6px;">
-        <div style="font-size:10px;font-weight:700;letter-spacing:2px;color:#5a5d62;text-transform:uppercase;margin-bottom:4px;">How it works</div>
+        <div style="font-size:10px;font-weight:700;letter-spacing:2px;color:#5a5d62;text-transform:uppercase;margin-bottom:4px;">The loop</div>
         <div style="display:flex;align-items:flex-start;gap:12px;font-size:12px;line-height:1.5;">
           <div style="width:20px;height:20px;border-radius:50%;background:rgba(187,255,0,0.12);border:1px solid rgba(187,255,0,0.3);display:flex;align-items:center;justify-content:center;color:#bbff00;font-size:10px;font-weight:700;flex-shrink:0;margin-top:1px;">1</div>
-          <span style="color:#828079;"><span style="color:#dbd6cc;">Write code</span> — Sigil maps every file to components, specs, ADRs, and gates</span>
+          <span style="color:#828079;"><span style="color:#dbd6cc;">Spec it</span> — write intent docs before a line of code. Components, specs, ADRs, interfaces, gates.</span>
         </div>
         <div style="display:flex;align-items:flex-start;gap:12px;font-size:12px;line-height:1.5;">
           <div style="width:20px;height:20px;border-radius:50%;background:rgba(187,255,0,0.12);border:1px solid rgba(187,255,0,0.3);display:flex;align-items:center;justify-content:center;color:#bbff00;font-size:10px;font-weight:700;flex-shrink:0;margin-top:1px;">2</div>
-          <span style="color:#828079;"><span style="color:#dbd6cc;">Open a PR</span> — intent diff posted automatically: coverage, gates, governed vs. ungoverned changes</span>
+          <span style="color:#828079;"><span style="color:#dbd6cc;">Review the graph</span> — everyone sees the same architecture picture. Gaps in red. No surprises mid-sprint.</span>
         </div>
         <div style="display:flex;align-items:flex-start;gap:12px;font-size:12px;line-height:1.5;">
           <div style="width:20px;height:20px;border-radius:50%;background:rgba(187,255,0,0.12);border:1px solid rgba(187,255,0,0.3);display:flex;align-items:center;justify-content:center;color:#bbff00;font-size:10px;font-weight:700;flex-shrink:0;margin-top:1px;">3</div>
-          <span style="color:#828079;"><span style="color:#dbd6cc;">Review intent</span> — gates catch architectural violations before code ships</span>
+          <span style="color:#828079;"><span style="color:#dbd6cc;">Ship with gates</span> — CI blocks any PR that violates agreed intent. Code can never drift from the decision.</span>
         </div>
       </div>
       <p style="font-size:11px;color:#5a5d62;margin-bottom:20px;">
-        This demo: Shelf — a bookstore with 9 components, 36 nodes, 96 edges.
+        Demo: Shelf — a bookstore with 9 components, 36 nodes, 87 edges. PR #312 is currently blocked by a gate.
       </p>
       <div style="
         background:#282b31; border:1px solid #3a3d42; border-radius:5px;
@@ -2078,13 +2073,13 @@
             font-family:inherit; font-size:13px; font-weight:700;
             padding:10px 22px; cursor:pointer;
             letter-spacing:0.5px;
-          ">See PR Review →</button>
+          ">See a PR get blocked →</button>
           <button onclick="dismissWelcome();switchView('graph')" style="
             background:transparent; color:#828079;
             border:1px solid #3a3d42; border-radius:5px;
             font-family:inherit; font-size:12px;
             padding:9px 16px; cursor:pointer;
-          ">Explore graph</button>
+          ">Explore the graph</button>
         </div>
         <div>
           <a href="https://github.com/fielding/sigil" target="_blank" style="
@@ -2104,7 +2099,7 @@
         setTimeout(() => el.remove(), 200);
       }
     }
-    // Also dismiss on any keypress — go straight to the gate failure demo
+    // Also dismiss on any keypress — go straight to the review (most compelling demo)
     document.addEventListener('keydown', function() { dismissWelcome(); switchView('review'); }, { once: true });
   </script>
 
@@ -2623,7 +2618,7 @@
 
     async function renderReviewDashboard() {
       const area = document.getElementById("content-area");
-      document.getElementById("node-header").innerHTML = '<h2>Intent Review</h2><div><span class="pill pill-type">code review governance</span></div>';
+      document.getElementById("node-header").innerHTML = '<h2>Intent Review</h2><div><span class="pill pill-type">spec governance</span></div>';
       document.getElementById("breadcrumb").innerHTML = '';
       document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
 
