@@ -1827,7 +1827,7 @@ def cmd_demo(args) -> int:
             httpd = HTTPServer(("127.0.0.1", 0), Handler)
             port = httpd.server_address[1]
 
-        url = f"http://127.0.0.1:{port}/tools/intent_viewer/index.html"
+        url = f"http://127.0.0.1:{port}/tools/intent_viewer/index.html?demo=1"
 
         print()
         print(f"  ── Shelf Bookstore: a real microservices app ────────────────────")

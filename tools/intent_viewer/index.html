@@ -3057,6 +3057,33 @@
     // Configure marked
     marked.setOptions({ gfm: true, breaks: false });
 
+    // ---- Demo Mode ----
+    // When served by `sigil demo`, the URL includes ?demo=1.
+    // Override the welcome panel with demo-specific guidance.
+    (function initDemoMode() {
+      const params = new URLSearchParams(window.location.search);
+      if (!params.has("demo")) return;
+      const panel = document.getElementById("welcome-panel");
+      if (!panel) return;
+      panel.innerHTML = `
+        <div style="font-size:10px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:var(--base0F);margin-bottom:12px;">DEMO — Shelf Bookstore</div>
+        <h2 style="margin-bottom:10px;">A real microservices app, fully mapped</h2>
+        <p>9 services · 36 intent nodes · 87 typed edges · 5 enforced gates.<br>
+        Every node was written <strong>before code</strong> — specs, decisions, gates, interfaces.</p>
+        <p>Click any node to read its intent. Then press <kbd style="background:var(--base02);color:var(--base05);padding:2px 6px;border-radius:3px;font-size:11px">w</kbd> to see a gate block a PR in real time.</p>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px;">
+          <div style="font-size:11px;color:var(--base04)"><kbd style="background:var(--base02);color:var(--base05);padding:1px 5px;border-radius:3px;font-size:10px">g</kbd> &nbsp;Graph — the full intent map</div>
+          <div style="font-size:11px;color:var(--base04)"><kbd style="background:var(--base02);color:var(--base05);padding:1px 5px;border-radius:3px;font-size:10px">r</kbd> &nbsp;Blast Radius — what breaks if this node changes</div>
+          <div style="font-size:11px;color:var(--base04)"><kbd style="background:var(--base02);color:var(--base05);padding:1px 5px;border-radius:3px;font-size:10px">c</kbd> &nbsp;Coverage — which components are under-specced</div>
+          <div style="font-size:11px;color:var(--base04)"><kbd style="background:var(--base02);color:var(--base05);padding:1px 5px;border-radius:3px;font-size:10px">w</kbd> &nbsp;Review — a gate blocking PR #47</div>
+        </div>
+        <div style="border-top:1px solid var(--base02);padding-top:12px;font-size:11px;color:var(--base03);">
+          Ready for your own project? Press <kbd style="background:var(--base02);color:var(--base05);padding:1px 5px;border-radius:3px;font-size:10px">Ctrl+C</kbd> to stop, then:<br>
+          <span style="color:var(--base0B);font-family:monospace;">cd your-project &amp;&amp; sigil init</span>
+        </div>
+      `;
+    })();
+
     loadGraph().then(render).catch(err => {
       document.getElementById("content-area").textContent = String(err);
     });
