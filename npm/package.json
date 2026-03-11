@@ -1,0 +1,37 @@
+{
+  "name": "@fielding/sigil",
+  "version": "0.1.0",
+  "description": "Intent-first engineering CLI — structured decisions, enforced by code",
+  "bin": {
+    "sigil": "bin/sigil.mjs"
+  },
+  "files": [
+    "bin/",
+    "lib/"
+  ],
+  "keywords": [
+    "cli",
+    "engineering",
+    "intent",
+    "adr",
+    "specs",
+    "code-review",
+    "knowledge-graph"
+  ],
+  "author": "Fielding Johnston <fielding@justfielding.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fielding/sigil"
+  },
+  "homepage": "https://github.com/fielding/sigil#readme",
+  "bugs": {
+    "url": "https://github.com/fielding/sigil/issues"
+  },
+  "scripts": {
+    "prepublishOnly": "bash prepare.sh"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
