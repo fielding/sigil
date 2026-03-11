@@ -1,0 +1,24 @@
+id: GATE-0005
+type: pattern
+status: active
+
+applies_to:
+  - node: COMP-payment-gateway
+  - node: API-PAYMENTS-V1
+
+enforced_by:
+  kind: pattern
+  config:
+    paths:
+      - "services/payments/**"
+    pattern: "card_number|credit_card|cc_num|pan_number"
+    negate: true
+    message: "Payment code must not contain raw card number references. Use tokenized payment methods only."
+
+policy:
+  mode: "enforce"
+  on_fail: "block"
+
+docs:
+  summary: "Payment gateway must never handle raw card numbers — only tokenized payment methods. Prevents accidental PCI scope expansion."
+  owner: "team-payments"

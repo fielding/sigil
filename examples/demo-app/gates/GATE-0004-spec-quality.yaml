@@ -1,0 +1,21 @@
+id: GATE-0004
+type: spec-quality
+status: active
+
+applies_to:
+  - node_type: spec
+
+enforced_by:
+  kind: builtin
+  rules:
+    - require_sections: ["Intent", "Goals", "Non-goals", "Design", "Acceptance Criteria", "Links"]
+    - require_links: ["Belongs to"]
+    - max_missing_links: 2
+
+policy:
+  mode: "warn"
+  on_fail: "warn"
+
+docs:
+  summary: "All specs must have Intent, Goals, Non-goals, Design, Acceptance Criteria, and Links sections. Every spec must declare which component it belongs to."
+  owner: "team-platform"

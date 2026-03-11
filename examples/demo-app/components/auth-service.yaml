@@ -1,0 +1,21 @@
+id: COMP-auth-service
+name: Auth Service
+
+owners:
+  - team-platform
+
+paths:
+  - services/auth/**
+
+interfaces:
+  provides:
+    - API-AUTH-V1
+  consumes: []
+
+dependency_policy:
+  allowed_components: []
+
+attributes:
+  tier: 0
+  data: [credentials, pii]
+  runtime: [docker]

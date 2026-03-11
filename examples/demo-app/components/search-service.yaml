@@ -1,0 +1,22 @@
+id: COMP-search-service
+name: Search Service
+
+owners:
+  - team-platform
+
+paths:
+  - services/search/**
+
+interfaces:
+  provides: []
+  consumes:
+    - API-CATALOG-V1
+
+dependency_policy:
+  allowed_components:
+    - COMP-catalog-service
+
+attributes:
+  tier: 2
+  data: [search-index]
+  runtime: [docker]

@@ -1,0 +1,28 @@
+id: GATE-0003
+type: dependency-policy
+status: active
+
+applies_to:
+  - node: COMP-order-service
+  - node: API-ORDERS-V1
+
+enforced_by:
+  kind: builtin
+  rule: "dependency-check"
+  config:
+    # Order service may only depend on these components.
+    # Prevents accidental coupling to services it shouldn't know about.
+    allowed_dependencies:
+      - COMP-catalog-service
+      - COMP-cart-service
+      - COMP-auth-service
+      - COMP-notification-service
+      - COMP-payment-gateway
+
+policy:
+  mode: "warn"
+  on_fail: "block"
+
+docs:
+  summary: "Order service can only depend on catalog, cart, auth, and notification. Prevents uncontrolled coupling."
+  owner: "team-platform"

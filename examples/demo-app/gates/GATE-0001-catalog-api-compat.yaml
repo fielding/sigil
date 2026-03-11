@@ -1,0 +1,34 @@
+id: GATE-0001
+type: api-compat
+status: active
+
+applies_to:
+  - node: API-CATALOG-V1
+
+enforced_by:
+  kind: command
+  workdir: .
+  command: ["python3", "-c", "
+import json, sys;
+# Verify the catalog API contract hasn't changed in a breaking way.
+# Checks: required fields present, price is int not float, search endpoint exists.
+routes = open('services/catalog/routes.py').read();
+checks = [
+  ('list_books' in routes, 'list_books function must exist'),
+  ('get_book' in routes, 'get_book function must exist'),
+  ('search_books' in routes, 'search_books function must exist'),
+  ('price_cents' in routes, 'price must use price_cents (integer cents)'),
+  ('float' not in routes.split('price')[1][:50] if 'price' in routes else True, 'price must not use float'),
+];
+failures = [msg for ok, msg in checks if not ok];
+[print(f'FAIL: {f}') for f in failures];
+sys.exit(1 if failures else 0)
+"]
+
+policy:
+  mode: "block"
+  on_fail: "block"
+
+docs:
+  summary: "Prevents breaking changes to the Catalog API: required endpoints must exist, prices must be integer cents"
+  owner: "team-platform"

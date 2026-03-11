@@ -1,0 +1,26 @@
+id: COMP-admin-dashboard
+name: Admin Dashboard
+
+owners:
+  - team-internal-tools
+
+paths:
+  - app/admin/**
+
+interfaces:
+  provides: []
+  consumes:
+    - API-CATALOG-V1
+    - API-ORDERS-V1
+    - API-AUTH-V1
+
+dependency_policy:
+  allowed_components:
+    - COMP-catalog-service
+    - COMP-order-service
+    - COMP-auth-service
+
+attributes:
+  tier: 3
+  data: []
+  runtime: [docker]

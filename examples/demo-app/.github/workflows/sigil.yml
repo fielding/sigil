@@ -1,0 +1,122 @@
+# Sigil CI — Intent validation on every pull request
+#
+# This workflow shows how to integrate Sigil into your CI pipeline.
+# It validates intent docs, enforces gates, detects drift, and posts
+# a summary comment on the PR.
+#
+# Copy this file into your repo's .github/workflows/ and adjust the
+# sigil install step to match how you consume the CLI (pip, npx, etc).
+
+name: sigil
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  intent-check:
+    name: Intent Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history needed for diff + timeline
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Option A: install from PyPI (when published)
+      # - run: pip install sigil-intent
+      #
+      # Option B: install from the sigil repo (what this demo uses)
+      - name: Install sigil
+        run: pip install sigil-intent
+
+      # ── Core validation ───────────────────────────────────────────
+      #
+      # sigil ci runs: index → lint → check → coverage in one shot.
+      # If any step fails, the job fails the PR.
+
+      - name: Run sigil CI pipeline
+        run: sigil ci
+
+      # ── Gate enforcement ──────────────────────────────────────────
+      #
+      # Gates are YAML-defined constraints (pattern checks, lint rules,
+      # coverage thresholds). `sigil check` exits non-zero if any gate
+      # with on_fail: "block" fails.
+
+      - name: Enforce gates
+        run: sigil check
+
+      # ── Drift detection ───────────────────────────────────────────
+      #
+      # Find source files that aren't mapped to any component.
+      # Runs as a warning (won't fail the build) so teams can
+      # incrementally adopt Sigil without blocking on full coverage.
+
+      - name: Detect drift
+        run: sigil drift || true
+
+      # ── Coverage report ───────────────────────────────────────────
+      #
+      # Shows which components have specs, ADRs, and acceptance criteria.
+      # Useful for tracking adoption progress over time.
+
+      - name: Intent coverage
+        run: sigil coverage
+
+      # ── Graph diff ────────────────────────────────────────────────
+      #
+      # Compare intent graph before/after the PR. Shows which nodes
+      # and edges were added, removed, or modified.
+
+      - name: Compute graph diff
+        run: |
+          BASE="${{ github.event.pull_request.base.sha }}"
+          HEAD="${{ github.event.pull_request.head.sha }}"
+          sigil diff "$BASE" "$HEAD" --out .intent/index/diff.json --md .intent/index/diff.md
+
+      # ── PR comment ────────────────────────────────────────────────
+      #
+      # Posts a summary on the PR with coverage score, gate results,
+      # drift warnings, and a link to the graph diff. Requires the
+      # default GITHUB_TOKEN.
+
+      - name: Post PR summary
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: sigil pr ${{ github.event.pull_request.number }}
+
+      # ── Timeline ──────────────────────────────────────────────────
+      #
+      # Build a timeline of intent changes from git history.
+      # Optional — useful for the viewer's Timeline view.
+
+      - name: Build timeline
+        run: sigil timeline || true
+
+      # ── Export viewer snapshot ─────────────────────────────────────
+      #
+      # Generate a self-contained HTML file with the interactive graph.
+      # Upload as a build artifact so reviewers can explore the graph.
+
+      - name: Export viewer
+        run: sigil export
+
+      - name: Upload sigil artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sigil-artifacts
+          path: |
+            .intent/index/graph.json
+            .intent/index/diff.json
+            .intent/index/diff.md
+            .intent/index/drift.json
+            .intent/index/timeline.json
+            .intent/badge.svg
+            .intent/export.html
+          retention-days: 30

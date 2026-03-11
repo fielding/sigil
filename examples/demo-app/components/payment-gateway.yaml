@@ -1,0 +1,25 @@
+id: COMP-payment-gateway
+name: Payment Gateway
+
+owners:
+  - team-payments
+
+paths:
+  - services/payments/**
+
+interfaces:
+  provides:
+    - API-PAYMENTS-V1
+  consumes:
+    - API-AUTH-V1
+    - API-ORDERS-V1
+
+dependency_policy:
+  allowed_components:
+    - COMP-auth-service
+    - COMP-order-service
+
+attributes:
+  tier: 1
+  data: [payment-tokens, pii]
+  runtime: [docker]

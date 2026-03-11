@@ -1,0 +1,22 @@
+id: COMP-notification-service
+name: Notification Service
+
+owners:
+  - team-platform
+
+paths:
+  - services/notifications/**
+
+interfaces:
+  provides: []
+  consumes:
+    - API-AUTH-V1
+
+dependency_policy:
+  allowed_components:
+    - COMP-auth-service
+
+attributes:
+  tier: 2
+  data: [pii]
+  runtime: [docker]
