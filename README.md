@@ -31,23 +31,42 @@ That's the shift: **intent lives in Git, not in Slack.** Specs and decisions are
 Click any node to see the full reasoning. Trace from a component through its specs, decisions, and gates. Ask "why does this file exist?" and get a real answer:
 
 ```bash
-$ sigil why src/services/auth.ts
-src/services/auth.ts
-  └─ COMP-auth-service (component)
-       ├─ SPEC-0012 "Token refresh flow" (spec)
-       ├─ ADR-0003 "Use JWT with short-lived tokens" (decision)
-       └─ GATE-0001 "Auth token expiry check" (gate)
+$ sigil why services/auth/auth.py
+
+  Owned by: Auth Service (COMP-auth-service)
+
+  What is being built:
+    [accepted] SPEC-0002: JWT Authentication
+      | Give users a way to sign up, log in, and prove their identity to
+      | other services. Using stateless JWT tokens so services can verify
+      | requests without calling back to auth on every request.
+
+  Why it was built this way:
+    [accepted] ADR-0002: Use JWT tokens instead of server-side sessions
+      | Use JWT-style tokens signed with HMAC-SHA256. Each service can
+      | verify tokens independently without a shared session store.
+
+  What enforces it:
+    GATE-0002: Auth service must hash passwords, never return them in plaintext
 ```
 
 Map blast radius before touching anything:
 
 ```bash
-$ sigil impact COMP-order-service
-COMP-order-service
-  Ring 1: SPEC-0003, ADR-0002, GATE-0002, API-ORDERS-V1
-  Ring 2: COMP-payment-gateway, COMP-inventory, COMP-notification
-  Ring 3: SPEC-0008, ADR-0005, GATE-0005
-  Total: 32 affected nodes
+$ sigil impact COMP-payment-gateway
+
+  Direct (2)
+    → ● GATE-0005  Payment gateway must never handle raw card numbers (PCI)
+    ← ◆ SPEC-0009  Payment Processing
+
+  Secondary (4)
+    → ■ COMP-order-service   Order Service
+    → ◈ API-PAYMENTS-V1      Payments API
+    → ◆ SPEC-0004            Checkout Flow
+    → ◈ API-AUTH-V1          Auth API
+
+  ==================================================
+  Blast radius: 21 nodes — 1 adr, 5 components, 3 gates, 5 interfaces, 1 rollout, 6 specs
 ```
 
 Know what breaks before you write a line.
@@ -63,16 +82,14 @@ Once specs are agreed on, gates enforce them. When code ships:
 The real moment is when a gate fails:
 
 ```
-❌ GATE-0003: PCI compliance check failed
+  GATE GATE-0005: Payment gateway must never handle raw card numbers
+  kind: pattern  |  policy: block  |  scope: 3 node(s)
+    FAIL services/payments/checkout.py: forbidden pattern 'raw_card_number' found (1 match(es))
 
-  Payment gateway code changed but SPEC-0008 (Payment Security
-  Constraints) was not updated.
-
-  Fix: Update intent/payment-gateway/specs/SPEC-0008.md to reflect
-  the change, then re-run `sigil check`.
+  Gates: 4 passed, 1 failed, 0 warning(s)
 ```
 
-A developer touched the payment service. The code looked clean. But the gate knew that any change to `payment.ts` requires updating the PCI compliance spec — and it didn't happen. Blocked until the intent is updated.
+A developer touched the payment service. The diff looked clean. But the gate caught a raw card number access — a pattern forbidden by PCI constraint, written once three sprints ago. PR blocked until the intent is updated.
 
 That's the loop: specs define intent, gates enforce it, code can't drift.
 

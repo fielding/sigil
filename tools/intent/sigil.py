@@ -29,6 +29,14 @@ except Exception:
     __version__ = "0.1.0"
 
 
+# Unicode symbol defaults — defined as module constants so they can be used
+# inside f-string expressions without triggering the Python <3.12
+# "backslash in f-string expression" SyntaxError.
+_SYM_DEFAULT = "\u25cb"  # ○  fallback for unknown node types
+_SYM_BULLET = "\u25cf"   # ●  gate symbol default
+_SYM_DIAMOND = "\u25c8"  # ◈  interface symbol default
+
+
 # -----------------------------
 # Models
 # -----------------------------
@@ -4046,7 +4054,7 @@ def cmd_map(args) -> int:
                     if e.type == "gated_by" and e.src == kid.id and e.dst in g.nodes:
                         gate_node = g.nodes[e.dst]
                         prefix = "     " if is_last else "\u2502    "
-                        print(f"  {prefix}\u2514\u2500 {sym.get('gate', '\u25cf')} {gate_node.id}")
+                        print(f"  {prefix}\u2514\u2500 {sym.get('gate', _SYM_BULLET)} {gate_node.id}")
 
             # Show edges to other components
             outgoing = []
@@ -4097,7 +4105,7 @@ def cmd_map(args) -> int:
                         status_str = f"  [{st}]"
                 except Exception:
                     pass
-                print(f"  {sym.get('interface', '\u25c8')} {iface.id}  {iface.title}{status_str}")
+                print(f"  {sym.get('interface', _SYM_DIAMOND)} {iface.id}  {iface.title}{status_str}")
                 providers = sorted(iface_providers.get(iface.id, []))
                 consumers = sorted(iface_consumers.get(iface.id, []))
                 lines = []
@@ -4116,7 +4124,7 @@ def cmd_map(args) -> int:
         # Legend
         print()
         print("  " + "\u2500" * 50)
-        legend_parts = [f"{sym.get(t, '\u25cb')} {type_labels.get(t, t)}" for t in ["component", "spec", "adr", "gate", "interface", "rollout"] if any(n.type == t for n in g.nodes.values())]
+        legend_parts = [f"{sym.get(t, _SYM_DEFAULT)} {type_labels.get(t, t)}" for t in ["component", "spec", "adr", "gate", "interface", "rollout"] if any(n.type == t for n in g.nodes.values())]
         print("  " + "  ".join(legend_parts))
         print(f"  {len(g.nodes)} nodes, {len(g.edges)} edges")
         print()
@@ -4159,7 +4167,7 @@ def cmd_map(args) -> int:
             if not nodes:
                 continue
             label = type_labels.get(t, t).upper()
-            print(f"  {sym.get(t, '\u25cb')} {label} ({len(nodes)})")
+            print(f"  {sym.get(t, _SYM_DEFAULT)} {label} ({len(nodes)})")
             for n in sorted(nodes, key=lambda n: n.id):
                 status_str = ""
                 try:
@@ -4548,7 +4556,7 @@ def cmd_impact(args) -> int:
     print()
     print(f"  sigil impact {node.id}")
     print(f"  {'=' * 50}")
-    print(f"  {sym.get(node.type, '\u25cb')} {node.id}: {node.title}")
+    print(f"  {sym.get(node.type, _SYM_DEFAULT)} {node.id}: {node.title}")
     print(f"  {node.path}")
 
     total = 0
