@@ -3917,7 +3917,24 @@ def cmd_doctor(args) -> int:
     if failed == 0:
         print("  Everything looks good.")
     else:
-        print("  Run 'sigil init' to fix most issues.")
+        failed_labels = {label for label, ok, _ in checks if not ok}
+        init_needed = bool(failed_labels & {"Directory structure", "Config file", "Templates", "Viewer"})
+        if init_needed:
+            print("  Run 'sigil init' to fix most issues.")
+        else:
+            fixes = []
+            if "Git repository" in failed_labels:
+                fixes.append(("git init", "initialize a git repository"))
+            if "Graph index" in failed_labels:
+                fixes.append(("sigil index", "rebuild the knowledge graph"))
+            if "Components" in failed_labels:
+                fixes.append(("sigil bootstrap", "auto-detect components from your repo"))
+            if "Pre-commit hook" in failed_labels:
+                fixes.append(("sigil hook install", "enable intent review on commit"))
+            if fixes:
+                print("  Quick fixes:")
+                for cmd, desc in fixes:
+                    print(f"    {cmd:<26s}  {desc}")
     print()
     return 0 if failed == 0 else 1
 
