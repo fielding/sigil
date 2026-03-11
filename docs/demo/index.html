@@ -2847,6 +2847,33 @@
         });
       }
 
+      // "Try on your project" CTA — shown after the impact demo
+      html += `
+        <div style="margin-top:32px;padding:22px 24px;background:linear-gradient(135deg,rgba(124,58,237,0.07),rgba(37,99,235,0.07));border:1px solid rgba(124,58,237,0.2);border-radius:10px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:rgba(124,58,237,0.7);margin-bottom:10px">Run this on your project</div>
+          <p style="font-size:14px;color:var(--base06);margin:0 0 16px;line-height:1.55">
+            Every PR on your repo gets this comment automatically — intent coverage, gate results, and enforcement in CI. Two commands to start.
+          </p>
+          <div style="background:var(--base00);border:1px solid var(--base02);border-radius:6px;padding:12px 16px;font-family:'SF Mono','Fira Code',monospace;font-size:12px;margin-bottom:16px">
+            <div style="color:var(--base03);font-size:10px;margin-bottom:8px">terminal</div>
+            <div><span style="color:var(--base03)">$</span> <span style="color:var(--base0B)">uv tool install git+https://github.com/fielding/sigil.git</span></div>
+            <div style="color:var(--base04);font-size:11px;margin:2px 0 8px 14px"># or: pip install git+https://github.com/fielding/sigil.git</div>
+            <div><span style="color:var(--base03)">$</span> <span style="color:var(--base0B)">cd your-project &amp;&amp; sigil init</span></div>
+          </div>
+          <div style="font-size:12px;color:var(--base04);margin-bottom:10px">Then add one step to your GitHub Actions workflow:</div>
+          <div style="background:var(--base00);border:1px solid var(--base02);border-radius:6px;padding:12px 16px;font-family:'SF Mono','Fira Code',monospace;font-size:12px;margin-bottom:18px">
+            <span style="color:var(--base03)">- uses: </span><span style="color:var(--base0D)">fielding/sigil@v1</span><br>
+            <span style="color:var(--base03)">  with:</span><br>
+            <span style="color:var(--base03)">    github-token: </span><span style="color:var(--base0D)">\${{ secrets.GITHUB_TOKEN }}</span>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+            <a href="https://github.com/fielding/sigil" target="_blank" style="display:inline-block;padding:8px 20px;background:rgba(124,58,237,0.15);border:1px solid rgba(124,58,237,0.35);border-radius:6px;color:var(--base0E);font-size:13px;font-weight:600;text-decoration:none">View on GitHub ↗</a>
+            <a href="../../#install" style="display:inline-block;padding:8px 20px;background:transparent;border:1px solid var(--base02);border-radius:6px;color:var(--base04);font-size:13px;text-decoration:none">Install guide</a>
+            <span style="font-size:11px;color:var(--base03);margin-left:4px">Open-source · Python 3.11+ · MIT</span>
+          </div>
+        </div>
+      `;
+
       area.innerHTML = html;
     }
 
