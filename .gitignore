@@ -1,5 +1,9 @@
 # Intent index (generated)
 .intent/index/
+/.intent/config.yaml
+/.intent/export.html
+/examples/demo-app/.intent/index/
+/examples/demo-app/tools/
 
 # Python
 __pycache__/
@@ -8,10 +12,13 @@ __pycache__/
 .venv/
 venv/
 .pytest_cache/
+/.coverage
 
 # Node
 node_modules/
 npm/lib/
+/tools/sigil-vscode/out/
+/tools/sigil-vscode/package-lock.json
 
 # Paperclip agents (not part of product)
 agents/

@@ -1,0 +1,11 @@
+{
+  "all_pass": true,
+  "gate_count": 5,
+  "gate_ids": [
+    "GATE-0001",
+    "GATE-0002",
+    "GATE-0003",
+    "GATE-0004",
+    "GATE-0005"
+  ]
+}

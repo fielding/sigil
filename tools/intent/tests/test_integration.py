@@ -316,16 +316,6 @@ class TestDemoAppSnapshots:
         assert set(golden["gate_ids"]).issubset(set(actual["gate_ids"])), \
             f"Missing gates: {set(golden['gate_ids']) - set(actual['gate_ids'])}"
 
-
-def pytest_addoption(parser):
-    """Add --update-golden option for refreshing snapshot files."""
-    try:
-        parser.addoption("--update-golden", action="store_true", default=False,
-                         help="Update golden snapshot files")
-    except ValueError:
-        pass  # already added
-
-
 # ===========================================================================
 # Edge case tests: empty, partial, broken, monorepo
 # ===========================================================================

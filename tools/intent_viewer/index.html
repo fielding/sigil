@@ -570,7 +570,7 @@
       <button class="view-btn" data-view="hierarchy" onclick="switchView('hierarchy')">Hierarchy</button>
       <button class="view-btn" data-view="coverage" onclick="switchView('coverage')">Coverage</button>
       <button class="view-btn" data-view="drift" onclick="switchView('drift')">Drift</button>
-      <button class="view-btn" data-view="timeline" onclick="switchView('timeline')">Timeline</button>
+      <button class="view-btn" data-view="timeline" onclick="switchView('timeline')">History</button>
       <button class="view-btn" data-view="matrix" onclick="switchView('matrix')">Matrix</button>
       <button class="view-btn" data-view="review" onclick="switchView('review')">Review</button>
       <button id="new-btn" onclick="showNewModal()">+ New</button>
@@ -596,6 +596,7 @@
         <span class="keyhint-key">g</span> graph
         <span class="keyhint-key">r</span> radar
         <span class="keyhint-key">h</span> hier
+        <span class="keyhint-key">t</span> history
         <span class="keyhint-key">c</span> cov
         <span class="keyhint-key">f</span> focus
       </div>
@@ -1091,7 +1092,7 @@
       const gatesColor = gatesTotal === 0 ? "var(--base04)" : gatesPassed === gatesTotal ? "var(--base0B)" : "var(--base08)";
       const hasBlockingFailure = gates.some(g => !g.passed && g.policy === 'block');
 
-      // Build GitHub-style PR comment preview
+      // Build GitHub-style change review preview
       const covIcon = pct >= 80 ? '✅' : pct >= 50 ? '⚠️' : '❌';
       const gateIcon = gatesPassed === gatesTotal ? '✅' : '❌';
       const govIcon = (s.uncovered_files || 0) > 0 ? '⚠️' : '✅';
@@ -1099,13 +1100,13 @@
       const prBanner = pr ? `
         <div style="margin-bottom:16px;padding:10px 14px;background:${hasBlockingFailure ? 'rgba(248,81,73,0.06)' : 'var(--base01)'};border:1px solid ${hasBlockingFailure ? 'rgba(248,81,73,0.35)' : 'var(--base02)'};border-radius:8px;font-size:13px">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-            <span style="color:var(--base0E);font-weight:700">PR #${pr.number}</span>
+            <span style="color:var(--base0E);font-weight:700">CR-${pr.number}</span>
             <span style="color:var(--base06)">${esc(pr.title)}</span>
             ${pr.author ? `<span style="color:var(--base03);font-size:11px">by ${esc(pr.author)}</span>` : ''}
             ${pr.base && pr.head ? `<span style="color:var(--base03);font-size:11px">${esc(pr.head)} → ${esc(pr.base)}</span>` : ''}
             ${hasBlockingFailure ? `<span style="background:#f85149;color:#fff;font-size:10px;font-weight:700;letter-spacing:1px;padding:2px 8px;border-radius:3px;text-transform:uppercase">BLOCKED</span>` : ''}
           </div>
-          ${hasBlockingFailure ? `<div style="margin-top:6px;font-size:11px;color:#f85149">⛔ This PR cannot merge — ${gates.filter(g=>!g.passed&&g.policy==='block').length} blocking gate${gates.filter(g=>!g.passed&&g.policy==='block').length>1?'s':''} failed</div>` : ''}
+          ${hasBlockingFailure ? `<div style="margin-top:6px;font-size:11px;color:#f85149">⛔ This change cannot merge — ${gates.filter(g=>!g.passed&&g.policy==='block').length} blocking gate${gates.filter(g=>!g.passed&&g.policy==='block').length>1?'s':''} failed</div>` : ''}
         </div>` : '';
       const intentChangesSummary = (review.intent_changes || []).map(ic => {
         const name = ic.path.split('/').pop().replace(/\.md$/, '').replace(/\.yaml$/, '');
@@ -1129,7 +1130,7 @@
 
       const ghComment = `
         <div style="margin-bottom:20px">
-          <div style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--base03);margin-bottom:8px">Gate enforcement on PR — downstream of agreed specs</div>
+          <div style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--base03);margin-bottom:8px">Gate enforcement on every change request</div>
           <div style="border:1px solid #30363d;border-radius:6px;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif">
             <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#161b22;border-bottom:1px solid #30363d">
               <div style="width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#2563eb);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#fff;flex-shrink:0">S</div>
@@ -1635,7 +1636,7 @@
 
     async function renderTimelineView() {
       const container = document.getElementById("timeline-container");
-      document.getElementById("node-header").innerHTML = '<h2>Intent Timeline</h2><div><span class="pill pill-type">evolution history</span></div>';
+      document.getElementById("node-header").innerHTML = '<h2>Intent History</h2><div><span class="pill pill-type">decision log</span></div>';
       document.getElementById("breadcrumb").innerHTML = '';
       document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
 
@@ -1679,7 +1680,7 @@
       const trackWidth = container.clientWidth - 140;
       const actionIcons = { added: "+", modified: "~", removed: "x" };
 
-      let html = `<div class="tl-header">Intent Evolution<span>${events.length} events</span></div>`;
+      let html = `<div class="tl-header">Intent Evolution<span>${events.length} decisions recorded</span></div>`;
 
       // Tooltip element
       html += '<div id="tl-tooltip" class="tl-event-tooltip"></div>';
@@ -1750,7 +1751,8 @@
             <div class="cov-card-value" style="color:var(--base0A)">${modEvents}</div>
           </div>
         </div>
-        <h3 style="color:var(--base06);font-size:14px;margin-bottom:10px">Event Log</h3>
+        <h3 style="color:var(--base06);font-size:14px;margin-bottom:4px">Decision Log</h3>
+        <p style="font-size:12px;color:var(--base04);margin-bottom:14px;line-height:1.5">Every spec, ADR, gate, and component registered in the intent graph becomes part of the permanent record of what changed and when.</p>
         ${events.slice().reverse().map(ev => `
           <div class="cov-finding">
             <span class="cov-sev ${ev.action === 'added' ? 'cov-sev-ok' : ev.action === 'removed' ? 'cov-sev-warn' : 'cov-sev-info'}">${ev.action.toUpperCase()}</span>
@@ -2889,8 +2891,11 @@
       renderHealthBadge(cov);
       buildLegend();
 
-      // Show overview landing by default
-      switchView('overview');
+      // When launched from `sigil demo` (?demo=1), open directly to the Review view
+      // so the first thing users see is a gate blocking a PR — the "aha moment".
+      // Otherwise show the overview landing.
+      const _initParams = new URLSearchParams(window.location.search);
+      switchView(_initParams.has('demo') ? 'review' : 'overview');
     }
 
     // ---- New Doc Modal ----
@@ -2979,7 +2984,7 @@
         { label: "Hierarchy", action: () => switchView("hierarchy"), type: "view", hint: "h" },
         { label: "Coverage Dashboard", action: () => switchView("coverage"), type: "view", hint: "c" },
         { label: "Drift Detection", action: () => switchView("drift"), type: "view", hint: "d" },
-        { label: "Timeline", action: () => switchView("timeline"), type: "view", hint: "t" },
+        { label: "History", action: () => switchView("timeline"), type: "view", hint: "t" },
         { label: "Dependency Matrix", action: () => switchView("matrix"), type: "view", hint: "m" },
         { label: "Review", action: () => switchView("review"), type: "view", hint: "w" },
       ];
@@ -3072,7 +3077,7 @@
         Every node was written <strong>before code</strong> — specs, decisions, gates, interfaces.</p>
         <p>Click any node to read its intent. Then press <kbd style="background:var(--base02);color:var(--base05);padding:2px 6px;border-radius:3px;font-size:11px">w</kbd> to see a gate block a PR in real time.</p>
         <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px;">
-          <div style="font-size:11px;color:var(--base04)"><kbd style="background:rgba(248,81,73,0.15);color:#f85149;padding:1px 5px;border-radius:3px;font-size:10px;border:1px solid rgba(248,81,73,0.3)">w</kbd> &nbsp;<strong style="color:var(--base05)">Review</strong> — ⛔ PR #47 blocked by a gate (start here)</div>
+          <div style="font-size:11px;color:var(--base04)"><kbd style="background:rgba(248,81,73,0.15);color:#f85149;padding:1px 5px;border-radius:3px;font-size:10px;border:1px solid rgba(248,81,73,0.3)">w</kbd> &nbsp;<strong style="color:var(--base05)">Review</strong> — ⛔ CR-47 blocked by a gate (start here)</div>
           <div style="font-size:11px;color:var(--base04)"><kbd style="background:var(--base02);color:var(--base05);padding:1px 5px;border-radius:3px;font-size:10px">g</kbd> &nbsp;Graph — the full intent map</div>
           <div style="font-size:11px;color:var(--base04)"><kbd style="background:var(--base02);color:var(--base05);padding:1px 5px;border-radius:3px;font-size:10px">r</kbd> &nbsp;Blast Radius — what breaks if this node changes</div>
           <div style="font-size:11px;color:var(--base04)"><kbd style="background:var(--base02);color:var(--base05);padding:1px 5px;border-radius:3px;font-size:10px">c</kbd> &nbsp;Coverage — which components are under-specced</div>

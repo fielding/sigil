@@ -2,9 +2,9 @@
 
 [![intent coverage](.intent/badge.svg)](https://fielding.github.io/sigil/)
 
-**Review intent, not just diffs.**
+**Code review is dead. Review intent instead.**
 
-AI writes code faster than humans can review it. The diff gets reviewed. The decision behind it doesn't. Sigil fixes that: specs, ADRs, and architectural constraints live in your repo as a queryable graph. Every PR gets an intent diff — what decisions changed, what specs apply, what gates failed. Your team reviews the *why* alongside the *what*.
+AI writes code faster than any human can read it. In the age of generative code, checking diffs is a fool's errand. Sigil moves the "peer" in peer review up the stack: specs, ADRs, and architectural constraints live in your repo as a queryable graph. Every PR gets an intent diff — what decisions changed, what specs apply, what gates failed. Humans agree on the *why*; Sigil enforces the *what*.
 
 [![Sigil intent graph viewer — 36 nodes, 87 edges, 8 interactive views](docs/branding/graph-screenshot.png)](https://fielding.github.io/sigil/)
 
