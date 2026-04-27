@@ -4686,16 +4686,20 @@ def cmd_show(args) -> int:
         print(f"\n  Relationships ({len(outgoing) + len(incoming)})")
         print(f"  {'-' * 40}")
 
-        # Group by edge type
+        # Group by edge type. Keep default glyphs outside the f-string
+        # expressions so the CLI imports cleanly on Python 3.12+.
         by_type: Dict[str, List[str]] = collections.defaultdict(list)
+        default_symbol = "\u25cb"
+        outgoing_arrow = "\u2192"
+        incoming_arrow = "\u2190"
         for e in outgoing:
             if e.dst in g.nodes:
                 t = g.nodes[e.dst]
-                by_type[e.type].append(f"\u2192 {sym.get(t.type, '\u25cb')} {e.dst}  {t.title}")
+                by_type[e.type].append(f"{outgoing_arrow} {sym.get(t.type, default_symbol)} {e.dst}  {t.title}")
         for e in incoming:
             if e.src in g.nodes:
                 t = g.nodes[e.src]
-                by_type[e.type].append(f"\u2190 {sym.get(t.type, '\u25cb')} {e.src}  {t.title}")
+                by_type[e.type].append(f"{incoming_arrow} {sym.get(t.type, default_symbol)} {e.src}  {t.title}")
 
         for etype in sorted(by_type.keys()):
             print(f"    {etype}:")
