@@ -29,7 +29,7 @@
     "url": "https://github.com/fielding/sigil/issues"
   },
   "scripts": {
-    "prepublishOnly": "bash prepare.sh"
+    "prepublishOnly": "node prepare.mjs"
   },
   "engines": {
     "node": ">=18"
